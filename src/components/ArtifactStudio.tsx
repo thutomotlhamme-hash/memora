@@ -91,6 +91,21 @@ const ITEMS: Item[] = [
     ),
   },
   {
+    key: 'booklet',
+    kind: 'A5 booklet · print at home',
+    title: 'Programme booklet',
+    body: 'The programme and their story as a folded A5 booklet. Print double-sided on A4, flip on the short edge, then fold in half.',
+    action: 'Download PDF',
+    run: A.programmeBooklet,
+    preview: (n) => (
+      <div>
+        <div className="k">A5 booklet</div>
+        <div className="n">{n}</div>
+        <div className="d">Cover · story · programme · journey</div>
+      </div>
+    ),
+  },
+  {
     key: 'keepsake-card',
     kind: 'Print · 5 × 7 in · 300 dpi',
     title: 'Keepsake card',

@@ -662,15 +662,146 @@ function loadPdfFonts() {
 
 type Face = 'display' | 'serif' | 'italic' | 'sans' | 'sansBold';
 
+type Op = [method: string, args: unknown[]];
+
+/**
+ * Stands in for jsPDF while a booklet is laid out: it measures text on a real
+ * (never saved) A4 document and records every drawing call per page, so the
+ * pages can then be placed two to a sheet in fold order.
+ */
+class Recorder {
+  pages: Op[][] = [[]];
+  constructor(readonly m: jsPDF) {}
+  private rec(name: string, args: unknown[]) {
+    this.pages[this.pages.length - 1].push([name, args]);
+  }
+  setFont(family: string, style?: string) {
+    this.m.setFont(family, style);
+    this.rec('setFont', [family, style]);
+  }
+  setFontSize(size: number) {
+    this.m.setFontSize(size);
+    this.rec('setFontSize', [size]);
+  }
+  setTextColor(...a: number[]) {
+    this.rec('setTextColor', a);
+  }
+  setDrawColor(...a: number[]) {
+    this.rec('setDrawColor', a);
+  }
+  setFillColor(...a: number[]) {
+    this.rec('setFillColor', a);
+  }
+  setLineWidth(w: number) {
+    this.rec('setLineWidth', [w]);
+  }
+  text(...a: unknown[]) {
+    this.rec('text', a);
+  }
+  line(...a: unknown[]) {
+    this.rec('line', a);
+  }
+  rect(...a: unknown[]) {
+    this.rec('rect', a);
+  }
+  roundedRect(...a: unknown[]) {
+    this.rec('roundedRect', a);
+  }
+  circle(...a: unknown[]) {
+    this.rec('circle', a);
+  }
+  addImage(...a: unknown[]) {
+    this.rec('addImage', a);
+  }
+  getTextWidth(t: string) {
+    return this.m.getTextWidth(t);
+  }
+  splitTextToSize(t: string, w: number) {
+    return this.m.splitTextToSize(t, w);
+  }
+  addPage() {
+    this.pages.push([]);
+  }
+  getNumberOfPages() {
+    return this.pages.length;
+  }
+  addFileToVFS(name: string, data: string) {
+    this.m.addFileToVFS(name, data);
+  }
+  addFont(file: string, family: string, style: string) {
+    this.m.addFont(file, family, style);
+  }
+  setProperties(p: Record<string, string>) {
+    this.m.setProperties(p);
+  }
+}
+
+/** Draw one recorded page onto a sheet, scaled by s and shifted right by ox (all in mm). */
+function replay(out: jsPDF, ops: Op[], s: number, ox: number) {
+  const X = (v: unknown) => ox + (v as number) * s;
+  const S = (v: unknown) => (v as number) * s;
+  for (const [name, a] of ops) {
+    switch (name) {
+      case 'setFont':
+        out.setFont(a[0] as string, a[1] as string | undefined);
+        break;
+      case 'setFontSize':
+        out.setFontSize(S(a[0]));
+        break;
+      case 'setTextColor':
+        out.setTextColor(a[0] as number, a[1] as number, a[2] as number);
+        break;
+      case 'setDrawColor':
+        out.setDrawColor(a[0] as number, a[1] as number, a[2] as number);
+        break;
+      case 'setFillColor':
+        out.setFillColor(a[0] as number, a[1] as number, a[2] as number);
+        break;
+      case 'setLineWidth':
+        out.setLineWidth(S(a[0]));
+        break;
+      case 'text': {
+        const o = a[3] ? { ...(a[3] as Record<string, number | string>) } : undefined;
+        if (o && typeof o.maxWidth === 'number') o.maxWidth = S(o.maxWidth);
+        if (o && typeof o.charSpace === 'number') o.charSpace = S(o.charSpace);
+        out.text(a[0] as string, X(a[1]), S(a[2]), o);
+        break;
+      }
+      case 'line':
+        out.line(X(a[0]), S(a[1]), X(a[2]), S(a[3]));
+        break;
+      case 'rect':
+        out.rect(X(a[0]), S(a[1]), S(a[2]), S(a[3]), a[4] as string | undefined);
+        break;
+      case 'roundedRect':
+        out.roundedRect(X(a[0]), S(a[1]), S(a[2]), S(a[3]), S(a[4]), S(a[5]), a[6] as string | undefined);
+        break;
+      case 'circle':
+        out.circle(X(a[0]), S(a[1]), S(a[2]), a[3] as string | undefined);
+        break;
+      case 'addImage':
+        out.addImage(a[0] as string, a[1] as string, X(a[2]), S(a[3]), S(a[4]), S(a[5]));
+        break;
+    }
+  }
+}
+
 class Pdf {
-  doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  doc: jsPDF;
   y = MARGIN;
   private embedded = false;
+  private closingPage = 0;
+  /** Type scale: A5 booklet pages are laid out on A4 and shrunk, so their type starts larger. */
+  private k: number;
 
   constructor(
     private name: string,
     private footerNote: string,
-  ) {}
+    opts: { doc?: jsPDF; typeScale?: number } = {},
+  ) {
+    this.doc = opts.doc ?? new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    this.k = opts.typeScale ?? 1;
+  }
 
   async init() {
     const fonts = await loadPdfFonts();
@@ -706,12 +837,12 @@ class Pdf {
       };
       d.setFont(...map[face]);
     }
-    d.setFontSize(size);
+    d.setFontSize(size * this.k);
     d.setTextColor(...color);
   }
 
   /** Line height in mm for a font size in pt. */
-  lh = (size: number, leading = 1.45) => size * 0.3528 * leading;
+  lh = (size: number, leading = 1.45) => size * this.k * 0.3528 * leading;
 
   split(text: string, width: number): string[] {
     return this.doc.splitTextToSize(String(text).replace(/\s*\n\s*/g, ' '), width) as string[];
@@ -720,7 +851,7 @@ class Pdf {
   private footer() {
     const d = this.doc;
     const page = d.getNumberOfPages();
-    if (page === 1) return; // the cover stays clean
+    if (page === 1 || page === this.closingPage) return; // the covers stay clean
     const y = PAGE_H - 13;
     d.setDrawColor(...P.line);
     d.setLineWidth(0.2);
@@ -888,7 +1019,8 @@ class Pdf {
     groups.forEach((g, gi) => {
       const when = partStartLabel(partStart(draft.journey, draft.programme.items, g.part), g.part);
       if (groups.length > 1 || g.part !== 'service' || when) {
-        this.ensure(30);
+        // Keep a part's heading with its first item.
+        this.ensure(30 + this.lh(13) * 3);
         if (gi > 0) this.y += 4;
         this.face('sansBold', 8, g.part === 'vigil' ? P.candle : P.clay);
         d.text(g.label.toUpperCase(), MARGIN, this.y, { charSpace: 0.9 });
@@ -1059,9 +1191,14 @@ class Pdf {
     this.face('sansBold', 8, P.clay);
     d.text(label.toUpperCase(), MARGIN + 7, this.y + 11, { charSpace: 0.9 });
     this.face('serif', 12.5);
-    d.text(line, MARGIN + 7, this.y + 18.5, { maxWidth: PAGE_W - MARGIN * 2 - 44 });
+    const text = this.split(line, PAGE_W - MARGIN * 2 - 44).slice(0, 2);
+    let ty = this.y + 18.5;
+    for (const l of text) {
+      d.text(l, MARGIN + 7, ty);
+      ty += this.lh(12.5, 1.25);
+    }
     this.face('sans', 9, P.dusk);
-    d.text(bare(url), MARGIN + 7, this.y + 27);
+    d.text(bare(url), MARGIN + 7, Math.max(this.y + 27, ty + 1.5));
     this.y += h + 8;
   }
 
@@ -1069,6 +1206,7 @@ class Pdf {
   async closing(draft: Draft, url: string) {
     const d = this.doc;
     this.newPage();
+    this.closingPage = d.getNumberOfPages();
     this.y = 86;
     this.face('sansBold', 8.5, P.clay);
     d.text(draft.story.familyMessage ? 'FROM THE FAMILY' : 'FOREVER IN OUR HEARTS', PAGE_W / 2, this.y, { align: 'center', charSpace: 1.1 });
@@ -1101,6 +1239,11 @@ class Pdf {
     this.footer();
     this.doc.save(filename);
   }
+
+  /** Close the last page without saving (the booklet is saved after imposition). */
+  finish() {
+    this.footer();
+  }
 }
 
 function serviceLine(draft: Draft): string {
@@ -1109,11 +1252,15 @@ function serviceLine(draft: Draft): string {
   return [date ? shortDate(date) : '', svc?.time ? `at ${svc.time}` : '', svc?.place ?? ''].filter(Boolean).join(' · ');
 }
 
-/** Printable order of service with the funeral journey. */
-export async function programmePdf({ draft, url, slug }: ArtifactInput) {
-  const pdf = await new Pdf(displayName(draft.person), 'MEMORA').init();
+async function layoutProgramme(pdf: Pdf, draft: Draft, url: string, withStory = false) {
   await pdf.cover(draft, 'Order of service', serviceLine(draft));
   pdf.newPage();
+  // A printed booklet carries their story too, as funeral programmes do.
+  if (withStory && draft.story.obituary) {
+    pdf.section('Their story', 'A life remembered');
+    pdf.prose(draft.story.obituary, { size: 11.5, dropCap: true });
+    pdf.newPage();
+  }
   pdf.prayers(draft);
   pdf.programme(draft);
   if (draft.journey.length) {
@@ -1121,7 +1268,74 @@ export async function programmePdf({ draft, url, slug }: ArtifactInput) {
     await pdf.journey(draft, url);
   }
   await pdf.closing(draft, url);
+}
+
+/** Printable order of service with the funeral journey. */
+export async function programmePdf({ draft, url, slug }: ArtifactInput) {
+  const pdf = await new Pdf(displayName(draft.person), 'MEMORA').init();
+  await layoutProgramme(pdf, draft, url);
   pdf.save(file(slug, 'programme', 'pdf'));
+}
+
+const A5_W = PAGE_W / Math.SQRT2; // 148.5 mm: an A5 page is an A4 page shrunk by 1/√2
+
+/**
+ * The programme as an A5 booklet to print at home: A4 sheets, two pages a side,
+ * in fold order. Print double-sided (flip on the short edge), stack, fold in half.
+ */
+export async function programmeBooklet({ draft, url, slug }: ArtifactInput) {
+  const rec = new Recorder(new jsPDF({ unit: 'mm', format: 'a4', compress: true }));
+  const pdf = await new Pdf(displayName(draft.person), 'MEMORA', { doc: rec as unknown as jsPDF, typeScale: 1.22 }).init();
+  await layoutProgramme(pdf, draft, url, true);
+  pdf.finish();
+
+  const out = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
+  const fonts = await loadPdfFonts();
+  if (fonts) {
+    for (const [f, family, style] of PDF_FONTS) {
+      out.addFileToVFS(f, fonts.get(f)!);
+      out.addFont(f, family, style);
+    }
+  }
+  out.setProperties({ title: `In loving memory of ${displayName(draft.person)}`, creator: 'Memora' });
+
+  // Pad to a multiple of four with blank pages before the back cover.
+  const pages = rec.pages;
+  const n = Math.ceil(pages.length / 4) * 4;
+  const order: (Op[] | null)[] = [...pages.slice(0, -1), ...Array<null>(n - pages.length).fill(null), pages[pages.length - 1]];
+  const s = 1 / Math.SQRT2;
+  const name = displayName(draft.person);
+  // A page left over by the fold keeps a quiet line of remembrance rather than standing empty.
+  const blank = (ox: number) => {
+    out.setFont(fonts ? 'Fraunces' : 'times', 'italic');
+    out.setFontSize(11);
+    out.setTextColor(...P.dusk);
+    out.text(`In loving memory of ${name}`, ox + A5_W / 2, PAGE_W / 2, { align: 'center' });
+    out.setDrawColor(...P.bloom);
+    out.setLineWidth(0.25);
+    out.line(ox + A5_W / 2 - 9, PAGE_W / 2 + 7, ox + A5_W / 2 - 1.8, PAGE_W / 2 + 7);
+    out.line(ox + A5_W / 2 + 1.8, PAGE_W / 2 + 7, ox + A5_W / 2 + 9, PAGE_W / 2 + 7);
+    out.setFillColor(...P.candle);
+    out.circle(ox + A5_W / 2, PAGE_W / 2 + 7, 0.7, 'F');
+  };
+  const side = (left: Op[] | null, right: Op[] | null) => {
+    if (left) replay(out, left, s, 0);
+    else blank(0);
+    if (right) replay(out, right, s, A5_W);
+    else blank(A5_W);
+    // Fold marks at the top and bottom of the spine.
+    out.setDrawColor(...P.bloom);
+    out.setLineWidth(0.2);
+    out.line(A5_W, 0, A5_W, 5);
+    out.line(A5_W, PAGE_W - 5, A5_W, PAGE_W);
+  };
+  for (let i = 0; i < n / 4; i++) {
+    if (i > 0) out.addPage();
+    side(order[n - 1 - 2 * i], order[2 * i]);
+    out.addPage();
+    side(order[2 * i + 1], order[n - 2 - 2 * i]);
+  }
+  out.save(file(slug, 'programme-booklet', 'pdf'));
 }
 
 /** The complete keepsake: story, programme, journey and family message. */

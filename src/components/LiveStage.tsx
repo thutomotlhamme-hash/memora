@@ -32,11 +32,15 @@ export function LiveStage({
   programme,
   name,
   portraitUrl,
+  dates,
+  initials,
 }: {
   journey: Draft['journey'];
   programme: Draft['programme'];
   name: string;
   portraitUrl: string;
+  dates: string;
+  initials: string;
 }) {
   const now = useNow();
   const data = useLiveData({
@@ -47,10 +51,26 @@ export function LiveStage({
   });
   const view = now ? stageView(data.journey, data.programme, data.liveKey, now) : null;
   if (!now || !view) return null;
-  return <Stage view={view} data={data} now={now} name={name} portraitUrl={portraitUrl} />;
+  return <Stage view={view} data={data} now={now} name={name} portraitUrl={portraitUrl} dates={dates} initials={initials} />;
 }
 
-function Stage({ view, data, now, name, portraitUrl }: { view: StageView; data: LiveData; now: Date; name: string; portraitUrl: string }) {
+function Stage({
+  view,
+  data,
+  now,
+  name,
+  portraitUrl,
+  dates,
+  initials,
+}: {
+  view: StageView;
+  data: LiveData;
+  now: Date;
+  name: string;
+  portraitUrl: string;
+  dates: string;
+  initials: string;
+}) {
   const [away, setAway] = useState(false);
 
   useEffect(() => {
@@ -118,6 +138,8 @@ function Stage({ view, data, now, name, portraitUrl }: { view: StageView; data: 
   const barLabel =
     mode === 'now' || mode === 'broadcast' || (mode === 'after' && view.arrived) ? 'Now' : mode === 'transit' ? 'Live' : mode === 'after' ? 'Next' : tonight;
 
+  const cardSub = focus ? where(focus) : (prog?.current?.presenter ?? '');
+
   return (
     <>
       <section className={`stage-live${vigil ? ' vigil' : ''}`} id="now" aria-labelledby="now-title" aria-live="polite">
@@ -125,65 +147,64 @@ function Stage({ view, data, now, name, portraitUrl }: { view: StageView; data: 
         <div className="sl-inner">
           <div className="sl-top">
             <BrandMark size={24} />
-            <span className="sl-who">
-              {portraitUrl ? <img src={portraitUrl} alt="" /> : null}
-              <span>{name ? `In loving memory of ${name}` : 'In loving memory'}</span>
+            <span className="sl-kicker">
+              <span className={`sl-dot${mode === 'vigil_ended' || mode === 'after' ? ' still' : ''}`} aria-hidden="true" />
+              {kicker}
             </span>
           </div>
 
-          <div className="sl-kicker">
-            <span className={`sl-dot${mode === 'vigil_ended' || mode === 'after' ? ' still' : ''}`} aria-hidden="true" />
-            {kicker}
+          {/* The memorial itself, as on the phone: portrait, name, dates. */}
+          <div className="sl-person">
+            <div className="sl-portrait">{portraitUrl ? <img src={portraitUrl} alt={`Portrait of ${name || 'our loved one'}`} /> : <span>{initials}</span>}</div>
+            <span className="sl-eyebrow">In loving memory</span>
+            <h1 className="sl-name">{name || 'Our loved one'}</h1>
+            {dates && <div className="sl-dates">{dates}</div>}
           </div>
-          <h2 className="sl-title" id="now-title" key={headline}>
-            {headline}
-          </h2>
 
-          {mode === 'after' && <p className="sl-lede">The funeral has ended. The family invites you to join them for {afterWhat}.</p>}
-          {mode === 'vigil_ended' ? (
-            <p className="sl-lede">The family thanks everyone who came to pray and remember. Tomorrow’s details are below.</p>
-          ) : (
-            <article className="sl-card now" key={`${focus?.id ?? 'prog'}-${mode}`}>
-              <div className="k">{cardKicker}</div>
-              {focus ? (
-                <>
-                  <div className="t">{focus.title}</div>
-                  {where(focus) && <div className="s">{where(focus)}</div>}
-                </>
-              ) : (
-                prog?.current && (
-                  <>
-                    <div className="t" key={prog.current.id}>
-                      {prog.current.title}
-                    </div>
-                    {prog.current.presenter && <div className="s">{prog.current.presenter}</div>}
-                  </>
-                )
-              )}
-              {focus && prog?.current && (
-                <div className="sl-row live" key={prog.current.id}>
-                  <span>{prog.where}</span>
-                  <strong>
-                    {prog.current.title}
-                    {prog.current.presenter && <small>{prog.current.presenter}</small>}
-                  </strong>
+          <article className="sl-card now" key={`${focus?.id ?? 'prog'}-${mode}`}>
+            <div className="k">
+              <span className={`sl-dot${mode === 'vigil_ended' || mode === 'after' ? ' still' : ''}`} aria-hidden="true" />
+              <span id="now-title">{headline.replace(/\.$/, '')}</span>
+            </div>
+            {mode === 'vigil_ended' || mode === 'after' ? (
+              <p className="sl-lede">
+                {mode === 'after'
+                  ? `The funeral has ended. The family invites you to join them for ${afterWhat}.`
+                  : 'The family thanks everyone who came to pray and remember. Tomorrow’s details are below.'}
+              </p>
+            ) : null}
+            {mode !== 'vigil_ended' && (focus || prog?.current) && (
+              <>
+                <div className="sl-card-k2">{cardKicker}</div>
+                <div className="t" key={focus?.id ?? prog?.current?.id}>
+                  {focus ? focus.title : prog?.current?.title}
                 </div>
-              )}
-              {prog?.next && (
-                <div className="sl-row">
-                  <span>Then{prog.next.time ? ` · ${prog.next.time}` : ''}</span>
-                  <strong>{prog.next.title}</strong>
-                </div>
-              )}
-              {focus && mode !== 'now' && focus.parking && (
-                <div className="sl-row">
-                  <span>Parking</span>
-                  <strong>{focus.parking}</strong>
-                </div>
-              )}
-              {focus && hasPin(focus) && <Directions stop={focus} />}
-            </article>
-          )}
+                {cardSub && <div className="s">{cardSub}</div>}
+              </>
+            )}
+            {focus && prog?.current && (
+              <div className="sl-row live" key={prog.current.id}>
+                <span>{prog.where}</span>
+                <strong>
+                  {prog.current.title}
+                  {prog.current.presenter && <small>{prog.current.presenter}</small>}
+                </strong>
+              </div>
+            )}
+            {prog?.next && (
+              <div className="sl-row">
+                <span>Then{prog.next.time ? ` · ${prog.next.time}` : ''}</span>
+                <strong>{prog.next.title}</strong>
+              </div>
+            )}
+            {focus && mode !== 'now' && mode !== 'vigil_ended' && focus.parking && (
+              <div className="sl-row">
+                <span>Parking</span>
+                <strong>{focus.parking}</strong>
+              </div>
+            )}
+            {focus && mode !== 'vigil_ended' && hasPin(focus) && <Directions stop={focus} />}
+          </article>
 
           {procession && (
             <a className="sl-card sl-proc" href="#procession">
@@ -206,17 +227,10 @@ function Stage({ view, data, now, name, portraitUrl }: { view: StageView; data: 
           )}
 
           {after && (
-            <article className="sl-card next">
-              <div className="k soft">
-                {mode === 'vigil_ended'
-                  ? `Tomorrow · ${fmtDate(after.date)} · ${after.time}`
-                  : mode === 'after'
-                    ? `Later · ${after.time}`
-                    : `Next · ${after.time}`}
-              </div>
-              <div className="p">{place(after)}</div>
-              <div className="s">{stopLabel(after.type)}</div>
-              {(mode === 'vigil_ended' || mode === 'after') && hasPin(after) && <Directions stop={after} />}
+            <article className="sl-next">
+              <span>{mode === 'vigil_ended' ? `Tomorrow · ${fmtDate(after.date)} · ${after.time}` : mode === 'after' ? `Later · ${after.time}` : `Next · ${after.time}`}</span>
+              <strong>{place(after)}</strong>
+              {(mode === 'vigil_ended' || mode === 'after') && hasPin(after) && <Directions stop={after} light />}
             </article>
           )}
 
@@ -239,9 +253,9 @@ function Stage({ view, data, now, name, portraitUrl }: { view: StageView; data: 
   );
 }
 
-function Directions({ stop }: { stop: Stop }) {
+function Directions({ stop, light = false }: { stop: Stop; light?: boolean }) {
   return (
-    <div className="sl-actions">
+    <div className={`sl-actions${light ? ' light' : ''}`}>
       <a className="sl-btn" href={directionsUrl(stop, 'google')} target="_blank" rel="noopener noreferrer">
         Directions
       </a>

@@ -11,12 +11,12 @@ export function demoDraft(now = new Date()): Draft {
     ...emptyDraft(),
     person: {
       firstName: 'Naledi',
-      lastName: 'Mokoena',
+      lastName: 'Magumba',
       preferredName: 'Naledi',
       birthDate: '1958-04-12',
       passingDate: '2026-08-19',
       portraitPath: '',
-      portraitUrl: '',
+      portraitUrl: '/demo/naledi.webp',
     },
     story: {
       obituary:
@@ -38,13 +38,13 @@ export function demoDraft(now = new Date()): Draft {
         { id: 'v2', part: 'vigil', type: 'candle', time: '19:20', title: 'Candle lighting', presenter: 'Grandchildren', detail: '' },
         { id: 'v3', part: 'vigil', type: 'tribute', time: '19:40', title: 'Memories of Naledi', presenter: 'Friends & neighbours', detail: '' },
         { id: 'p1', type: 'prayer', time: '10:00', title: 'Opening prayer', presenter: 'Pastor Mokoena', detail: '' },
-        { id: 'p2', type: 'scripture', time: '10:10', title: 'Psalm 23', presenter: 'Lerato Mokoena', detail: 'Scripture reading' },
+        { id: 'p2', type: 'scripture', time: '10:10', title: 'Psalm 23', presenter: 'Lerato Magumba', detail: 'Scripture reading' },
         { id: 'p3', type: 'hymn', time: '10:20', title: 'Amazing Grace', presenter: 'Congregation', detail: '' },
         { id: 'p4', type: 'tribute', time: '10:30', title: 'Family tributes', presenter: 'Family & friends', detail: '' },
-        { id: 'p5', type: 'eulogy', time: '11:00', title: 'Eulogy', presenter: 'Thabo Mokoena', detail: '' },
+        { id: 'p5', type: 'eulogy', time: '11:00', title: 'Eulogy', presenter: 'Thabo Magumba', detail: '' },
         { id: 'g1', part: 'graveside', type: 'committal', time: '12:30', title: 'Committal', presenter: 'Pastor Mokoena', detail: '' },
         { id: 'g2', part: 'graveside', type: 'wreath', time: '12:45', title: 'Laying of wreaths', presenter: 'Family', detail: '' },
-        { id: 'g3', part: 'graveside', type: 'thanks', time: '13:00', title: 'Vote of thanks', presenter: 'Lerato Mokoena', detail: '' },
+        { id: 'g3', part: 'graveside', type: 'thanks', time: '13:00', title: 'Vote of thanks', presenter: 'Lerato Magumba', detail: '' },
       ],
     },
   };

@@ -154,7 +154,7 @@ test('gift form validation', () => {
   const today = new Date('2026-10-01T09:00:00');
   const good = {
     buyerName: 'Thabo', buyerEmail: 'THABO@example.com', recipientName: 'Lerato', recipientEmail: '', recipientWhatsapp: '0821234567',
-    lovedOneName: 'Naledi Mokoena', message: 'Thinking of you', funeralDate: '2026-10-05', funeralDateUnsure: false,
+    lovedOneName: 'Naledi Magumba', message: 'Thinking of you', funeralDate: '2026-10-05', funeralDateUnsure: false,
   };
   const ok = validateGift(good, today);
   assert.equal(ok.ok, true);
@@ -175,7 +175,7 @@ test('gift form validation', () => {
 });
 
 test('gift helpers', () => {
-  assert.deepEqual(splitName('Naledi Grace Mokoena'), { firstName: 'Naledi Grace', lastName: 'Mokoena' });
+  assert.deepEqual(splitName('Naledi Grace Magumba'), { firstName: 'Naledi Grace', lastName: 'Magumba' });
   assert.deepEqual(splitName('Naledi'), { firstName: 'Naledi', lastName: '' });
   assert.equal(daysUntil('2026-10-04', new Date('2026-10-01T22:00:00')), 3);
   assert.equal(daysUntil(null), null);

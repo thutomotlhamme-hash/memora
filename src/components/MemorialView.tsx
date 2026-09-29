@@ -46,7 +46,7 @@ function MemorialPage({ draft, path, name, formal, hasJourney }: BodyProps) {
   const p = draft.person;
   return (
     <>
-      <LiveStage journey={draft.journey} programme={draft.programme} name={displayName(p, '')} portraitUrl={p.portraitUrl} />
+      <LiveStage journey={draft.journey} programme={draft.programme} name={displayName(p, '')} portraitUrl={p.portraitUrl} dates={lifeDates(p)} initials={initials(p)} />
       <section className="m-hero">
         <div className="m-sky" aria-hidden="true">
           {Array.from({ length: 14 }, (_, i) => (

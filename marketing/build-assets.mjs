@@ -69,7 +69,7 @@ const mockMemorial = (scale = 1) => `
 <div class="card" style="width:${420 * scale}px; overflow:hidden; font-size:${16 * scale}px">
   <div style="background:var(--night); color:var(--onNight); padding:${26 * scale}px ${26 * scale}px ${22 * scale}px; position:relative">
     <div class="eyebrow" style="color:var(--clayNight); font-size:${12 * scale}px">In loving memory</div>
-    <div class="serif" style="font-size:${44 * scale}px; line-height:1; margin-top:${10 * scale}px">Naledi Mokoena</div>
+    <div class="serif" style="font-size:${44 * scale}px; line-height:1; margin-top:${10 * scale}px">Naledi Magumba</div>
     <div style="color:var(--onNightMuted); font-size:${15 * scale}px; margin-top:${8 * scale}px">12 April 1958 — 19 August 2026</div>
   </div>
   <div style="padding:${20 * scale}px ${24 * scale}px; display:grid; gap:${14 * scale}px">

@@ -82,7 +82,7 @@ export function validateGift(input: Partial<GiftInput>, today = new Date()): { o
   };
 }
 
-/** Splits "Naledi Grace Mokoena" into first name and surname for the memorial draft. */
+/** Splits "Naledi Grace Magumba" into first name and surname for the memorial draft. */
 export function splitName(full: string): { firstName: string; lastName: string } {
   const parts = full.trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 1) return { firstName: parts[0] ?? '', lastName: '' };

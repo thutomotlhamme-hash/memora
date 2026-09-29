@@ -74,7 +74,7 @@ export default function Home() {
                   <div className="v-portrait" />
                   <div>
                     <span className="v-kicker">In loving memory</span>
-                    <strong>Naledi Mokoena</strong>
+                    <strong>Naledi Magumba</strong>
                     <p>A teacher for thirty-one years, she knew every child by name and every parent by their worries.</p>
                   </div>
                 </div>

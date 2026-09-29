@@ -85,7 +85,7 @@ export function GiftForm({ ready }: { ready: boolean }) {
         <legend className="h3">Who is it for?</legend>
         <p className="muted small">They get a private link to create the memorial. It’s already paid for.</p>
         <div className="grid-2">
-          <div className="span-2">{field('recipientName', 'Their name', { autoComplete: 'off', autoCapitalize: 'words', placeholder: 'e.g. Lerato Mokoena' })}</div>
+          <div className="span-2">{field('recipientName', 'Their name', { autoComplete: 'off', autoCapitalize: 'words', placeholder: 'e.g. Lerato Magumba' })}</div>
           {field('recipientWhatsapp', 'Their WhatsApp number', { type: 'tel', autoComplete: 'off', inputMode: 'tel', placeholder: '082 123 4567' })}
           {field('recipientEmail', 'Their email (optional)', { type: 'email', autoComplete: 'off', inputMode: 'email' })}
           <p className="hint span-2" style={{ margin: 0 }}>

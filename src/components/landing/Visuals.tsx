@@ -13,7 +13,7 @@ export function ArchPortrait({ className = '' }: { className?: string }) {
       <Portrait className="v-arch-portrait" />
       <div className="v-arch-card">
         <div className="v-kicker">In loving memory</div>
-        <div className="v-arch-name">Naledi Mokoena</div>
+        <div className="v-arch-name">Naledi Magumba</div>
         <div className="v-arch-dates">12 April 1958 — 19 August 2026</div>
       </div>
     </div>
@@ -49,7 +49,7 @@ export function PhoneMemorial({ className = '' }: { className?: string }) {
         <div className="v-mem">
           <Portrait className="v-mem-portrait" />
           <div className="v-kicker">In loving memory</div>
-          <div className="v-name">Naledi Mokoena</div>
+          <div className="v-name">Naledi Magumba</div>
           <div className="v-dates">1958 — 2026</div>
           <div className="v-live">
             <div className="v-live-k">
@@ -88,7 +88,7 @@ export function QrCard({ className = '' }: { className?: string }) {
           <span key={i} className={on ? 'on' : ''} />
         ))}
       </div>
-      <div className="v-qr-name">Naledi Mokoena</div>
+      <div className="v-qr-name">Naledi Magumba</div>
       <div className="v-qr-sub">memora · funeral details</div>
     </div>
   );
@@ -98,10 +98,10 @@ export function QrCard({ className = '' }: { className?: string }) {
 export function ProgrammeSheet({ className = '' }: { className?: string }) {
   const items = [
     ['10:00', 'Opening prayer', 'Pastor Mokoena'],
-    ['10:10', 'Psalm 23', 'Lerato Mokoena'],
+    ['10:10', 'Psalm 23', 'Lerato Magumba'],
     ['10:20', 'Amazing Grace', 'Congregation'],
     ['10:30', 'Family tributes', 'Family & friends'],
-    ['11:00', 'Eulogy', 'Thabo Mokoena'],
+    ['11:00', 'Eulogy', 'Thabo Magumba'],
   ];
   return (
     <div className={`v-card v-prog ${className}`} aria-hidden="true">
@@ -231,7 +231,7 @@ export function RunSheetVisual({ className = '' }: { className?: string }) {
         </div>
         <div className="v-run-head">
           <span>Run-sheet</span>
-          <strong>Naledi Mokoena</strong>
+          <strong>Naledi Magumba</strong>
         </div>
         <div className="v-run-now">
           <span>Happening now</span>
@@ -268,7 +268,7 @@ export function KeepsakeStack() {
         <Portrait className="v-keep-portrait" />
         <div className="v-keep-copy">
           <div className="v-kicker">In loving memory</div>
-          <div className="v-keep-name">Naledi Mokoena</div>
+          <div className="v-keep-name">Naledi Magumba</div>
           <div className="v-keep-sub">Service · Saturday 10:00</div>
         </div>
       </div>

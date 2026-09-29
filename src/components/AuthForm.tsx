@@ -143,6 +143,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
         <button className="btn primary lg block" type="submit" disabled={busy}>
           {busy ? 'Please wait…' : copy.cta}
         </button>
+        {mode === 'register' && (
+          <p className="consent">
+            By creating an account you confirm you’re 18 or older and agree to the <Link href="/terms">terms</Link> and{' '}
+            <Link href="/privacy">privacy policy</Link>.
+          </p>
+        )}
         {mode === 'login' && (
           <Link className="text-link small" href="/account/forgot" style={{ justifySelf: 'start' }}>
             Forgot your password?

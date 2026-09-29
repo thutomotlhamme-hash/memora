@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { emptyGift, validateGift, type GiftInput } from '@/lib/gift';
@@ -145,6 +146,10 @@ export function GiftForm({ ready }: { ready: boolean }) {
           {busy ? 'Opening checkout…' : `Pay ${PRICE_LABEL} and send the gift`}
         </button>
       </div>
+      <p className="consent" style={{ marginTop: 12 }}>
+        By paying you agree to the <Link href="/terms">terms</Link> and confirm {form.recipientName || 'the recipient'} knows you’re sharing their number, so our
+        team can help them on WhatsApp. See our <Link href="/privacy">privacy policy</Link>.
+      </p>
       {!ready && (
         <p className="small muted" style={{ marginTop: 10 }}>
           Gifting isn’t switched on for this deployment yet.

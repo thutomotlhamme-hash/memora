@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { isSupabaseConfigured } from '@/lib/config';
+import { contact, isSupabaseConfigured } from '@/lib/config';
 import { getSessionUser } from '@/lib/supabase/server';
 import { Brand } from './Brand';
 
@@ -46,7 +46,12 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="container bar">
         <span>Memora · Remember beautifully</span>
-        <span>Create · Coordinate · Share · Preserve</span>
+        <nav className="row" aria-label="Footer" style={{ gap: 18 }}>
+          <Link href="/gift">Give a memorial</Link>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+          <a href={`mailto:${contact.email}`}>{contact.email}</a>
+        </nav>
       </div>
     </footer>
   );

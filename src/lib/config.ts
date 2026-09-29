@@ -13,3 +13,16 @@ export function isSupabaseConfigured(): boolean {
 export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
+
+/** Public contact details shown in the footer, privacy policy and terms. */
+export const contact = {
+  get email(): string {
+    return process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'hello@memora.co.za';
+  },
+  get whatsapp(): string {
+    return process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || '';
+  },
+  get businessName(): string {
+    return process.env.NEXT_PUBLIC_BUSINESS_NAME || 'Memora';
+  },
+};

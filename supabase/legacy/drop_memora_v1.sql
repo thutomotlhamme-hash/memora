@@ -15,23 +15,12 @@
 
 begin;
 
-drop policy if exists "memora owner media read" on storage.objects;
-drop policy if exists "memora owner media insert" on storage.objects;
-drop policy if exists "memora owner media update" on storage.objects;
-drop policy if exists "memora owner media delete" on storage.objects;
-drop policy if exists "memora permanent accounts only" on storage.objects;
-drop policy if exists "memora pro case media insert" on storage.objects;
-drop policy if exists "memora pro case media update" on storage.objects;
-drop policy if exists "memora pro case media read" on storage.objects;
-drop policy if exists "memora pro case media delete" on storage.objects;
-drop policy if exists "memora org logo read" on storage.objects;
-drop policy if exists "memora org logo insert" on storage.objects;
-drop policy if exists "memora org logo update" on storage.objects;
-drop policy if exists "memora org logo delete" on storage.objects;
-
 do $$
 declare r record;
 begin
+  for r in select policyname from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname like 'memora %' loop
+    execute format('drop policy if exists %I on storage.objects', r.policyname);
+  end loop;
   for r in select tablename from pg_tables where schemaname = 'public' and tablename like 'memora\_%' loop
     execute format('drop table if exists public.%I cascade', r.tablename);
   end loop;

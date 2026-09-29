@@ -3,7 +3,7 @@
 -- A clean, family-only schema. The funeral-home product (Memora Pro:
 -- organisations, branches, staff, invites, intake and approval links) has been
 -- removed entirely. Apply to a fresh Supabase project, or to the existing
--- project after dropping the old memora_* tables (it had no production rows).
+-- project after running supabase/legacy/drop_memora_v1.sql (it held only test data).
 --
 -- Security model
 --   * Every table has RLS. Browser clients only ever act as the signed-in owner.
@@ -133,7 +133,7 @@ as $$
   select (select auth.uid()) is not null
     and coalesce((((select auth.jwt())->>'is_anonymous')::boolean), false) = false;
 $$;
-revoke all on function public.memora_is_permanent_user() from public;
+revoke all on function public.memora_is_permanent_user() from public, anon;
 grant execute on function public.memora_is_permanent_user() to authenticated;
 
 create or replace function public.memora_owns_case(p_case_id uuid)
@@ -145,7 +145,7 @@ as $$
     where c.id = p_case_id and c.owner_id = (select auth.uid())
   );
 $$;
-revoke all on function public.memora_owns_case(uuid) from public;
+revoke all on function public.memora_owns_case(uuid) from public, anon;
 grant execute on function public.memora_owns_case(uuid) to authenticated;
 
 -- Storage paths are text; compare as text so a non-UUID folder is simply "not yours"
@@ -159,7 +159,7 @@ as $$
     where c.id::text = p_folder and c.owner_id = (select auth.uid())
   );
 $$;
-revoke all on function public.memora_owns_case_folder(text) from public;
+revoke all on function public.memora_owns_case_folder(text) from public, anon;
 grant execute on function public.memora_owns_case_folder(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -308,7 +308,7 @@ begin
   return v_now;
 end $$;
 
-revoke all on function public.memora_save_draft(uuid, jsonb) from public;
+revoke all on function public.memora_save_draft(uuid, jsonb) from public, anon;
 grant execute on function public.memora_save_draft(uuid, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------

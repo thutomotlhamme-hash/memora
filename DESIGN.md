@@ -1,31 +1,43 @@
 # Memora design notes
 
-**Reference:** [Refero Styles](https://styles.refero.design/) → the *Anthropic* style: warm editorial minimalism.
+**Reference:** a product-launch "white gallery" style (Refero Styles: the Apple product-page reference). The page is a quiet gallery: large product renders take the centre, compact near-black type carries each claim, and one precise blue is kept for actions only.
 
-It was chosen because a memorial has to feel calm, dignified and human (not "app-like") while funeral logistics still need to be precise and legible on a phone in bright sun. That style does both: an ivory paper ground, near-black ink, one warm clay accent, an editorial serif for moments of meaning and a quiet sans for everything functional.
-
-Memora borrows the *aesthetic*, not the brand: no logos, and open-licence fonts.
+Memora borrows the *cadence and feel*, not the brand. There are no Apple logos, product names or imagery. Type uses SF Pro where the device already has it (Apple devices) and falls back to Inter everywhere else.
 
 ## Tokens (`src/app/globals.css`)
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--paper` | `#faf9f5` | page ground |
-| `--paper-2` | `#f0eee6` | tinted sections, notes |
-| `--night` | `#141413` | memorial hero, live panel, checkout |
-| `--ink` / `--ink-2` / `--muted` | `#141413` / `#3d3d3a` / `#66655f` | text (muted is 5.5:1 on paper) |
-| `--clay` | `#b5552f` | the single accent: live pill, progress, accent buttons (white text 4.9:1) |
-| `--clay-ink` | `#9f4829` | eyebrows and labels on light grounds |
-| `--sage` / `--rust` | | success / error, used sparingly |
+| `--paper` | `#ffffff` | Page canvas, hero and storytelling sections |
+| `--paper-2` | `#f5f5f7` | Alternate full-width bands, app screens behind white panels, footer |
+| `--ink` | `#1d1d1f` | Headlines and body |
+| `--muted` / `--faint` | `#6e6e73` / `#86868b` | Secondary copy, the grey second line of a headline |
+| `--clay` | `#0071e3` | Filled buttons, focus rings, progress, "now" markers |
+| `--clay-ink` | `#0066cc` | Inline and "›" links |
+| `--launch` | `#b64400` | Small kickers and "New" labels (plain text, never a pill) |
+| `--night` | `#000000` | The one dark chapter per page, the live panel |
+| `--r-lg` | `28px` | Cards and media frames; buttons are full pills |
 
-- **Type:** Newsreader (optical-size variable) for display, names and the story; Inter for UI. Display sizes are tight (−0.02em) and balanced; body text is 16px/1.55; the life story is set in serif at 18–20px for reading.
-- **Shape:** 8/12/18/24px radii, hairline `rgba(20,20,19,.1)` rules, almost no shadow except on the keepsake and the memorial portrait.
-- **Rhythm:** a generous 1160px column, a 16–40px fluid gutter, and 64–112px section padding. On memorial pages the eyebrow label sits in a left rail with the content beside it.
+Not tokenised on purpose:
+- **No shadows on content.** Separation comes from white on `#f5f5f7` and hairlines. The only shadows are on floating popovers and the product renders.
+- **No gradients** on surfaces.
 
-## Principles
+## Type
+- **Display:** 600 weight with tight tracking. The hero is 48–96px at −0.015em; chapter titles are 32–56px.
+- **Body:** 17px/1.47 with slightly negative tracking. Links are blue with a "›" chevron.
+- **Kickers:** 14–21px/600 in `--launch`, never uppercase.
 
-1. **One accent.** Clay marks what is live, what to do next, and progress. Nothing else competes.
-2. **Serif for meaning, sans for logistics.** Names, story and headings are serif; times, addresses and buttons are sans.
-3. **Night for the moment that matters.** The memorial hero and the Live panel invert to `--night`, so the funeral-day guide is unmistakable.
-4. **Phone first.** No horizontal scroll at 390px (checked with Playwright screenshots), tap targets of 36–52px, sticky section nav on the memorial.
-5. **Accessible by default.** AA contrast on every text token, visible focus rings, `prefers-reduced-motion` honoured, and a print stylesheet for the memorial.
+## Motion
+Everything uses Apple's long ease-out: `cubic-bezier(0.28, 0.11, 0.32, 1)`.
+- **Scroll reveals:** any `.reveal` fades up 44px over 1.1s the first time it enters view (`RevealObserver`). `.from-left` and `.from-right` slide in sideways. Stagger siblings with `style={{ '--d': '0.08s' }}`.
+- **Hero entrance:** copy rises in a stagger and the product scene settles in.
+- **Scroll-linked zoom:** where supported, the hero scene recedes as you scroll past it and `.zoom-soft` visuals grow into place. There's no fallback because none is needed.
+- **Highlights carousel:** scroll-snap cards that advance every 5.2s while in view, with a filling progress dot and a play/pause pill. It stops as soon as someone touches it.
+- **Sticky bars:** frosted glass (`saturate(180%) blur(20px)`) on the header, the landing page's local nav once it sticks, and the memorial's section nav.
+- **Reduced motion:** reveals become a plain fade; autoplay, pulses and zooms are off.
+
+## Components
+- **Buttons:** 980px pills. `.primary` is blue; the default is a hairline outline; `.ghost` is text only.
+- **Panels and cards:** white, 28px radius, no border, on the `#f5f5f7` band.
+- **Inputs:** 50px tall, 12px radius, blue focus ring.
+- **Product renders** (`src/components/landing/Visuals.tsx`): the phone, programme sheet, QR card, map, live card, procession and run-sheet are drawn in HTML/SVG, so they're crisp at any size and need no photography.

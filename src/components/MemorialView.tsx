@@ -21,28 +21,27 @@ export function MemorialView({ draft, path, banner, live }: { draft: Draft; path
     <div className="memorial">
       {banner}
       <section className="m-hero">
-        <div className="m-hero-glow" aria-hidden="true" />
         <div className="container m-topbar">
           <Brand />
         </div>
         <div className="container m-hero-inner">
-          <div>
+          <div className="m-portrait">
+            {p.portraitUrl ? <img src={p.portraitUrl} alt={`Portrait of ${name}`} /> : <span className="mono">{initials(p)}</span>}
+          </div>
+          <div className="m-hero-copy">
             <span className="eyebrow">In loving memory</span>
             <h1 className="display">{name}</h1>
             <div className="dates">{lifeDates(p)}</div>
             <div className="row no-print">
               {hasJourney && (
-                <a className="btn on-night primary" href="#journey">
+                <a className="btn primary" href="#journey">
                   Funeral details
                 </a>
               )}
-              <a className="btn on-night" href="#story">
-                Their story
+              <a className="link chev" href="#story">
+                Read their story
               </a>
             </div>
-          </div>
-          <div className="m-portrait">
-            {p.portraitUrl ? <img src={p.portraitUrl} alt={`Portrait of ${name}`} /> : <span className="mono">{initials(p)}</span>}
           </div>
         </div>
       </section>
@@ -83,7 +82,7 @@ function MemorialBody({ draft, path, name, formal, hasJourney }: { draft: Draft;
       <ProcessionCard journey={draft.journey} />
       <LivePanel journey={draft.journey} programme={draft.programme} />
 
-      <section className="m-section" id="story">
+      <section className="m-section reveal" id="story">
         <div className="m-section-grid">
           <header>
             <span className="eyebrow">Their story</span>
@@ -96,7 +95,7 @@ function MemorialBody({ draft, path, name, formal, hasJourney }: { draft: Draft;
       </section>
 
       {formal && (
-        <section className="m-section" id="programme">
+        <section className="m-section band reveal" id="programme">
           <div className="m-section-grid">
             <header>
               <span className="eyebrow">Order of service</span>
@@ -110,7 +109,7 @@ function MemorialBody({ draft, path, name, formal, hasJourney }: { draft: Draft;
       )}
 
       {hasJourney && (
-        <section className="m-section" id="journey">
+        <section className="m-section reveal" id="journey">
           <div className="m-section-grid">
             <header>
               <span className="eyebrow">Funeral journey</span>
@@ -130,7 +129,7 @@ function MemorialBody({ draft, path, name, formal, hasJourney }: { draft: Draft;
       )}
 
       {draft.story.familyMessage && (
-        <section className="m-section" id="family">
+        <section className="m-section band reveal" id="family">
           <div className="m-section-grid">
             <header>
               <span className="eyebrow">From the family</span>

@@ -53,7 +53,7 @@ export function MapPicker({
           .addTo(m);
         const icon = L.divIcon({
           className: '',
-          html: '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;background:#b5552f;border:3px solid #fff;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.35)"></div>',
+          html: '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;background:#0071e3;border:3px solid #fff;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.35)"></div>',
           iconSize: [26, 26],
           iconAnchor: [13, 26],
         });

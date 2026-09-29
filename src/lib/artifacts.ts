@@ -8,19 +8,20 @@ import QRCode from 'qrcode';
 import { dispositionLabel, displayName, fmtDate, funeralDate, lifeDates, programmeTypeLabel, stopLabel, type Draft } from './memorial';
 
 const C = {
-  paper: '#faf9f5',
-  paper2: '#f0eee6',
-  night: '#141413',
-  night3: '#2b2a27',
-  ink: '#141413',
-  ink2: '#3d3d3a',
-  muted: '#66655f',
-  clay: '#b5552f',
-  clayLight: '#e08a67',
-  onNight: '#faf9f5',
-  onNightMuted: '#b9b6ab',
+  paper: '#ffffff',
+  paper2: '#f5f5f7',
+  night: '#000000',
+  night3: '#2c2c2e',
+  ink: '#1d1d1f',
+  ink2: '#424245',
+  muted: '#6e6e73',
+  clay: '#b64400',
+  clayLight: '#2997ff',
+  onNight: '#f5f5f7',
+  onNightMuted: '#a1a1a6',
 };
-const SERIF = '"Newsreader Variable", Georgia, serif';
+// Display type: semibold, like the site's headlines.
+const SERIF = '"Inter Variable", "Helvetica Neue", Arial, sans-serif';
 const SANS = '"Inter Variable", Arial, sans-serif';
 
 export interface ArtifactInput {
@@ -47,7 +48,7 @@ async function loadImage(src: string): Promise<HTMLImageElement | null> {
 
 async function ensureFonts() {
   try {
-    await Promise.all([document.fonts.load(`48px ${SERIF}`), document.fonts.load(`24px ${SANS}`), document.fonts.load(`600 24px ${SANS}`)]);
+    await Promise.all([document.fonts.load(`600 48px ${SERIF}`), document.fonts.load(`24px ${SANS}`), document.fonts.load(`600 24px ${SANS}`)]);
   } catch {
     /* fall back to system fonts */
   }
@@ -119,7 +120,7 @@ function monogram(ctx: CanvasRenderingContext2D, draft: Draft, x: number, y: num
   ctx.fillStyle = bg;
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = fg;
-  ctx.font = `${Math.round(Math.min(w, h) * 0.28)}px ${SERIF}`;
+  ctx.font = `600 ${Math.round(Math.min(w, h) * 0.28)}px ${SERIF}`;
   ctx.textAlign = 'center';
   const p = draft.person;
   ctx.fillText(((p.preferredName || p.firstName || 'M')[0] + (p.lastName || '')[0] || '').toUpperCase(), x + w / 2, y + h / 2 + Math.min(w, h) * 0.1);
@@ -154,7 +155,7 @@ export async function socialCard({ draft, slug }: ArtifactInput) {
   ctx.font = `600 20px ${SANS}`;
   spaced(ctx, 'IN LOVING MEMORY', 540, 850, 4);
   ctx.fillStyle = C.ink;
-  ctx.font = `64px ${SERIF}`;
+  ctx.font = `600 64px ${SERIF}`;
   wrap(ctx, displayName(draft.person), 540, 928, 900, 68, 1);
   ctx.fillStyle = C.muted;
   ctx.font = `26px ${SANS}`;
@@ -181,7 +182,7 @@ export async function announcementCard({ draft, url, slug }: ArtifactInput) {
   ctx.font = `600 22px ${SANS}`;
   spaced(ctx, 'WITH DEEP SORROW', 540, 590, 5);
   ctx.fillStyle = C.onNight;
-  ctx.font = `68px ${SERIF}`;
+  ctx.font = `600 68px ${SERIF}`;
   let y = wrap(ctx, displayName(draft.person), 540, 680, 900, 74, 2);
   ctx.fillStyle = C.onNightMuted;
   ctx.font = `26px ${SANS}`;
@@ -194,7 +195,7 @@ export async function announcementCard({ draft, url, slug }: ArtifactInput) {
   ctx.stroke();
   y += 70;
   ctx.fillStyle = C.onNight;
-  ctx.font = `italic 32px ${SERIF}`;
+  ctx.font = `400 30px ${SANS}`;
   y = wrap(ctx, `The family sadly announces the passing of ${displayName(draft.person)}.`, 540, y, 820, 44, 3);
   const first = draft.journey[0];
   ctx.fillStyle = C.clayLight;
@@ -220,7 +221,7 @@ export async function journeyCard({ draft, url, slug }: ArtifactInput) {
   ctx.font = `600 20px ${SANS}`;
   spaced(ctx, 'FUNERAL JOURNEY', 80, 110, 4);
   ctx.fillStyle = C.ink;
-  ctx.font = `64px ${SERIF}`;
+  ctx.font = `600 64px ${SERIF}`;
   const nameEnd = wrap(ctx, displayName(draft.person), 80, 190, 920, 70, 2);
   ctx.fillStyle = C.muted;
   ctx.font = `26px ${SANS}`;
@@ -294,7 +295,7 @@ export async function keepsakeCard({ draft, slug }: ArtifactInput) {
   ctx.font = `600 22px ${SANS}`;
   spaced(ctx, 'IN LOVING MEMORY', 540, 840, 5);
   ctx.fillStyle = C.ink;
-  ctx.font = `64px ${SERIF}`;
+  ctx.font = `600 64px ${SERIF}`;
   let y = wrap(ctx, displayName(draft.person), 540, 930, 880, 70, 2);
   ctx.fillStyle = C.muted;
   ctx.font = `26px ${SANS}`;
@@ -302,7 +303,7 @@ export async function keepsakeCard({ draft, slug }: ArtifactInput) {
   y += 90;
   const line = draft.story.obituary.split(/(?<=[.!?])\s+/)[0] || 'Forever in our hearts.';
   ctx.fillStyle = C.ink2;
-  ctx.font = `italic 32px ${SERIF}`;
+  ctx.font = `400 30px ${SANS}`;
   wrap(ctx, line, 540, y, 780, 46, 4);
   await download(c, file(slug, 'keepsake-card', 'png'));
 }
@@ -318,7 +319,7 @@ export async function qrCard({ draft, url, slug }: ArtifactInput) {
   ctx.font = `600 22px ${SANS}`;
   spaced(ctx, 'SCAN TO REMEMBER', 540, 130, 5);
   ctx.fillStyle = C.ink;
-  ctx.font = `60px ${SERIF}`;
+  ctx.font = `600 60px ${SERIF}`;
   let y = wrap(ctx, displayName(draft.person), 540, 215, 900, 66, 2);
   ctx.fillStyle = C.muted;
   ctx.font = `24px ${SANS}`;
@@ -393,7 +394,7 @@ class Pdf {
     d.setTextColor(181, 85, 47);
     d.text('IN LOVING MEMORY', PAGE_W / 2, this.y, { align: 'center', charSpace: 0.8 });
     this.y += 13;
-    d.setFont('times', 'normal');
+    d.setFont('helvetica', 'bold');
     d.setFontSize(32);
     d.setTextColor(20, 20, 19);
     for (const line of d.splitTextToSize(displayName(draft.person), PAGE_W - MARGIN * 2)) {

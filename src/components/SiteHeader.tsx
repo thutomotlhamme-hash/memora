@@ -5,11 +5,11 @@ import { getSessionUser } from '@/lib/supabase/server';
 import { Brand } from './Brand';
 
 /** `hideCreate` drops the "Create a memorial" button on pages where you're already creating one. */
-export async function SiteHeader({ hideCreate = false }: { hideCreate?: boolean } = {}) {
+export async function SiteHeader({ hideCreate = false, sticky = true }: { hideCreate?: boolean; sticky?: boolean } = {}) {
   const user = isSupabaseConfigured() ? await getSessionUser() : null;
   const isTeam = user ? Boolean(await roleForEmail(user.email)) : false;
   return (
-    <header className="site-header">
+    <header className={`site-header${sticky ? '' : ' static'}`}>
       <div className="container bar">
         <Brand />
         <nav className="site-nav" aria-label="Main">

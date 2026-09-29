@@ -8,7 +8,7 @@ export function QrImage({ url, label }: { url: string; label: string }) {
   const [src, setSrc] = useState('');
   useEffect(() => {
     let live = true;
-    QRCode.toDataURL(url, { width: 480, margin: 1, color: { dark: '#141413', light: '#ffffff' }, errorCorrectionLevel: 'M' })
+    QRCode.toDataURL(url, { width: 480, margin: 1, color: { dark: '#1d1d1f', light: '#ffffff' }, errorCorrectionLevel: 'M' })
       .then((d) => live && setSrc(d))
       .catch(() => live && setSrc(''));
     return () => {
@@ -19,7 +19,7 @@ export function QrImage({ url, label }: { url: string; label: string }) {
 }
 
 export async function downloadQrPng(url: string, filename: string) {
-  const dataUrl = await QRCode.toDataURL(url, { width: 1200, margin: 3, color: { dark: '#141413', light: '#ffffff' }, errorCorrectionLevel: 'M' });
+  const dataUrl = await QRCode.toDataURL(url, { width: 1200, margin: 3, color: { dark: '#1d1d1f', light: '#ffffff' }, errorCorrectionLevel: 'M' });
   const a = document.createElement('a');
   a.href = dataUrl;
   a.download = filename;

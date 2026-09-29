@@ -1,170 +1,303 @@
 import Link from 'next/link';
+import { Highlights } from '@/components/landing/Highlights';
+import { LocalNav } from '@/components/landing/LocalNav';
+import { KeepsakeStack, LiveVisual, MapVisual, PhoneMemorial, ProcessionVisual, ProgrammeSheet, QrCard, RunSheetVisual } from '@/components/landing/Visuals';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
 import { paymentsOn } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 
+const d = (s: number) => ({ ['--d' as string]: `${s}s` });
+
 export default function Home() {
+  const price = paymentsOn ? `${PRICE_LABEL} once-off` : 'Free while we launch';
   return (
     <>
-      <SiteHeader />
-      <main>
-        <section className="hero">
-          <div className="container hero-grid">
-            <div>
-              <span className="eyebrow">Memorial · Funeral journey · Keepsake</span>
-              <h1 className="display" style={{ marginTop: 20 }}>
-                Remember beautifully.
-              </h1>
-              <p className="lede">
-                One calm place to tell their story, map every stop of the funeral, share a single link and QR code with everyone,
-                and keep the programme and keepsakes afterwards.
-              </p>
-              <div className="row">
-                <Link className="btn primary lg" href="/create">
-                  Create a memorial
-                </Link>
-                <Link className="btn lg" href="/m/preview">
-                  See an example
-                </Link>
-              </div>
-              <div className="hero-meta">
-                <span>No account needed to start</span>
-                <span>Private until you publish</span>
-              </div>
+      <SiteHeader sticky={false} hideCreate />
+      <LocalNav
+        links={[
+          { href: '#highlights', label: 'Highlights' },
+          { href: '#overview', label: 'How it works' },
+          { href: '#day', label: 'On the day' },
+          { href: '#pricing', label: 'Pricing' },
+        ]}
+      />
+      <main id="top">
+        {/* ---------------------------------------------------------------- Hero */}
+        <section className="stage">
+          <div className="container stage-copy">
+            <p className="stage-new">New · Follow the procession live</p>
+            <h1 className="stage-title">Remember beautifully.</h1>
+            <p className="stage-sub">The memorial, the funeral journey and every keepsake. One link for everyone who loved them.</p>
+            <div className="stage-cta">
+              <Link className="btn primary" href="/create">
+                Create a memorial
+              </Link>
+              <Link className="link chev" href="/m/preview">
+                See an example
+              </Link>
             </div>
-            <div aria-hidden="true">
-              <div className="keepsake">
-                <div className="portrait" />
-                <span className="pill live dot live-chip">Live today</span>
-                <div className="copy">
-                  <span className="eyebrow">In loving memory</span>
-                  <h3>Naledi Mokoena</h3>
-                  <p>12 April 1958 — 19 August 2026</p>
+          </div>
+          <div className="stage-scene zoom" aria-hidden="true">
+            <ProgrammeSheet className="scene-left" />
+            <PhoneMemorial className="scene-phone" />
+            <QrCard className="scene-right" />
+          </div>
+          <div className="stage-callout reveal">
+            <div>
+              <strong>{price}</strong>
+              <span>No account needed to start. Private until you publish.</span>
+            </div>
+            <Link className="btn primary sm" href="/create">
+              Start
+            </Link>
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- Highlights */}
+        <section className="band" id="highlights">
+          <div className="container band-head reveal">
+            <h2 className="chapter-title">Get the highlights.</h2>
+            <Link className="link chev" href="/m/preview">
+              See an example memorial
+            </Link>
+          </div>
+          <Highlights labels={['Their story', 'Every stop', 'On the day', 'The procession', 'Keepsakes']}>
+            <article className="hl-card">
+              <p className="hl-cap">
+                <strong>Their story, told with care.</strong> Portrait, names, dates, a life story and a message from the family.
+              </p>
+              <div className="hl-visual hl-story">
+                <div className="hl-story-card">
+                  <div className="v-portrait" />
+                  <div>
+                    <span className="v-kicker">In loving memory</span>
+                    <strong>Naledi Mokoena</strong>
+                    <p>A teacher for thirty-one years, she knew every child by name and every parent by their worries.</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section alt">
-          <div className="container">
-            <div className="section-head">
-              <h2 className="h2">Everything the family needs, in one place.</h2>
-              <p className="lede">
-                Memora treats the funeral as one living memorial, not a pile of separate documents. Change a venue or a time once,
-                and the memorial page, programme and cards all agree.
+            </article>
+            <article className="hl-card">
+              <p className="hl-cap">
+                <strong>Every stop, pinned to the right gate.</strong> Home, church, cemetery and reception, with one-tap directions between them.
               </p>
-            </div>
-            <div className="steps-grid">
-              <article>
-                <span className="num">01</span>
-                <h3>Tell their story</h3>
-                <p>Portrait, names, dates, life story and a message from the family, at your own pace.</p>
-              </article>
-              <article>
-                <span className="num">02</span>
-                <h3>Map the journey</h3>
-                <p>Home, church, cemetery, reception: every stop in order, with an exact pin at the right gate.</p>
-              </article>
-              <article>
-                <span className="num">03</span>
-                <h3>Build the programme</h3>
-                <p>Prayers, hymns, scripture, tributes and eulogy, in the order they will happen.</p>
-              </article>
-              <article>
-                <span className="num">04</span>
-                <h3>Share one QR</h3>
-                <p>A single memorial link and QR, plus WhatsApp cards, a printable programme and a keepsake PDF.</p>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="section night">
-          <div className="container">
-            <div className="section-head">
-              <h2 className="h2">On the day, the page guides everyone.</h2>
-              <p className="lede">
-                The memorial link turns into a funeral-day guide on its own. Guests see where to be now and where to go next,
-                with one-tap directions. No app to install and no location tracking.
-              </p>
-            </div>
-            <div className="feature-list">
-              <article>
-                <span className="pill live dot">Live</span>
-                <h3>Now &amp; next</h3>
-                <p>Uses the stop times you entered to show the current stop, the next stop and the part of the service under way.</p>
-              </article>
-              <article>
-                <span className="pill dot" style={{ background: 'rgba(250,249,245,.1)', color: 'var(--on-night)' }}>
-                  Exact pins
-                </span>
-                <h3>The right entrance</h3>
-                <p>Search for a place, then drag the pin to the exact gate, hall or graveside, even on unmarked rural roads.</p>
-              </article>
-              <article>
-                <span className="pill dot" style={{ background: 'rgba(250,249,245,.1)', color: 'var(--on-night)' }}>
-                  Directions
-                </span>
-                <h3>Google, Apple or Waze</h3>
-                <p>Guests open the saved coordinates in the maps app they already use, and get the route from each stop to the next.</p>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        {paymentsOn && (
-          <section className="section alt" id="gift">
-            <div className="container cta-band">
-              <div>
-                <span className="eyebrow">Give a memorial</span>
-                <h2 className="h2" style={{ marginTop: 12 }}>
-                  Take one thing off a grieving family’s plate.
-                </h2>
-                <p className="lede" style={{ marginTop: 14 }}>
-                  Pay for the memorial on their behalf and send them a private link on WhatsApp. Our team helps them get it ready before the
-                  funeral.
-                </p>
+              <div className="hl-visual">
+                <MapVisual />
               </div>
-              <Link className="btn primary lg" href="/gift">
-                Give a memorial
-              </Link>
+            </article>
+            <article className="hl-card dark">
+              <p className="hl-cap">
+                <strong>On the day, it shows what’s happening now.</strong> Guests see the current stop, what’s next and where the service is up to.
+              </p>
+              <div className="hl-visual">
+                <LiveVisual />
+              </div>
+            </article>
+            <article className="hl-card">
+              <p className="hl-cap">
+                <strong>Follow the procession.</strong> The lead car shares its position, so nobody gets lost on the way to the cemetery.
+              </p>
+              <div className="hl-visual">
+                <ProcessionVisual />
+              </div>
+            </article>
+            <article className="hl-card">
+              <p className="hl-cap">
+                <strong>One QR code. Every keepsake.</strong> WhatsApp cards, a printable programme and a keepsake book, made for you.
+              </p>
+              <div className="hl-visual">
+                <KeepsakeStack />
+              </div>
+            </article>
+          </Highlights>
+        </section>
+
+        {/* ---------------------------------------------------------------- How it works */}
+        <section className="chapter" id="overview">
+          <div className="container split">
+            <div className="split-copy">
+              <p className="chapter-kicker reveal">How it works</p>
+              <h2 className="chapter-title reveal" style={d(0.05)}>
+                Made in an evening.
+                <br />
+                <span className="soft">Ready for everyone.</span>
+              </h2>
+              <p className="chapter-body reveal" style={d(0.1)}>
+                Memora treats the funeral as one living memorial, not a pile of separate documents. Change a venue or a time once, and the page,
+                the programme and every card agree.
+              </p>
+              <ol className="how">
+                {[
+                  ['Tell their story', 'Portrait, names, dates and a few words from the family.'],
+                  ['Map the journey', 'Every stop in order, with an exact pin at the right entrance.'],
+                  ['Build the programme', 'Prayers, hymns, tributes and eulogy, in the order they’ll happen.'],
+                  ['Share one link', 'A QR code and WhatsApp cards for everyone who needs to know.'],
+                ].map(([t, b], i) => (
+                  <li key={t} className="reveal" style={d(0.1 + i * 0.07)}>
+                    <strong>{t}</strong>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="split-visual reveal from-right">
+              <ProgrammeSheet className="big" />
+            </div>
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- On the day (dark chapter) */}
+        <section className="chapter dark" id="day">
+          <div className="container center-head">
+            <p className="chapter-kicker reveal">On the day</p>
+            <h2 className="chapter-title xl reveal" style={d(0.05)}>
+              The page becomes
+              <br />
+              the guide.
+            </h2>
+            <p className="chapter-body reveal" style={d(0.1)}>
+              No app to install. The same link everyone already has turns into a live, calm guide to where to be and when.
+            </p>
+          </div>
+          <div className="container day-grid">
+            <div className="reveal zoom-soft">
+              <LiveVisual />
+            </div>
+            <div className="reveal zoom-soft" style={d(0.08)}>
+              <ProcessionVisual />
+            </div>
+          </div>
+          <div className="container facts">
+            {[
+              ['Now & next.', 'Uses the stop and programme times to show the current stop, the next one and the part of the service under way.'],
+              ['The right entrance.', 'Pins go on the exact gate, hall or graveside, even on unmarked rural roads. Google Maps, Apple Maps or Waze.'],
+              ['A live procession.', 'Only while the coordinator shares it. Only the latest position, never a history. It ends by itself on arrival.'],
+            ].map(([t, b], i) => (
+              <p key={t} className="reveal" style={d(i * 0.08)}>
+                <strong>{t}</strong> {b}
+              </p>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- Run-sheet */}
+        <section className="chapter" id="coordinator">
+          <div className="container split reverse">
+            <div className="split-visual reveal from-left">
+              <RunSheetVisual className="run-phone" />
+            </div>
+            <div className="split-copy">
+              <p className="chapter-kicker reveal">For the programme director</p>
+              <h2 className="chapter-title reveal" style={d(0.05)}>
+                Things change.
+                <br />
+                <span className="soft">The programme keeps up.</span>
+              </h2>
+              <p className="chapter-body reveal" style={d(0.1)}>
+                The family hands the day to whoever runs it with one private link. They start each item, drag the running order around, and push
+                everything back when things run late. Every guest’s page follows within seconds.
+              </p>
+              <ul className="ticks reveal" style={d(0.15)}>
+                <li>Drag and drop the order of service</li>
+                <li>Running late? +5, +10 or +15 minutes for everything still to come</li>
+                <li>Two phones, no clashes: nobody overwrites anyone</li>
+                <li>No account needed. Reset the link any time.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- Privacy */}
+        <section className="band" id="privacy">
+          <div className="container center-head">
+            <svg className="glyph reveal" width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
+              <rect x="12" y="24" width="32" height="24" rx="6" fill="#1d1d1f" />
+              <path d="M19 24v-6a9 9 0 0 1 18 0v6" stroke="#1d1d1f" strokeWidth="4" fill="none" strokeLinecap="round" />
+            </svg>
+            <h2 className="chapter-title reveal" style={d(0.05)}>
+              Private by design.
+            </h2>
+            <p className="chapter-body reveal" style={d(0.1)}>
+              A memorial is personal. Memora keeps it that way.
+            </p>
+          </div>
+          <div className="container tiles">
+            {[
+              ['Yours until you publish.', 'Drafts are private. Start without an account and nothing leaves your phone until you sign up.'],
+              ['Unlisted, not indexed.', 'Memorials are shared by link and kept out of search engines.'],
+              ['A year, then private.', 'The page stays up long enough for the unveiling, then quietly goes private.'],
+            ].map(([t, b], i) => (
+              <article key={t} className="tile reveal" style={d(i * 0.08)}>
+                <strong>{t}</strong>
+                <p>{b}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- Gift */}
+        {paymentsOn && (
+          <section className="chapter" id="gift">
+            <div className="container center-head">
+              <p className="chapter-kicker reveal">Give a memorial</p>
+              <h2 className="chapter-title reveal" style={d(0.05)}>
+                One less thing to carry.
+              </h2>
+              <p className="chapter-body reveal" style={d(0.1)}>
+                Pay for the memorial on a grieving family’s behalf and send them a private link on WhatsApp. Our team helps them finish before the
+                funeral.
+              </p>
+              <div className="stage-cta reveal" style={d(0.15)}>
+                <Link className="btn primary" href="/gift">
+                  Give a memorial
+                </Link>
+              </div>
             </div>
           </section>
         )}
 
-        <section className="section" id="pricing">
+        {/* ---------------------------------------------------------------- Pricing */}
+        <section className={paymentsOn ? 'band' : 'chapter'} id="pricing">
+          <div className="container center-head">
+            <p className="chapter-kicker reveal">Pricing</p>
+            <h2 className="chapter-title xl reveal" style={d(0.05)}>
+              {paymentsOn ? PRICE_LABEL : 'Free.'}
+            </h2>
+            <p className="chapter-body reveal" style={d(0.1)}>
+              {paymentsOn
+                ? 'Build and preview everything for free. Pay once when you publish. No subscriptions.'
+                : `Every feature is free while we launch (usually ${PRICE_LABEL}). Memorials published now stay free.`}
+            </p>
+          </div>
           <div className="container">
-            <div className="price-band">
+            <article className="plan reveal" style={d(0.12)}>
               <div>
-                <span className="eyebrow">Pricing</span>
-                <h2 className="h2" style={{ marginTop: 12 }}>
-                  {paymentsOn ? 'Start free. Pay once, when you publish.' : 'Free while we launch.'}
-                </h2>
-                <p className="lede" style={{ marginTop: 16 }}>
-                  {paymentsOn
-                    ? 'Build and preview the whole memorial without paying. When the family is ready, one payment publishes it for a full year, long enough to update it for the tombstone unveiling. No subscriptions.'
-                    : 'Every feature is free while we launch: build, publish and share the memorial, and download every card and keepsake. It stays public for a full year, long enough to update it for the tombstone unveiling.'}
-                </p>
+                <strong className="plan-title">{PRODUCT.name}</strong>
+                <span className="plan-sub">{paymentsOn ? 'Once-off, per memorial · public for a year' : 'Public for a full year'}</span>
               </div>
-              <article className="plan-card featured">
-                <strong className="plan-name">{PRODUCT.name}</strong>
-                <span className="plan-price">{paymentsOn ? PRICE_LABEL : 'Free'}</span>
-                <span className="plan-duration">{paymentsOn ? 'Once-off, per memorial' : `During our launch (usually ${PRICE_LABEL})`}</span>
-                <ul className="plan-features">
-                  {PRODUCT.features.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-                <Link className="btn primary block" href="/create">
-                  Start free
-                </Link>
-                {paymentsOn && (
-                  <span className="tiny muted" style={{ marginTop: 10 }}>
-                    Card payments handled securely by Yoco.
-                  </span>
-                )}
-              </article>
+              <ul>
+                {PRODUCT.features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+              <Link className="btn primary" href="/create">
+                Start free
+              </Link>
+            </article>
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- Close */}
+        <section className="band closing">
+          <div className="container center-head">
+            <h2 className="stage-title reveal">Remember beautifully.</h2>
+            <div className="stage-cta reveal" style={d(0.08)}>
+              <Link className="btn primary" href="/create">
+                Create a memorial
+              </Link>
+              <Link className="link chev" href="/m/preview">
+                See an example
+              </Link>
             </div>
           </div>
         </section>

@@ -1,9 +1,8 @@
-import '@fontsource-variable/newsreader/opsz.css';
-import '@fontsource-variable/newsreader/opsz-italic.css';
 import '@fontsource-variable/inter';
 import './globals.css';
 
 import type { Metadata, Viewport } from 'next';
+import { RevealObserver } from '@/components/RevealObserver';
 import { ToastProvider } from '@/components/Toast';
 import { siteUrl } from '@/lib/config';
 
@@ -17,16 +16,21 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#faf9f5',
+  themeColor: '#ffffff',
   width: 'device-width',
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-ZA">
+    <html lang="en-ZA" suppressHydrationWarning>
+      <head>
+        {/* Hide scroll-reveal content only when JavaScript will reveal it. */}
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
+      </head>
       <body>
         <ToastProvider>{children}</ToastProvider>
+        <RevealObserver />
       </body>
     </html>
   );

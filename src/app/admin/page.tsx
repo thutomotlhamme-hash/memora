@@ -8,7 +8,7 @@ import { siteUrl } from '@/lib/config';
 import { fmtDate } from '@/lib/memorial';
 import { formatWhatsApp } from '@/lib/phone';
 import { formatMoney } from '@/lib/plans';
-import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, teamInviteText, teamJoinText } from '@/lib/server/admin';
+import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, setupChecks, teamInviteText, teamJoinText } from '@/lib/server/admin';
 import { getAdminAccess } from '@/lib/server/admin-auth';
 import { giftWhatsAppText, loadGiftBoard } from '@/lib/server/gifts';
 import { getAdminSupabase } from '@/lib/supabase/admin';
@@ -107,8 +107,27 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   async function renderOverview() {
     const o = await loadOverview(admin);
     const nothing = !o.urgent.length && !o.paidNotPublished.length && !o.stuckOrders.length && !o.stuckGifts.length && !o.giftsNotStarted.length;
+    const setup = setupChecks();
+    const missing = setup.filter((c) => !c.ok && !c.needed.startsWith('Optional'));
     return (
       <>
+        <div className={`card setup-card${missing.length ? ' bad' : ''}`} style={{ marginBottom: 20 }}>
+          <h2 className="h3">{missing.length ? `Setup: ${missing.length} setting${missing.length > 1 ? 's' : ''} missing` : 'Setup: all good'}</h2>
+          <p className="small muted" style={{ marginTop: 4 }}>
+            Settings live in Netlify → Site configuration → Environment variables. After changing one, trigger a new deploy.
+          </p>
+          {setup.map((c) => (
+            <div className="kv" key={c.name}>
+              <span>
+                {c.ok ? '✓' : c.needed.startsWith('Optional') ? '○' : '✗'} <code>{c.name}</code>
+              </span>
+              <span className={c.ok ? 'muted small' : 'small'}>
+                {c.needed}
+                {!c.ok && <span className="muted"> · {c.fix}</span>}
+              </span>
+            </div>
+          ))}
+        </div>
         <div className="stat-row">
           <div className="stat">
             <strong>{o.stats.published}</strong>

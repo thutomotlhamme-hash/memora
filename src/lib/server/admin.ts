@@ -308,3 +308,24 @@ export function teamInviteText(email: string): string {
 export function teamJoinText(): string {
   return `I'd like to add you to the Memora team. First create your account here with your cellphone number and a password:\n${siteUrl()}/account/register?next=/admin\n\nThen send me the number you used, and I'll add you.`;
 }
+
+/**
+ * Settings the live site needs, checked on every admin visit, so a missing one
+ * is visible here instead of quietly breaking a feature. Never shows values.
+ */
+export function setupChecks(): { name: string; ok: boolean; needed: string; fix: string }[] {
+  const has = (k: string) => Boolean(process.env[k]);
+  const checks = [
+    { name: 'SUPABASE_SECRET_KEY', ok: has('SUPABASE_SECRET_KEY') || has('SUPABASE_SERVICE_ROLE_KEY'), needed: 'Accounts, publishing, admin, the run-sheet', fix: 'Supabase → Project Settings → API Keys → secret key' },
+    { name: 'MEMORA_LINK_SECRET', ok: has('MEMORA_LINK_SECRET'), needed: 'Run-sheet links, procession sharing, gift links', fix: 'Any long random string' },
+    { name: 'NEXT_PUBLIC_SITE_URL', ok: has('NEXT_PUBLIC_SITE_URL'), needed: 'Correct links in WhatsApp messages and QR codes', fix: 'https://memora-memorials.netlify.app' },
+    { name: 'NEXT_PUBLIC_CONTACT_WHATSAPP', ok: has('NEXT_PUBLIC_CONTACT_WHATSAPP'), needed: 'Optional: “WhatsApp us” for password help (otherwise the contact form)', fix: 'Memora’s WhatsApp number, e.g. 27721234567' },
+  ];
+  if (process.env.NEXT_PUBLIC_MEMORA_PAYMENTS === 'on') {
+    checks.push(
+      { name: 'YOCO_SECRET_KEY', ok: has('YOCO_SECRET_KEY'), needed: 'Taking payments', fix: 'Yoco → Settings → Payment Gateway' },
+      { name: 'YOCO_WEBHOOK_SECRET', ok: has('YOCO_WEBHOOK_SECRET'), needed: 'Confirming payments automatically', fix: 'Register the Yoco webhook' },
+    );
+  }
+  return checks;
+}

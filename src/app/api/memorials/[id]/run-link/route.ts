@@ -15,7 +15,7 @@ export async function POST(request: Request, { params }: Ctx) {
   const auth = await requireOwner(request);
   if (auth instanceof Response) return auth;
   const admin = getAdminSupabase();
-  if (!admin || !linkSecret()) return fail('Run-sheet links aren’t switched on yet.', 503);
+  if (!admin || !linkSecret()) return fail('The run-sheet isn’t switched on for this site yet. The site owner can see what’s missing under Admin → Overview → Setup.', 503);
 
   // RLS: only the owner can see their memorial.
   const { data: owned } = await auth.supabase.from('memora_cases').select('id').eq('id', id).maybeSingle();

@@ -1028,6 +1028,8 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes sheet-up { from { opacity: 0; transform: translate3d(0, 40px, 0); } }
 .sheet .consent, .save-card .consent { margin-top: 14px; }
+.setup-card code { font-size: 12.5px; }
+.setup-card.bad { box-shadow: inset 0 0 0 2px var(--rust); }
 .mono-pw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheet-backdrop { animation: none; } }
 

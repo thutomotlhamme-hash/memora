@@ -366,7 +366,9 @@ button { cursor: pointer; }
   .mobile-steps button.done:not([aria-current='step'])::after { content: ' ✓'; color: var(--sage); }
 }
 
-.guest-banner { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; padding: 14px 18px; margin-top: 20px; border-radius: var(--r); background: var(--paper-2); font-size: 14.5px; }
+.guest-note { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.guest-note strong { color: var(--ink); font-weight: 600; }
+.guest-note a { color: var(--clay-ink); font-weight: 550; }
 
 .portrait-picker { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .portrait-frame { width: 132px; aspect-ratio: 4 / 5; border-radius: var(--r); overflow: hidden; background: var(--paper-2); border: 1px dashed var(--line-strong); display: grid; place-items: center; color: var(--faint); font-size: 13px; text-align: center; flex: none; }

@@ -3,7 +3,8 @@ import { isSupabaseConfigured } from '@/lib/config';
 import { getSessionUser } from '@/lib/supabase/server';
 import { Brand } from './Brand';
 
-export async function SiteHeader() {
+/** `hideCreate` drops the "Create a memorial" button on pages where you're already creating one. */
+export async function SiteHeader({ hideCreate = false }: { hideCreate?: boolean } = {}) {
   const user = isSupabaseConfigured() ? await getSessionUser() : null;
   return (
     <header className="site-header">
@@ -30,9 +31,11 @@ export async function SiteHeader() {
               <Link className="btn ghost" href="/account/login">
                 Log in
               </Link>
-              <Link className="btn primary" href="/create">
-                Create a memorial
-              </Link>
+              {!hideCreate && (
+                <Link className="btn primary" href="/create">
+                  Create a memorial
+                </Link>
+              )}
             </>
           )}
         </nav>

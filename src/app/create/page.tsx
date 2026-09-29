@@ -14,7 +14,7 @@ export default async function CreatePage() {
   if (await getSessionUser()) redirect('/memorials?new=1');
   return (
     <>
-      <SiteHeader />
+      <SiteHeader hideCreate />
       <main>
         <Suspense>
           <GuestEditor />

@@ -188,23 +188,6 @@ export function Editor(props: EditorProps) {
 
   return (
     <>
-      {!owner && (
-        <div className="container">
-          <div className="guest-banner">
-            <span>
-              <strong>Guest draft.</strong> <span className="muted">Everything stays on this device until you create an account.</span>
-            </span>
-            <span className="row">
-              <Link className="btn sm" href="/account/login?next=/memorials">
-                Log in
-              </Link>
-              <Link className="btn sm primary" href="/account/register?next=/memorials">
-                Create account
-              </Link>
-            </span>
-          </div>
-        </div>
-      )}
       <div className="container editor" ref={topRef} style={{ scrollMarginTop: 80 }}>
         <aside className="editor-side">
           <div className="who">
@@ -223,6 +206,12 @@ export function Editor(props: EditorProps) {
               <SaveIndicator state={save} guest={!owner} />
             </div>
           </div>
+          {!owner && (
+            <p className="guest-note">
+              <strong>Guest draft</strong> · saved only on this device.{' '}
+              <Link href="/account/register?next=/memorials">Create a free account</Link> to keep it safe and publish.
+            </p>
+          )}
           {owner?.gift && (
             <div className="note" style={{ fontSize: 14 }}>
               <span>

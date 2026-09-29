@@ -16,8 +16,9 @@ export function siteUrl(): string {
 
 /** Public contact details shown in the footer, privacy policy and terms. */
 export const contact = {
+  /** Optional public email. Without it, the site points people to the /contact form. */
   get email(): string {
-    return process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'hello@memora.co.za';
+    return process.env.NEXT_PUBLIC_CONTACT_EMAIL || '';
   },
   get whatsapp(): string {
     return process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || '';

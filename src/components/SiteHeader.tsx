@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { contact, isSupabaseConfigured } from '@/lib/config';
+import { isSupabaseConfigured } from '@/lib/config';
 import { getSessionUser } from '@/lib/supabase/server';
 import { Brand } from './Brand';
 
@@ -50,7 +50,7 @@ export function SiteFooter() {
           <Link href="/gift">Give a memorial</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
-          <a href={`mailto:${contact.email}`}>{contact.email}</a>
+          <Link href="/contact">Contact us</Link>
         </nav>
       </div>
     </footer>

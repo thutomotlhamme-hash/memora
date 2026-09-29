@@ -1,4 +1,4 @@
-import { LegalPage } from '@/components/LegalPage';
+import { ContactLink, LegalPage } from '@/components/LegalPage';
 import { contact } from '@/lib/config';
 import { PRODUCT } from '@/lib/plans';
 
@@ -75,8 +75,8 @@ export default function PrivacyPage() {
 
       <h2>Your rights</h2>
       <p>
-        You may ask to see the personal information we hold about you, ask us to correct or delete it, or object to how we use it. Email{' '}
-        <a href={`mailto:${contact.email}`}>{contact.email}</a>. If you are not satisfied with our response, you may complain to the Information
+        You may ask to see the personal information we hold about you, ask us to correct or delete it, or object to how we use it. Contact us via{' '}
+        <ContactLink />. If you are not satisfied with our response, you may complain to the Information
         Regulator (South Africa) at inforeg.org.za.
       </p>
 
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
 
       <h2>Contact</h2>
       <p>
-        Questions about privacy: <a href={`mailto:${contact.email}`}>{contact.email}</a>.
+        Questions about privacy: contact us via <ContactLink />.
       </p>
     </LegalPage>
   );

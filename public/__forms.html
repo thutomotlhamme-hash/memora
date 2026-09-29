@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <!-- Netlify detects this static form at deploy time. The /contact page posts to this file. -->
+  <body>
+    <form name="contact" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input type="hidden" name="form-name" value="contact" />
+      <input name="bot-field" />
+      <input name="name" />
+      <input name="email" />
+      <input name="whatsapp" />
+      <select name="topic">
+        <option>help</option><option>gift</option><option>payment</option><option>privacy</option><option>partnership</option><option>other</option>
+      </select>
+      <textarea name="message"></textarea>
+    </form>
+  </body>
+</html>

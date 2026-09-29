@@ -116,6 +116,10 @@ Nothing is sent automatically yet: the buyer sends the link on WhatsApp and the 
 
 Gift payments use the same Yoco webhook. A checkout pays either for a memorial or for a gift.
 
+### Contact form
+
+`/contact` posts to Netlify Forms (declared in `public/__forms.html`). To get an email for each message: Netlify → Project → Forms → **Form notifications** → Add notification → Email notification, form `contact`. Free on Netlify's starter plan (100 submissions a month).
+
 ### Netlify
 
 Connect the repo; `netlify.toml` builds with `npm run build` and Netlify's Next.js runtime. Add the env vars from `.env.example` in Site settings. `NEXT_PUBLIC_SITE_URL` must be the public URL, because Yoco's success, cancel and failure redirects use it.

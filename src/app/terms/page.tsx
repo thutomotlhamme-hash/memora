@@ -1,4 +1,4 @@
-import { LegalPage } from '@/components/LegalPage';
+import { ContactLink, LegalPage } from '@/components/LegalPage';
 import { contact } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 
@@ -65,7 +65,7 @@ export default function TermsPage() {
 
       <h2>Changes and contact</h2>
       <p>
-        We may update these terms and will show the date of the latest version on this page. Questions: <a href={`mailto:${contact.email}`}>{contact.email}</a>.
+        We may update these terms and will show the date of the latest version on this page. Questions: contact us via <ContactLink />.
       </p>
     </LegalPage>
   );

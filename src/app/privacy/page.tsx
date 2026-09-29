@@ -65,7 +65,7 @@ export default function PrivacyPage() {
         <li>Supabase (database, file storage and sign-in), hosted in the European Union.</li>
         <li>Netlify (website hosting).</li>
         <li>Yoco (card payments).</li>
-        <li>OpenStreetMap (map tiles and place search, used when you set a map pin).</li>
+        <li>OpenStreetMap and komoot’s Photon service (map tiles and place suggestions, used when you search for a place or set a map pin; only what you type in the search box is sent).</li>
       </ul>
       <p>
         Some of these providers store information outside South Africa. We only use providers bound by data-protection laws or agreements that give

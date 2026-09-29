@@ -254,6 +254,7 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
 
               <div className="span-2">
                 <PlaceSearch
+                  near={form.lat !== '' && form.lng !== '' ? { lat: Number(form.lat), lng: Number(form.lng) } : stops[stops.length - 1] ?? null}
                   onPick={(p) =>
                     setForm((f) => (f ? { ...f, title: f.title || p.name, address: p.address, lat: p.lat.toFixed(6), lng: p.lng.toFixed(6) } : f))
                   }

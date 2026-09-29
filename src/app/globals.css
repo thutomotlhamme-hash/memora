@@ -623,7 +623,11 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .place-search .input { flex: 1; }
 .place-results { position: absolute; z-index: 1000; left: 0; right: 0; top: calc(100% + 6px); background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r); box-shadow: var(--shadow-lg); overflow: hidden; max-height: 320px; overflow-y: auto; }
 .place-results button { display: grid; gap: 2px; width: 100%; padding: 12px 14px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: var(--card); }
-.place-results button:hover, .place-results button:focus-visible { background: var(--paper-2); }
+.place-results button:hover, .place-results button:focus-visible, .place-results button.active { background: var(--paper-2); }
+.place-results strong { display: flex; align-items: baseline; gap: 8px; font-weight: 500; }
+.place-results mark { background: none; color: var(--ink); font-weight: 700; }
+.place-kind { font-style: normal; font-size: 11px; font-weight: 600; color: var(--clay); background: var(--clay-soft); padding: 1px 7px; border-radius: 999px; }
+.place-results { animation: rise 0.35s var(--ease) both; }
 .place-results strong { font-size: 15px; }
 .place-results span { font-size: 13px; color: var(--muted); }
 

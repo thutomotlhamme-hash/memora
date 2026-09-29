@@ -1,43 +1,48 @@
-# Memora design notes
+# Memora design notes: Jacaranda
 
-**Reference:** a product-launch "white gallery" style (Refero Styles: the Apple product-page reference). The page is a quiet gallery: large product renders take the centre, compact near-black type carries each claim, and one precise blue is kept for actions only.
+**Idea:** the colour of Pretoria in spring, and the church's colour for mourning and hope. Calm enough for grief, alive enough to celebrate a life. The approved direction board is the reference for colour, type and signatures.
 
-Memora borrows the *cadence and feel*, not the brand. There are no Apple logos, product names or imagery. Type uses SF Pro where the device already has it (Apple devices) and falls back to Inter everywhere else.
+## Palette (`src/app/globals.css`)
 
-## Tokens (`src/app/globals.css`)
-
-| Token | Value | Use |
-| --- | --- | --- |
-| `--paper` | `#ffffff` | Page canvas, hero and storytelling sections |
-| `--paper-2` | `#f5f5f7` | Alternate full-width bands, app screens behind white panels, footer |
-| `--ink` | `#1d1d1f` | Headlines and body |
-| `--muted` / `--faint` | `#6e6e73` / `#86868b` | Secondary copy, the grey second line of a headline |
-| `--clay` | `#0071e3` | Filled buttons, focus rings, progress, "now" markers |
-| `--clay-ink` | `#0066cc` | Inline and "›" links |
-| `--launch` | `#b64400` | Small kickers and "New" labels (plain text, never a pill) |
-| `--night` | `#000000` | The one dark chapter per page, the live panel |
-| `--r-lg` | `28px` | Cards and media frames; buttons are full pills |
-
-Not tokenised on purpose:
-- **No shadows on content.** Separation comes from white on `#f5f5f7` and hairlines. The only shadows are on floating popovers and the product renders.
-- **No gradients** on surfaces.
+| Name | Hex | Token | Use |
+| --- | --- | --- | --- |
+| Petal | `#FBFAF8` | `--paper` | Page canvas |
+| Mist | `#F2EEF7` | `--paper-2` | Bands, app screens behind white panels |
+| Bloom | `#C9B8E8` | `--bloom` | Highlights, arch ring, the journey line ahead, links on dark |
+| Jacaranda | `#5B3E8C` | `--clay` | Buttons, kickers, the journey line walked, focus |
+| Deep bloom | `#3F2A66` | `--clay-ink` | Links, hover |
+| Plum ink | `#1E1A24` | `--ink` | Text |
+| Dusk | `#6B6475` | `--muted` | Secondary text |
+| Vigil | `#15121C` | `--night` | Funeral-day screens and the dark chapter |
+| Candle | `#E8A94A` | `--candle` | "Live" and "now", **on dark only** (plus the logo's end pin) |
 
 ## Type
-- **Display:** 600 weight with tight tracking. The hero is 48–96px at −0.015em; chapter titles are 32–56px.
-- **Body:** 17px/1.47 with slightly negative tracking. Links are blue with a "›" chevron.
-- **Kickers:** 14–21px/600 in `--launch`, never uppercase.
+- **Fraunces** (serif, soft) is for names, headlines and big moments. Weight is around 400. The accent word is in italic Jacaranda: "Remember *beautifully.*"
+- **Instrument Sans** is for everything you read and tap, with neutral tracking.
+
+## Signatures
+- **The arch.** Every portrait sits in a church-window arch (`--arch`) with a Bloom ring: the memorial hero, editor, review, keepsakes and the landing page.
+- **The journey line.** The logo's M is one path between two pins (jacaranda start, candle end). The same line runs through the memorial's funeral journey (stops hang off one thread), under the landing hero (it draws itself) and in the procession visuals.
+- **Light, not shadow.** Soft bloom glows behind portraits, and a flickering candle glow on the funeral-day screens.
 
 ## Motion
-Everything uses Apple's long ease-out: `cubic-bezier(0.28, 0.11, 0.32, 1)`.
-- **Scroll reveals:** any `.reveal` fades up 44px over 1.1s the first time it enters view (`RevealObserver`). `.from-left` and `.from-right` slide in sideways. Stagger siblings with `style={{ '--d': '0.08s' }}`.
-- **Hero entrance:** copy rises in a stagger and the product scene settles in.
-- **Scroll-linked zoom:** where supported, the hero scene recedes as you scroll past it and `.zoom-soft` visuals grow into place. There's no fallback because none is needed.
-- **Highlights carousel:** scroll-snap cards that advance every 5.2s while in view, with a filling progress dot and a play/pause pill. It stops as soon as someone touches it.
-- **Sticky bars:** frosted glass (`saturate(180%) blur(20px)`) on the header, the landing page's local nav once it sticks, and the memorial's section nav.
-- **Reduced motion:** reveals become a plain fade; autoplay, pulses and zooms are off.
+The base curve is `cubic-bezier(0.28, 0.11, 0.32, 1)`; `--spring` is for small nudges.
 
-## Components
-- **Buttons:** 980px pills. `.primary` is blue; the default is a hairline outline; `.ghost` is text only.
-- **Panels and cards:** white, 28px radius, no border, on the `#f5f5f7` band.
-- **Inputs:** 50px tall, 12px radius, blue focus ring.
-- **Product renders** (`src/components/landing/Visuals.tsx`): the phone, programme sheet, QR card, map, live card, procession and run-sheet are drawn in HTML/SVG, so they're crisp at any size and need no photography.
+**Kept from the previous build:**
+- scroll reveals (`.reveal`, with `--d` for stagger);
+- the staggered hero entrance;
+- scroll-linked zoom;
+- the highlights carousel with its play/pause pill;
+- frosted sticky bars.
+
+**Added:**
+- headlines rise out of a soft blur;
+- chapter titles de-blur as they reveal;
+- the portrait arch unveils from the ground up;
+- the journey line draws itself (hero SVG, and the memorial's thread stop by stop);
+- the candle glow breathes on the day screens and the bloom breathes behind the hero;
+- a pulsing candle dot on "New";
+- springy button lift and arrow nudge;
+- cross-page view transitions that carry the portrait between screens.
+
+Reduced motion turns all of these into plain fades or nothing.

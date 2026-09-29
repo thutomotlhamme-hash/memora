@@ -26,9 +26,9 @@ test('the demo memorial with a portrait is complete', () => {
 test('burial requires a cemetery stop and cremation a crematorium', () => {
   const d = complete();
   d.journey = d.journey.filter((s) => s.type !== 'cemetery');
-  assert.match(journeyGate(d).message, /Cemetery/);
+  assert.match(journeyGate(d).message, /cemetery/);
   d.disposition.type = 'cremation';
-  assert.match(journeyGate(d).message, /Crematorium/);
+  assert.match(journeyGate(d).message, /crematorium/);
   d.disposition.type = 'memorial_only';
   assert.equal(journeyGate(d).ready, true);
   d.disposition = { type: 'other', notes: '' };
@@ -168,4 +168,23 @@ test('gift helpers', () => {
   assert.deepEqual(splitName('Naledi'), { firstName: 'Naledi', lastName: '' });
   assert.equal(daysUntil('2026-10-04', new Date('2026-10-01T22:00:00')), 3);
   assert.equal(daysUntil(null), null);
+});
+
+test('stops must follow in time order', async () => {
+  const { journeyOrderProblem } = await import('../src/lib/memorial.ts');
+  const s = (title: string, date: string, time: string, departTime = '') => ({ title, date, time, departTime });
+  assert.equal(journeyOrderProblem([s('Home', '2026-10-03', '08:00', '09:00'), s('Church', '2026-10-03', '10:00', '11:45'), s('Cemetery', '2026-10-03', '12:30')]), null);
+  // Starts before the previous stop ends.
+  assert.match(journeyOrderProblem([s('Church', '2026-10-03', '10:00', '11:45'), s('Cemetery', '2026-10-03', '11:30')]) ?? '', /Cemetery.*11:30.*ends at 11:45/);
+  // Earlier than the previous start.
+  assert.ok(journeyOrderProblem([s('Church', '2026-10-03', '10:00'), s('Home', '2026-10-03', '08:00')]));
+  // A later day is fine even with an earlier clock time.
+  assert.equal(journeyOrderProblem([s('Vigil', '2026-10-02', '19:00', '22:00'), s('Church', '2026-10-03', '08:00')]), null);
+  // An earlier day is not.
+  assert.ok(journeyOrderProblem([s('Church', '2026-10-03', '10:00'), s('Vigil', '2026-10-02', '19:00')]));
+  // Touching is fine: the next stop may start exactly when the last one ends.
+  assert.equal(journeyOrderProblem([s('Church', '2026-10-03', '10:00', '12:00'), s('Cemetery', '2026-10-03', '12:00')]), null);
+  const d = complete();
+  d.journey = [...d.journey].reverse();
+  assert.equal(journeyGate(d).ready, false);
 });

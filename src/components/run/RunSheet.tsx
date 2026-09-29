@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useNow } from '@/lib/hooks';
-import { PROGRAMME_TYPE_LABELS, fmtDate, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammeType, type Stop } from '@/lib/memorial';
+import { PROGRAMME_TYPE_LABELS, fmtDate, journeyOrderProblem, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammeType, type Stop } from '@/lib/memorial';
 import type { ProcessionRecord } from '@/lib/procession';
 import { ProcessionControl } from './ProcessionControl';
 import { insertItem, moveItem, shiftFrom, shiftTodaysStops, startItem, toMinutes } from '@/lib/runsheet';
@@ -172,10 +172,12 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
     const shifted = shiftTodaysStops(snap.journey, localDateKey(), new Date(), minutes);
     if (!shifted.length) return {};
     const byId = new Map(shifted.map((s) => [s.id, s]));
-    return {
-      journey: snap.journey.map((s) => (byId.has(s.id) ? { ...s, time: byId.get(s.id)!.time, departTime: byId.get(s.id)!.departTime } : s)),
-      stopTimes: byId,
-    };
+    const journey = snap.journey.map((s) => (byId.has(s.id) ? { ...s, time: byId.get(s.id)!.time, departTime: byId.get(s.id)!.departTime } : s));
+    if (journeyOrderProblem(journey)) {
+      toast('Today’s stops weren’t moved: that would put a stop before the one ahead of it. Adjust them below.', 'error');
+      return {};
+    }
+    return { journey, stopTimes: byId };
   };
 
   const start = (key: string) => {
@@ -236,8 +238,13 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   const setStopTime = (stop: Stop, field: 'time' | 'departTime', value: string) => {
     if (field === 'time' && !value) return;
     const updated = { ...stop, [field]: value };
+    if (updated.departTime && updated.departTime < updated.time) return toast('A stop can’t end before it starts.', 'error');
+    const journey = snap.journey.map((s) => (s.id === stop.id ? updated : s));
+    // The procession runs in order: never before the stop ahead of it has finished.
+    const problem = journeyOrderProblem(journey);
+    if (problem) return toast(problem, 'error');
     commit(
-      { journey: snap.journey.map((s) => (s.id === stop.id ? updated : s)) },
+      { journey },
       { stopTimes: new Map([[stop.id, { id: stop.id, time: updated.time, departTime: updated.departTime }]]) },
     );
   };
@@ -454,7 +461,7 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
                   <input className="input" type="time" value={s.time} onChange={(e) => setStopTime(s, 'time', e.target.value)} />
                 </label>
                 <label className="field">
-                  <span className="tiny muted">Departs</span>
+                  <span className="tiny muted">Ends</span>
                   <input className="input" type="time" value={s.departTime} onChange={(e) => setStopTime(s, 'departTime', e.target.value)} />
                 </label>
               </div>

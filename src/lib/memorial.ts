@@ -93,11 +93,11 @@ export const STOP_TYPE_LABELS: Record<StopType, string> = {
 };
 
 export const DISPOSITION_LABELS: Record<Exclude<DispositionType, ''>, string> = {
-  burial: 'Burial',
-  cremation: 'Cremation',
-  private_burial_later: 'Private burial later',
-  memorial_only: 'Memorial / service only',
-  other: 'Other arrangement',
+  burial: 'Funeral service and burial',
+  cremation: 'Funeral service and cremation',
+  private_burial_later: 'Service now, private burial later',
+  memorial_only: 'Memorial service only',
+  other: 'Something else',
 };
 
 export const PROGRAMME_TYPE_LABELS: Record<ProgrammeType, string> = {
@@ -201,14 +201,37 @@ export function personGate(draft: Draft): Gate {
   return { ready: true, message: 'Loved one details are complete.' };
 }
 
+/**
+ * Stops must follow in time order: each one starts no earlier than the stop
+ * before it ends (or starts, when it has no end time). Returns the first
+ * problem in plain words, or null when the order is fine.
+ */
+export function journeyOrderProblem(stops: Pick<Stop, 'title' | 'date' | 'time' | 'departTime'>[]): string | null {
+  for (let i = 1; i < stops.length; i++) {
+    const prev = stops[i - 1];
+    const cur = stops[i];
+    if (!prev.date || !prev.time || !cur.date || !cur.time) continue;
+    const prevEnd = `${prev.date}T${prev.departTime || prev.time}`;
+    const curStart = `${cur.date}T${cur.time}`;
+    if (curStart < prevEnd) {
+      const when = prev.departTime ? `ends at ${prev.departTime}` : `starts at ${prev.time}`;
+      const day = cur.date !== prev.date ? ` on ${fmtDate(cur.date)}` : '';
+      return `“${cur.title || 'This stop'}” starts at ${cur.time}${day}, but “${prev.title || 'the stop before it'}” ${when}. Each stop must start after the one before it.`;
+    }
+  }
+  return null;
+}
+
 export function journeyGate(draft: Draft): Gate {
   const type = draft.disposition.type;
   const stops = draft.journey;
-  if (!type) return { ready: false, message: 'Choose what happens after the service.' };
-  if (type === 'other' && !draft.disposition.notes.trim()) return { ready: false, message: 'Describe the other funeral arrangement.' };
+  if (!type) return { ready: false, message: 'Choose the kind of service.' };
+  if (type === 'other' && !draft.disposition.notes.trim()) return { ready: false, message: 'Describe the service in the note.' };
   if (!stops.length || !stops.every(validStop)) return { ready: false, message: 'Add at least one complete stop with a date, time and exact map pin.' };
-  if (type === 'burial' && !stops.some((s) => s.type === 'cemetery')) return { ready: false, message: 'This funeral is marked for burial, so add a Cemetery / burial stop.' };
-  if (type === 'cremation' && !stops.some((s) => s.type === 'crematorium')) return { ready: false, message: 'This funeral is marked for cremation, so add a Crematorium stop.' };
+  const order = journeyOrderProblem(stops);
+  if (order) return { ready: false, message: order };
+  if (type === 'burial' && !stops.some((s) => s.type === 'cemetery')) return { ready: false, message: 'A funeral with burial needs the cemetery as a stop.' };
+  if (type === 'cremation' && !stops.some((s) => s.type === 'crematorium')) return { ready: false, message: 'A funeral with cremation needs the crematorium as a stop.' };
   return { ready: true, message: 'The funeral journey is ready.' };
 }
 

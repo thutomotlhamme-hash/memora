@@ -13,7 +13,7 @@ function StopCard({ stop, kind }: { stop: Stop; kind: 'now' | 'next' }) {
       <h3>{stop.title}</h3>
       <div className="time">
         {stop.time}
-        {stop.departTime ? ` · departs ${stop.departTime}` : ''}
+        {stop.departTime ? `–${stop.departTime}` : ''}
       </div>
       {stop.address && <p>{stop.address}</p>}
       {stop.landmark && <p>Entrance: {stop.landmark}</p>}

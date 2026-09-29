@@ -35,7 +35,7 @@ export function JourneyTimeline({ journey: initial }: { journey: Draft['journey'
   const live = useLiveData({ journey: initial, programme: { mode: '', items: [] }, liveKey: null });
   const journey = live.journey.length ? live.journey : initial;
   return (
-    <div className="timeline">
+    <div className="timeline journey">
       {journey.map((s, i) => {
         const next = journey[i + 1];
         return (
@@ -43,7 +43,7 @@ export function JourneyTimeline({ journey: initial }: { journey: Draft['journey'
             <div className="t-when">
               <strong>{s.time}</strong>
               {fmtDate(s.date)}
-              {s.departTime && <div>Departs {s.departTime}</div>}
+              {s.departTime && <div>until {s.departTime}</div>}
             </div>
             <div className="t-body">
               <span className="kind">{stopLabel(s.type)}</span>

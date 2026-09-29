@@ -9,20 +9,33 @@ import { dispositionLabel, displayName, fmtDate, funeralDate, lifeDates, program
 
 const C = {
   paper: '#ffffff',
-  paper2: '#f5f5f7',
-  night: '#000000',
-  night3: '#2c2c2e',
-  ink: '#1d1d1f',
+  paper2: '#f4f1f8',
+  night: '#15121c',
+  night3: '#2c2636',
+  ink: '#1e1a24',
   ink2: '#424245',
-  muted: '#6e6e73',
-  clay: '#b64400',
-  clayLight: '#2997ff',
-  onNight: '#f5f5f7',
-  onNightMuted: '#a1a1a6',
+  muted: '#6b6475',
+  clay: '#5b3e8c',
+  clayLight: '#e8a94a',
+  onNight: '#f4f1f8',
+  onNightMuted: '#a79fb3',
 };
 // Display type: semibold, like the site's headlines.
 const SERIF = '"Inter Variable", "Helvetica Neue", Arial, sans-serif';
 const SANS = '"Inter Variable", Arial, sans-serif';
+
+/** The Memora arch: a semicircular top over softly rounded feet. */
+function archPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, foot = 26) {
+  const r = w / 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y + r);
+  ctx.arc(x + r, y + r, r, Math.PI, 0);
+  ctx.lineTo(x + w, y + h - foot);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - foot, y + h);
+  ctx.lineTo(x + foot, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - foot);
+  ctx.closePath();
+}
 
 export interface ArtifactInput {
   draft: Draft;
@@ -144,11 +157,10 @@ export async function socialCard({ draft, slug }: ArtifactInput) {
   const pw = 700;
   const ph = 700;
   ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(px, py, pw, ph, 28);
+  archPath(ctx, px + 70, py, pw - 140, ph);
   ctx.clip();
-  if (img) drawCover(ctx, img, px, py, pw, ph);
-  else monogram(ctx, draft, px, py, pw, ph, C.night, C.onNightMuted);
+  if (img) drawCover(ctx, img, px + 70, py, pw - 140, ph);
+  else monogram(ctx, draft, px + 70, py, pw - 140, ph, C.night, C.onNightMuted);
   ctx.restore();
   ctx.textAlign = 'center';
   ctx.fillStyle = C.clay;
@@ -285,8 +297,7 @@ export async function keepsakeCard({ draft, slug }: ArtifactInput) {
   ctx.textAlign = 'center';
   const img = await loadImage(draft.person.portraitUrl);
   ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(290, 130, 500, 620, 250);
+  archPath(ctx, 290, 130, 500, 620);
   ctx.clip();
   if (img) drawCover(ctx, img, 290, 130, 500, 620);
   else monogram(ctx, draft, 290, 130, 500, 620, C.night, C.onNightMuted);

@@ -8,7 +8,7 @@ export function ReviewStep({ draft, readiness: r, go, previewHref, nav }: { draf
   const p = draft.person;
   const checks: { ok: boolean; title: string; detail: string; step: StepId }[] = [
     { ok: r.person.ready, title: 'Loved one and portrait', detail: r.person.message, step: 'person' },
-    { ok: r.journey.ready, title: 'Funeral journey and arrangement', detail: r.journey.message, step: 'journey' },
+    { ok: r.journey.ready, title: 'Service and funeral journey', detail: r.journey.message, step: 'journey' },
     { ok: r.story.ready, title: 'Life story', detail: r.story.message, step: 'story' },
     { ok: r.programme.ready, title: 'Programme', detail: r.programme.message, step: 'story' },
   ];
@@ -42,7 +42,7 @@ export function ReviewStep({ draft, readiness: r, go, previewHref, nav }: { draf
             <span>{fmtDate(p.passingDate)}</span>
           </div>
           <div className="kv">
-            <span>Arrangement</span>
+            <span>Service</span>
             <span>
               {dispositionLabel(draft.disposition.type)}
               {draft.disposition.notes ? ` · ${draft.disposition.notes}` : ''}

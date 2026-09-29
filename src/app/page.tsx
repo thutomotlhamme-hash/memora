@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Highlights } from '@/components/landing/Highlights';
 import { LocalNav } from '@/components/landing/LocalNav';
-import { KeepsakeStack, LiveVisual, MapVisual, PhoneMemorial, ProcessionVisual, ProgrammeSheet, QrCard, RunSheetVisual } from '@/components/landing/Visuals';
+import { ArchPortrait, HeroJourneyLine, KeepsakeStack, LiveVisual, MapVisual, PhoneMemorial, ProcessionVisual, ProgrammeSheet, QrCard, RunSheetVisual } from '@/components/landing/Visuals';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
 import { paymentsOn } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
@@ -26,7 +26,9 @@ export default function Home() {
         <section className="stage">
           <div className="container stage-copy">
             <p className="stage-new">New · Follow the procession live</p>
-            <h1 className="stage-title">Remember beautifully.</h1>
+            <h1 className="stage-title">
+              Remember <em>beautifully.</em>
+            </h1>
             <p className="stage-sub">The memorial, the funeral journey and every keepsake. One link for everyone who loved them.</p>
             <div className="stage-cta">
               <Link className="btn primary" href="/create">
@@ -39,9 +41,10 @@ export default function Home() {
           </div>
           <div className="stage-scene zoom" aria-hidden="true">
             <ProgrammeSheet className="scene-left" />
-            <PhoneMemorial className="scene-phone" />
+            <ArchPortrait className="scene-phone" />
             <QrCard className="scene-right" />
           </div>
+          <HeroJourneyLine />
           <div className="stage-callout reveal">
             <div>
               <strong>{price}</strong>
@@ -141,7 +144,7 @@ export default function Home() {
               </ol>
             </div>
             <div className="split-visual reveal from-right">
-              <ProgrammeSheet className="big" />
+              <PhoneMemorial className="how-phone" />
             </div>
           </div>
         </section>
@@ -290,7 +293,9 @@ export default function Home() {
         {/* ---------------------------------------------------------------- Close */}
         <section className="band closing">
           <div className="container center-head">
-            <h2 className="stage-title reveal">Remember beautifully.</h2>
+            <h2 className="stage-title reveal">
+              Remember <em>beautifully.</em>
+            </h2>
             <div className="stage-cta reveal" style={d(0.08)}>
               <Link className="btn primary" href="/create">
                 Create a memorial

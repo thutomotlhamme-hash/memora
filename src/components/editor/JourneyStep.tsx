@@ -12,6 +12,7 @@ import {
   newId,
   stopLabel,
   type DispositionType,
+  journeyOrderProblem,
   type Draft,
   type Stop,
   type StopType,
@@ -43,11 +44,11 @@ const blankStop = (date: string): StopForm => ({
 });
 
 const RULE: Record<string, string> = {
-  burial: 'Burial needs a Cemetery / burial stop in the journey.',
-  cremation: 'Cremation needs a Crematorium stop in the journey.',
-  private_burial_later: 'No cemetery stop is required.',
-  memorial_only: 'No cemetery or crematorium stop is required.',
-  other: 'Describe the arrangement in the note. No destination is required.',
+  burial: 'Add the cemetery as a stop in the journey below.',
+  cremation: 'Add the crematorium as a stop in the journey below.',
+  private_burial_later: 'The burial is private, so no cemetery stop is needed.',
+  memorial_only: 'No cemetery or crematorium stop is needed.',
+  other: 'Describe the service in the note.',
 };
 
 export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Update; nav: Nav }) {
@@ -60,15 +61,17 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
   const editing = Boolean(form?.id);
 
   const setStops = (fn: (s: Stop[]) => Stop[]) => update((d) => ({ ...d, journey: fn(d.journey) }));
-  const move = (id: string, dir: -1 | 1) =>
-    setStops((list) => {
-      const i = list.findIndex((s) => s.id === id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= list.length) return list;
-      const next = [...list];
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
-    });
+  const move = (id: string, dir: -1 | 1) => {
+    const i = stops.findIndex((s) => s.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= stops.length) return;
+    const next = [...stops];
+    [next[i], next[j]] = [next[j], next[i]];
+    // The journey reads in time order, so a move must keep the times in sequence.
+    const problem = journeyOrderProblem(next);
+    if (problem) return toast('Stops follow the time order. Change the times first, then move it.', 'error');
+    setStops(() => next);
+  };
 
   const saveStop = () => {
     if (!form) return;
@@ -78,18 +81,18 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
     if (!form.date || !form.time) return setError('Add the date and the start or arrival time.');
     if (form.lat === '' || form.lng === '' || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180)
       return setError('Place the pin on the map, or enter valid coordinates.');
-    if (form.departTime && form.departTime < form.time) return setError('The departure time is before the arrival time.');
-    setError('');
+    if (form.departTime && form.departTime < form.time) return setError('The end time is before the start time.');
     const stop: Stop = { ...form, title: form.title.trim(), id: form.id || newId('stop'), lat, lng };
     const previous = stops.find((s) => s.id === stop.id);
-    setStops((list) => {
-      let next = editing ? list.map((s) => (s.id === stop.id ? stop : s)) : [...list, stop];
-      // Moving the first stop's date carries along every stop that shared the old funeral date.
-      if (previous && list[0]?.id === stop.id && previous.date !== stop.date) {
-        next = next.map((s) => (s.id !== stop.id && s.date === previous.date ? { ...s, date: stop.date } : s));
-      }
-      return next;
-    });
+    let next = editing ? stops.map((s) => (s.id === stop.id ? stop : s)) : [...stops, stop];
+    // Moving the first stop's date carries along every stop that shared the old funeral date.
+    if (previous && stops[0]?.id === stop.id && previous.date !== stop.date) {
+      next = next.map((s) => (s.id !== stop.id && s.date === previous.date ? { ...s, date: stop.date } : s));
+    }
+    const problem = journeyOrderProblem(next);
+    if (problem) return setError(problem);
+    setError('');
+    setStops(() => next);
     toast(editing ? 'Stop updated.' : 'Stop added to the journey.');
     setForm(null);
   };
@@ -117,12 +120,12 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
 
       <section>
         <div className="subsection-head">
-          <span className="eyebrow plain">Final arrangement</span>
-          <h2 className="h3">What happens after the service?</h2>
+          <span className="eyebrow plain">Type of service</span>
+          <h2 className="h3">What kind of service is it?</h2>
         </div>
         <div className="grid-2">
           <div className="field">
-            <label htmlFor="disposition">Arrangement</label>
+            <label htmlFor="disposition">Service</label>
             <select
               id="disposition"
               className="select"
@@ -145,7 +148,7 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
               className="input"
               value={draft.disposition.notes}
               onChange={(e) => update((d) => ({ ...d, disposition: { ...d.disposition, notes: e.target.value } }))}
-              placeholder={type === 'other' ? 'Describe the arrangement' : 'Shown on the memorial next to the arrangement'}
+              placeholder={type === 'other' ? 'Describe the service' : 'Shown on the memorial next to the service type'}
             />
           </div>
         </div>
@@ -178,7 +181,7 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
                 </h4>
                 <p>
                   {fmtDate(s.date)}
-                  {s.departTime ? ` · departs ${s.departTime}` : ''}
+                  {s.departTime ? `–${s.departTime}` : ''}
                   {s.address ? ` · ${s.address}` : ''}
                 </p>
               </div>
@@ -239,12 +242,13 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
               </div>
               <div className="grid-2" style={{ gap: 12 }}>
                 <div className="field">
-                  <label htmlFor="stopTime">Starts / arrive</label>
+                  <label htmlFor="stopTime">Starts at</label>
                   <input id="stopTime" className="input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
                 </div>
                 <div className="field">
-                  <label htmlFor="stopDepart">Departs</label>
+                  <label htmlFor="stopDepart">Ends at</label>
                   <input id="stopDepart" className="input" type="time" value={form.departTime} onChange={(e) => setForm({ ...form, departTime: e.target.value })} />
+                  <span className="hint">Optional. When everyone leaves for the next stop.</span>
                 </div>
               </div>
 

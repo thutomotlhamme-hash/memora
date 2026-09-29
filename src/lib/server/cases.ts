@@ -2,7 +2,6 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { MEDIA_BUCKET } from '../config';
-import { bestPlan, type PlanId } from '../plans';
 import {
   emptyDraft,
   normaliseDraft,
@@ -70,15 +69,14 @@ function rowsToDraft(c: Row, person: Row | null, stops: Row[], items: Row[], por
   });
 }
 
-function toMeta(c: Row, plan: PlanId | null): CaseMeta {
+function toMeta(c: Row, paid: boolean): CaseMeta {
   return {
     id: c.id,
     status: c.status as CaseStatus,
     slug: c.slug ?? '',
     publishedAt: c.published_at ?? null,
     archiveAt: c.archive_at ?? null,
-    paid: Boolean(plan),
-    plan,
+    paid,
     updatedAt: c.updated_at ?? null,
   };
 }
@@ -100,18 +98,18 @@ async function loadChildren(client: SupabaseClient, caseId: string) {
   return { person: personR.data as Row | null, stops: (stopsR.data ?? []) as Row[], items: (itemsR.data ?? []) as Row[] };
 }
 
-/** The plan this memorial has a confirmed, verified payment for, or null. */
-export async function paidPlan(client: SupabaseClient, caseId: string): Promise<PlanId | null> {
-  const { data: orders } = await client.from('memora_orders').select('id,plan').eq('case_id', caseId).eq('status', 'PAID').limit(10);
-  if (!orders?.length) return null;
+/** True when the memorial has a PAID order with a confirmed, verified payment. */
+export async function isCasePaid(client: SupabaseClient, caseId: string): Promise<boolean> {
+  const { data: orders } = await client.from('memora_orders').select('id').eq('case_id', caseId).eq('status', 'PAID').limit(5);
+  if (!orders?.length) return false;
   const { data: payments } = await client
     .from('memora_payments')
-    .select('order_id')
+    .select('id')
     .in('order_id', orders.map((o) => o.id))
     .eq('status', 'CONFIRMED')
-    .not('verified_at', 'is', null);
-  const confirmed = new Set((payments ?? []).map((p) => p.order_id));
-  return bestPlan(orders.filter((o) => confirmed.has(o.id)).map((o) => o.plan));
+    .not('verified_at', 'is', null)
+    .limit(1);
+  return Boolean(payments?.length);
 }
 
 /** Loads a memorial the signed-in user owns. RLS returns nothing for anyone else. */
@@ -120,8 +118,8 @@ export async function loadOwnedCase(client: SupabaseClient, caseId: string): Pro
   const { data: c, error } = await client.from('memora_cases').select(CASE_COLUMNS).eq('id', caseId).maybeSingle();
   if (error || !c) return null;
   const { person, stops, items } = await loadChildren(client, caseId);
-  const [portraitUrl, plan] = await Promise.all([signedUrl(client, person?.portrait_path), paidPlan(client, caseId)]);
-  return { draft: rowsToDraft(c, person, stops, items, portraitUrl), meta: toMeta(c, plan) };
+  const [portraitUrl, paid] = await Promise.all([signedUrl(client, person?.portrait_path), isCasePaid(client, caseId)]);
+  return { draft: rowsToDraft(c, person, stops, items, portraitUrl), meta: toMeta(c, paid) };
 }
 
 export interface CaseSummary {
@@ -191,7 +189,7 @@ export async function loadPublicMemorial(admin: SupabaseClient, slug: string): P
   const portraitUrl = await signedUrl(admin, person?.portrait_path, 6 * 3600);
   const draft = rowsToDraft(c, person, stops, items, portraitUrl);
   draft.person.portraitPath = '';
-  return { state: 'ok', draft, meta: toMeta(c, null) };
+  return { state: 'ok', draft, meta: toMeta(c, true) };
 }
 
 export { emptyDraft };

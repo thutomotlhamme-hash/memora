@@ -1,7 +1,7 @@
 import { readiness, slugify } from '@/lib/memorial';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { archiveDate, getPlan } from '@/lib/plans';
-import { loadOwnedCase, paidPlan } from '@/lib/server/cases';
+import { archiveDate } from '@/lib/plans';
+import { isCasePaid, loadOwnedCase } from '@/lib/server/cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
 
@@ -29,13 +29,12 @@ export async function POST(request: Request, { params }: Ctx) {
   if (meta.status !== 'DRAFT') return fail('This memorial cannot be published.', 409);
   const r = readiness(draft);
   if (!r.complete) return fail(r.missing[0] ?? 'The memorial is not complete yet.', 409);
-  const plan = getPlan(await paidPlan(admin, id));
-  if (!plan) return fail('Payment has not been confirmed yet.', 402);
+  if (!(await isCasePaid(admin, id))) return fail('Payment has not been confirmed yet.', 402);
 
   const now = new Date();
   const base = slugify(`${draft.person.firstName}-${draft.person.lastName}`) || 'memorial';
   const slug = `${base}-${id.replaceAll('-', '').slice(0, 6)}`;
-  const archiveAt = archiveDate(plan, now);
+  const archiveAt = archiveDate(now);
 
   const { data: updated, error } = await admin
     .from('memora_cases')
@@ -46,7 +45,7 @@ export async function POST(request: Request, { params }: Ctx) {
     .maybeSingle();
   if (error || !updated) return fail('Could not publish the memorial.', 500);
 
-  await admin.from('memora_activity_log').insert({ case_id: id, actor_user_id: user.id, action: 'CASE_PUBLISHED', metadata: { slug, plan: plan.id, archive_at: archiveAt } });
+  await admin.from('memora_activity_log').insert({ case_id: id, actor_user_id: user.id, action: 'CASE_PUBLISHED', metadata: { slug, archive_at: archiveAt } });
 
   return json({
     meta: {
@@ -56,7 +55,6 @@ export async function POST(request: Request, { params }: Ctx) {
       publishedAt: updated.published_at,
       archiveAt: updated.archive_at,
       paid: true,
-      plan: plan.id,
       updatedAt: updated.updated_at,
     },
   });

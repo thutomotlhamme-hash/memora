@@ -12,7 +12,7 @@ This is **Memora 2**, a clean rebuild on Next.js + Supabase. The funeral-home pr
 | 2 · Funeral journey | Burial / cremation / other arrangement, then any number of stops (home, church, hall, cemetery, crematorium, reception, gathering point, custom) with date, times, exact pin, landmark, parking, procession notes. Place search (OpenStreetMap) and "use my location" fill the pin; the pin is always the source of truth. |
 | 3 · Story & programme | Life story, family message, and an optional formal order of service (prayer, scripture, hymn, tribute, eulogy…) |
 | 4 · Review | Everything in one place, with a readiness checklist and a private preview |
-| 5 · Publish & share | Choose a plan, pay once (Yoco), then publish: permanent link, QR, share buttons |
+| 5 · Publish & share | Pay R899 once (Yoco), then publish: permanent link, QR, share buttons |
 
 - **Guest first.** Anyone can build and preview a whole memorial without an account. The draft lives only in the browser (`localStorage`) until they sign up. The dashboard then offers to move it, photo included, into the account.
 - **Live Funeral Mode.** The public page `/m/<slug>` switches between "in N days", "today", "happening now", "on the way", "concluded" from the guest's own clock and the stop and programme times. No GPS.
@@ -68,28 +68,19 @@ Without Supabase variables, the guest editor and `/m/preview` still work, which 
 
 ## Pricing
 
-One-off payments per memorial, set in `src/lib/plans.ts`. Building and previewing are free. Every plan includes every feature; plans differ only in how long the memorial stays public.
+One product, **Memora Complete: R899 once-off per memorial** (set in `src/lib/plans.ts`). Building and previewing are free; paying publishes the memorial for **one year**, long enough to update it for the tombstone unveiling. It includes every feature and every download.
 
-| Plan | Price | Public for |
-| --- | --- | --- |
-| Essential | R499 | 3 months |
-| Complete (default) | R899 | 1 year, to cover the tombstone unveiling |
-| Forever | R1 499 | permanently |
-
-How the prices were set (South African market, 2026):
+How the price was set (South African market, 2026):
 - 100 printed A4 programmes cost about R1 000, and programme design about R300–R1 000.
 - A newspaper death notice costs R500–R2 000.
 - Memory Vault's digital programme renews at R99 a month; Legacy Cloud QR memorials cost R800–R8 000.
 - ForeverMissed's lifetime memorial costs about $125–$160, or roughly R2 200–R2 900.
-- TributePoint's basic memorial is free.
 - An average funeral costs R35 000–R45 000.
-
-Memora replaces the design fee, a death notice and the directions chaos in one product, so R499–R1 499 sits below one print run plus a notice, and well below international lifetime memorials.
 
 ### Supabase
 
 1. Create a project (or reuse the V1 one; see *Moving from V1* below).
-2. Run the files in `supabase/migrations/` in order (SQL editor or `supabase db push`).
+2. Run `supabase/migrations/0001_memora_family.sql` (SQL editor or `supabase db push`).
 3. **Auth → URL configuration**: Site URL = your domain. Redirect URLs: `https://<domain>/auth/confirm`.
 4. **Auth → Providers → Email**: keep "Confirm email" on. Turn on leaked-password protection.
 5. Copy the publishable key and the **secret** key into the env vars. The secret key is used only on the server.
@@ -133,7 +124,7 @@ V1 was a static single-page app (`app.js`, `backend.js`) with nine Supabase Edge
 **Dropped with Memora Pro:** organisations, branches, staff roles and invites, the Pro dashboard, funeral-home branding, family-information intake links, and family-approval links.
 
 **Changed:**
-- Family pricing is now live, with three plans (it was parked in V1, where only Pro cases could pay).
+- Family pricing is now live: one product, R899 for a year (it was parked in V1, where only Pro cases could pay).
 - An account can hold several memorials; V1 allowed one.
 - Payment and publish are now one step.
 - Payments moved from Paystack to Yoco.

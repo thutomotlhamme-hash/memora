@@ -118,15 +118,10 @@ test('Yoco webhook signatures: valid, tampered, stale and multi-signature header
   assert.equal(await verifyYocoSignature(secret, { id: null, timestamp: ts, signature: `v1,${sig}` }, body, now), false);
 });
 
-import { PLANS, archiveDate, bestPlan, durationLabel, formatMoney, getPlan } from '../src/lib/plans.ts';
+import { PRICE_LABEL, PRODUCT, archiveDate } from '../src/lib/plans.ts';
 
-test('plans: prices, durations and archive dates', () => {
-  assert.deepEqual(PLANS.map((p) => formatMoney(p.amountMinor)), ['R499', 'R899', 'R1 499']);
-  assert.deepEqual(PLANS.map(durationLabel), ['Public for 3 months', 'Public for 1 year', 'Public permanently']);
-  const from = new Date('2026-10-01T00:00:00Z');
-  assert.equal(archiveDate(getPlan('essential')!, from), '2026-12-30T00:00:00.000Z');
-  assert.equal(archiveDate(getPlan('forever')!, from), null);
-  assert.equal(getPlan('platinum'), null);
-  assert.equal(bestPlan(['essential', 'forever', 'complete']), 'forever');
-  assert.equal(bestPlan(['nope']), null);
+test('single product: price and one-year public period', () => {
+  assert.equal(PRICE_LABEL, 'R899');
+  assert.equal(PRODUCT.publicDays, 365);
+  assert.equal(archiveDate(new Date('2026-10-01T00:00:00Z')), '2027-10-01T00:00:00.000Z');
 });

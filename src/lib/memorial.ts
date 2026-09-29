@@ -2,8 +2,6 @@
 // the public memorial. Keep this file free of React, Supabase and DOM APIs so the
 // same completeness rules run everywhere (and in `npm test`).
 
-import type { PlanId } from './plans.ts';
-
 export type StopType = 'home' | 'church' | 'hall' | 'cemetery' | 'crematorium' | 'reception' | 'gathering' | 'other';
 export type DispositionType = '' | 'burial' | 'cremation' | 'private_burial_later' | 'memorial_only' | 'other';
 export type ProgrammeMode = '' | 'formal' | 'none';
@@ -63,8 +61,6 @@ export interface CaseMeta {
   publishedAt: string | null;
   archiveAt: string | null;
   paid: boolean;
-  /** The plan that was paid for (the longest, if several). */
-  plan: PlanId | null;
   updatedAt: string | null;
 }
 

@@ -7,7 +7,7 @@ import { useOrigin } from '@/lib/hooks';
 import { CopyField, QrImage, ShareButtons } from '@/components/Share';
 import { useToast } from '@/components/Toast';
 import { displayName, fmtDate, slugify, type CaseMeta, type Draft, type Readiness } from '@/lib/memorial';
-import { DEFAULT_PLAN, PLANS, durationLabel, formatMoney, getPlan, type PlanId } from '@/lib/plans';
+import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 import { PanelFoot, type Nav, type StepId } from './shared';
 
 type Owner = { caseId: string; paymentsReady: boolean };
@@ -115,9 +115,6 @@ function Checkout({
   const paymentParam = useSearchParams().get('payment');
   const returning = paymentParam === 'return';
   const [pollDone, setPollDone] = useState(false);
-  const [choice, setChoice] = useState<PlanId>(DEFAULT_PLAN);
-  const chosen = getPlan(choice)!;
-  const paidFor = getPlan(meta.plan);
   const confirming = returning && !meta.paid && !pollDone;
   const [error, setError] = useState('');
   const polled = useRef(false);
@@ -134,7 +131,7 @@ function Checkout({
         const res = await fetch(`/api/memorials/${owner.caseId}/payment-status`, { method: 'POST' });
         const body = await res.json().catch(() => ({}));
         if (body?.paid) {
-          setMeta({ ...meta, paid: true, plan: body.plan ?? null });
+          setMeta({ ...meta, paid: true });
           setPollDone(true);
           toast('Payment confirmed. You can publish now.');
           return;
@@ -158,11 +155,7 @@ function Checkout({
     setBusy('pay');
     try {
       await flush();
-      const res = await fetch(`/api/memorials/${owner.caseId}/checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: choice }),
-      });
+      const res = await fetch(`/api/memorials/${owner.caseId}/checkout`, { method: 'POST' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || 'Could not start checkout.');
       if (body.url) {
@@ -170,7 +163,7 @@ function Checkout({
         return;
       }
       if (body.paid) {
-        setMeta({ ...meta, paid: true, plan: body.plan ?? choice });
+        setMeta({ ...meta, paid: true });
         toast(body.simulated ? 'Test payment recorded.' : 'Payment already confirmed.');
       }
     } catch (err) {
@@ -200,44 +193,26 @@ function Checkout({
     <div className="panel">
       {meta.paid
         ? head('Ready to publish.', 'Payment is confirmed. Publishing creates the permanent link and QR code, and unlocks every download.')
-        : head('Choose how long it stays public.', 'The memorial is complete. Every plan includes the full memorial, Live Funeral Mode, the QR code and every download. Pay once, no subscriptions.')}
+        : head('One payment, then publish.', 'The memorial is complete. Pay once to publish it for a full year, share it, and download every card and keepsake.')}
 
       {!meta.paid ? (
-        <>
-          <div className="plan-grid" role="radiogroup" aria-label="Plan">
-            {PLANS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                role="radio"
-                aria-checked={choice === p.id}
-                className="plan-card"
-                onClick={() => setChoice(p.id)}
-                disabled={Boolean(busy) || confirming}
-              >
-                {p.id === DEFAULT_PLAN && <span className="pill warn plan-badge">Recommended</span>}
-                <strong className="plan-name">{p.name}</strong>
-                <span className="plan-price">{formatMoney(p.amountMinor)}</span>
-                <span className="plan-duration">{durationLabel(p)}</span>
-                <span className="plan-tagline">{p.tagline}</span>
-              </button>
-            ))}
+        <div className="checkout">
+          <div>
+            <span className="eyebrow">{PRODUCT.name} · public for a year</span>
+            <div className="price">{PRICE_LABEL}</div>
+            <p>
+              Includes the memorial page with Live Funeral Mode, the QR code, WhatsApp cards, the printable programme and the keepsake book. One
+              payment, no subscription. Secure card checkout by Yoco.
+            </p>
           </div>
-          <div className="checkout" style={{ marginTop: 16 }}>
-            <div>
-              <span className="eyebrow">{chosen.name} · {durationLabel(chosen).toLowerCase()}</span>
-              <div className="price">{formatMoney(chosen.amountMinor)}</div>
-              <p>One payment, then publish. Secure card checkout by Yoco.</p>
-            </div>
-            <button className="btn on-night primary lg" type="button" onClick={pay} disabled={Boolean(busy) || confirming || !owner.paymentsReady}>
-              {confirming ? 'Confirming payment…' : busy === 'pay' ? 'Opening checkout…' : `Pay ${formatMoney(chosen.amountMinor)} with Yoco`}
-            </button>
-          </div>
-        </>
+          <button className="btn on-night primary lg" type="button" onClick={pay} disabled={Boolean(busy) || confirming || !owner.paymentsReady}>
+            {confirming ? 'Confirming payment…' : busy === 'pay' ? 'Opening checkout…' : `Pay ${PRICE_LABEL} with Yoco`}
+          </button>
+        </div>
       ) : (
         <div className="note ok">
           <span>
-            <strong>{paidFor ? `${paidFor.name} plan confirmed.` : 'Payment confirmed.'}</strong> Publishing is a single step. You can still edit details afterwards, and the live
+            <strong>Payment confirmed.</strong> Publishing is a single step. You can still edit details afterwards, and the live
             page updates.
           </span>
         </div>
@@ -292,7 +267,7 @@ function Published({ draft, meta, caseId, nav }: { draft: Draft; meta: CaseMeta;
         </span>
         <h1 className="h1">The memorial is live.</h1>
         <p className="lede">
-          Share the link or QR code with family and friends. {meta.archiveAt ? `It stays public until ${fmtDate(meta.archiveAt.slice(0, 10))}.` : 'It stays public permanently.'}{' '}
+          Share the link or QR code with family and friends. {meta.archiveAt ? `It stays public until ${fmtDate(meta.archiveAt.slice(0, 10))}.` : ''}{' '}
           Edits you make here update the live page straight away.
         </p>
       </header>

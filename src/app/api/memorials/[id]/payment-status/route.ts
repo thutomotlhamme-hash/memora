@@ -1,5 +1,5 @@
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { paidPlan } from '@/lib/server/cases';
+import { isCasePaid } from '@/lib/server/cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
 import { confirmOrderWithYoco, yocoSecret } from '@/lib/server/yoco';
@@ -21,8 +21,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
   const admin = getAdminSupabase();
   if (!admin) return fail('Payments are not configured.', 503);
-  const existing = await paidPlan(admin, id);
-  if (existing) return json({ paid: true, plan: existing });
+  if (await isCasePaid(admin, id)) return json({ paid: true });
   if (!yocoSecret()) return json({ paid: false });
 
   const { data: order } = await admin
@@ -39,8 +38,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
   try {
     const result = await confirmOrderWithYoco(admin, order.provider_reference);
-    const plan = await paidPlan(admin, id);
-    return json({ paid: Boolean(plan), plan, result });
+    return json({ paid: await isCasePaid(admin, id), result });
   } catch {
     return json({ paid: false, result: 'pending' });
   }

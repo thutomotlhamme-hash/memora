@@ -19,6 +19,7 @@ import {
 } from '@/lib/memorial';
 import { PlaceSearch } from './PlaceSearch';
 import { PrayerWeekEditor } from './PrayerWeekEditor';
+import { LIKELY_TIMES, QuickPicks, likelyDays } from './QuickPicks';
 import { PanelFoot, type Nav, type Update } from './shared';
 
 const MapPicker = dynamic(() => import('./MapPicker').then((m) => m.MapPicker), {
@@ -241,12 +242,14 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
               <div className="field">
                 <label htmlFor="stopDate">Date</label>
                 <input id="stopDate" className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                <QuickPicks label="Likely dates" picks={(now) => likelyDays(stops.filter((s) => s.id !== form.id).map((s) => s.date), now)} value={form.date} onPick={(date) => setForm({ ...form, date })} />
                 {firstDate && !editing && <span className="hint">Defaults to the funeral date, {fmtDate(firstDate)}.</span>}
               </div>
               <div className="grid-2" style={{ gap: 12 }}>
                 <div className="field">
                   <label htmlFor="stopTime">Starts at</label>
                   <input id="stopTime" className="input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+                  <QuickPicks label="Usual start times" picks={LIKELY_TIMES} value={form.time} onPick={(time) => setForm({ ...form, time })} />
                 </div>
                 <div className="field">
                   <label htmlFor="stopDepart">Ends at</label>

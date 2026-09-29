@@ -1342,3 +1342,5 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .pw-card.vigil.next { box-shadow: 0 0 0 1.5px var(--candle); }
 .pw-card.service .pw-card-date { background: var(--clay); color: #fff; }
 .pw-notes { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+.quick-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.quick-picks .chip { min-height: 34px; padding: 0 12px; font-size: 13px; }

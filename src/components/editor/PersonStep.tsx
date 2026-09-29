@@ -2,6 +2,7 @@
 
 import { capitaliseName, type Draft, type Person } from '@/lib/memorial';
 import { PanelFoot, type Nav, type Update } from './shared';
+import { QuickPicks, recentDays } from './QuickPicks';
 
 export function PersonStep({
   draft,
@@ -86,6 +87,7 @@ export function PersonStep({
         <div className="field">
           <label htmlFor="passingDate">Date of passing</label>
           <input className="input" id="passingDate" type="date" min={p.birthDate || undefined} max={today} value={p.passingDate} onChange={(e) => set('passingDate', e.target.value)} />
+          <QuickPicks label="Recent days" picks={recentDays} value={p.passingDate} onPick={(v) => set('passingDate', v)} />
         </div>
       </div>
 

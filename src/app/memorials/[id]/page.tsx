@@ -3,7 +3,6 @@ import { Suspense } from 'react';
 import { Editor } from '@/components/editor/Editor';
 import { DeleteMemorial } from '@/components/DeleteMemorial';
 import { SiteHeader } from '@/components/SiteHeader';
-import { formatMoney, pricing, publicDays } from '@/lib/config';
 import { displayName } from '@/lib/memorial';
 import { loadOwnedCase } from '@/lib/server/cases';
 import { getServerSupabase, getSessionUser } from '@/lib/supabase/server';
@@ -33,8 +32,6 @@ export default async function MemorialEditorPage({ params }: { params: Promise<{
             caseId={id}
             initialDraft={loaded.draft}
             initialMeta={loaded.meta}
-            price={formatMoney(pricing.amountMinor, pricing.currency)}
-            publicDays={publicDays()}
             paymentsReady={paymentsReady}
           />
         </Suspense>

@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
-import { formatMoney, pricing, publicDays } from '@/lib/config';
+import { DEFAULT_PLAN, PLANS, durationLabel, formatMoney } from '@/lib/plans';
 
 export default function Home() {
-  const price = formatMoney(pricing.amountMinor, pricing.currency);
   return (
     <>
       <SiteHeader />
@@ -113,21 +112,42 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="section">
-          <div className="container cta-band">
-            <div>
-              <span className="eyebrow">One simple price</span>
-              <h2 className="h2" style={{ marginTop: 12 }}>
-                Start free. Pay {price} once, when you publish.
-              </h2>
-              <p className="lede" style={{ marginTop: 14 }}>
-                Build and preview everything without paying. Publishing makes the memorial public for {publicDays()} days and
-                unlocks every download. Card payments are handled securely by Yoco.
+        <section className="section" id="pricing">
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <span className="eyebrow">Pricing</span>
+                <h2 className="h2" style={{ marginTop: 12 }}>
+                  Start free. Pay once, when you publish.
+                </h2>
+              </div>
+              <p className="lede">
+                Build and preview the whole memorial without paying. Every plan includes Live Funeral Mode, the QR code, WhatsApp cards, the
+                printable programme and the keepsake book. Plans differ only in how long the memorial stays public. No subscriptions.
               </p>
             </div>
-            <Link className="btn primary lg" href="/create">
-              Start a memorial
-            </Link>
+            <div className="plan-grid pricing">
+              {PLANS.map((p) => (
+                <article key={p.id} className={`plan-card ${p.id === DEFAULT_PLAN ? 'featured' : ''}`}>
+                  {p.id === DEFAULT_PLAN && <span className="pill warn plan-badge">Recommended</span>}
+                  <strong className="plan-name">{p.name}</strong>
+                  <span className="plan-price">{formatMoney(p.amountMinor)}</span>
+                  <span className="plan-duration">{durationLabel(p)}</span>
+                  <span className="plan-tagline">{p.tagline}</span>
+                  <ul className="plan-features">
+                    {p.features.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                  <Link className={`btn ${p.id === DEFAULT_PLAN ? 'primary' : ''} block`} href="/create">
+                    Start free
+                  </Link>
+                </article>
+              ))}
+            </div>
+            <p className="small muted" style={{ marginTop: 20 }}>
+              One-off prices in rand. Card payments are handled securely by Yoco.
+            </p>
           </div>
         </section>
       </main>

@@ -19,7 +19,7 @@ import { STEPS, type StepId } from './shared';
 
 export type EditorProps =
   | { mode: 'guest' }
-  | { mode: 'owner'; caseId: string; initialDraft: Draft; initialMeta: CaseMeta; price: string; publicDays: number; paymentsReady: boolean };
+  | { mode: 'owner'; caseId: string; initialDraft: Draft; initialMeta: CaseMeta; paymentsReady: boolean };
 
 type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: string };
 
@@ -273,7 +273,7 @@ export function Editor(props: EditorProps) {
             <PublishStep
               draft={draft}
               readiness={r}
-              owner={owner ? { caseId: owner.caseId, price: owner.price, publicDays: owner.publicDays, paymentsReady: owner.paymentsReady } : null}
+              owner={owner ? { caseId: owner.caseId, paymentsReady: owner.paymentsReady } : null}
               meta={meta}
               setMeta={setMeta}
               flush={flush}

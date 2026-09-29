@@ -1,5 +1,6 @@
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { json } from '@/lib/server/http';
+import { confirmGiftWithYoco } from '@/lib/server/gifts';
 import { confirmOrderWithYoco, yocoSecret } from '@/lib/server/yoco';
 import { verifyYocoSignature } from '@/lib/yoco-signature';
 
@@ -36,7 +37,9 @@ export async function POST(request: Request) {
   if (event?.type !== 'payment.succeeded' || !checkoutId) return json({ received: true });
 
   try {
-    const result = await confirmOrderWithYoco(admin, String(checkoutId), event);
+    // A checkout pays either for a memorial (an order) or for a gift.
+    let result: string = await confirmOrderWithYoco(admin, String(checkoutId), event);
+    if (result === 'no_order') result = await confirmGiftWithYoco(admin, String(checkoutId));
     if (result === 'mismatch') return json({ error: 'Verification mismatch' }, 409);
     // Yoco retries non-2xx deliveries; ask it to try again if the checkout hasn't settled yet.
     if (result === 'pending') return json({ error: 'Checkout not completed yet' }, 503);

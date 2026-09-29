@@ -13,6 +13,9 @@ export async function SiteHeader() {
           <Link className="btn ghost hide-sm" href="/m/preview">
             See an example
           </Link>
+          <Link className="btn ghost hide-sm" href="/gift">
+            Give a memorial
+          </Link>
           {user ? (
             <>
               <Link className="btn ghost" href="/account">

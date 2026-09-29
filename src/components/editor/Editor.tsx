@@ -8,7 +8,7 @@ import { loadGuestDraft, saveGuestDraft } from '@/lib/guest';
 import { useHydrated } from '@/lib/hooks';
 import { ACCEPTED_IMAGES, MAX_UPLOAD_BYTES, blobToDataUrl, compressImage } from '@/lib/image';
 import { MEDIA_BUCKET } from '@/lib/config';
-import { displayName, initials, readiness, type CaseMeta, type Draft } from '@/lib/memorial';
+import { displayName, fmtDate, initials, readiness, type CaseMeta, type Draft } from '@/lib/memorial';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 import { JourneyStep } from './JourneyStep';
 import { PersonStep } from './PersonStep';
@@ -19,7 +19,7 @@ import { STEPS, type StepId } from './shared';
 
 export type EditorProps =
   | { mode: 'guest' }
-  | { mode: 'owner'; caseId: string; initialDraft: Draft; initialMeta: CaseMeta; paymentsReady: boolean };
+  | { mode: 'owner'; caseId: string; initialDraft: Draft; initialMeta: CaseMeta; paymentsReady: boolean; gift?: { buyerName: string; funeralDate: string | null } | null };
 
 type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: string };
 
@@ -223,6 +223,14 @@ export function Editor(props: EditorProps) {
               <SaveIndicator state={save} guest={!owner} />
             </div>
           </div>
+          {owner?.gift && (
+            <div className="note" style={{ fontSize: 14 }}>
+              <span>
+                <strong>A gift from {owner.gift.buyerName}.</strong> It’s already paid for.
+                {owner.gift.funeralDate && meta?.status !== 'PUBLISHED' ? ` The funeral is expected around ${fmtDate(owner.gift.funeralDate)}; publish before then so guests have the directions.` : ''}
+              </span>
+            </div>
+          )}
           <ol className="steps" aria-label="Memorial steps">
             {STEPS.map((s, i) => (
               <li key={s.id} className={done[s.id] ? 'done' : ''}>

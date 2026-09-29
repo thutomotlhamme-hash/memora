@@ -5,6 +5,8 @@ import { DeleteMemorial } from '@/components/DeleteMemorial';
 import { SiteHeader } from '@/components/SiteHeader';
 import { displayName } from '@/lib/memorial';
 import { loadOwnedCase } from '@/lib/server/cases';
+import { giftForCase } from '@/lib/server/gifts';
+import { getAdminSupabase } from '@/lib/supabase/admin';
 import { getServerSupabase, getSessionUser } from '@/lib/supabase/server';
 
 export const metadata = { title: 'Memorial', robots: { index: false } };
@@ -16,6 +18,8 @@ export default async function MemorialEditorPage({ params }: { params: Promise<{
   if (!supabase || !user) redirect(`/account/login?next=/memorials/${id}`);
   const loaded = await loadOwnedCase(supabase, id);
   if (!loaded) notFound();
+  const admin = getAdminSupabase();
+  const gift = admin ? await giftForCase(admin, id) : null;
 
   const paymentsReady =
     Boolean(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) &&
@@ -33,6 +37,7 @@ export default async function MemorialEditorPage({ params }: { params: Promise<{
             initialDraft={loaded.draft}
             initialMeta={loaded.meta}
             paymentsReady={paymentsReady}
+            gift={gift}
           />
         </Suspense>
         {loaded.meta.status === 'DRAFT' && (

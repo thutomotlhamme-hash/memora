@@ -125,3 +125,47 @@ test('single product: price and one-year public period', () => {
   assert.equal(PRODUCT.publicDays, 365);
   assert.equal(archiveDate(new Date('2026-10-01T00:00:00Z')), '2027-10-01T00:00:00.000Z');
 });
+
+import { daysUntil, splitName, validateGift } from '../src/lib/gift.ts';
+import { formatWhatsApp, normaliseWhatsApp } from '../src/lib/phone.ts';
+
+test('WhatsApp numbers normalise to international digits', () => {
+  assert.equal(normaliseWhatsApp('082 123 4567'), '27821234567');
+  assert.equal(normaliseWhatsApp('+27 (82) 123-4567'), '27821234567');
+  assert.equal(normaliseWhatsApp('0027821234567'), '27821234567');
+  assert.equal(normaliseWhatsApp('+44 7700 900123'), '447700900123');
+  assert.equal(normaliseWhatsApp('12345'), null);
+  assert.equal(normaliseWhatsApp('+27 82 123 45'), null);
+  assert.equal(formatWhatsApp('27821234567'), '+27 82 123 4567');
+});
+
+test('gift form validation', () => {
+  const today = new Date('2026-10-01T09:00:00');
+  const good = {
+    buyerName: 'Thabo', buyerEmail: 'THABO@example.com', recipientName: 'Lerato', recipientEmail: '', recipientWhatsapp: '0821234567',
+    lovedOneName: 'Naledi Mokoena', message: 'Thinking of you', funeralDate: '2026-10-05', funeralDateUnsure: false,
+  };
+  const ok = validateGift(good, today);
+  assert.equal(ok.ok, true);
+  if (ok.ok) {
+    assert.equal(ok.gift.buyerEmail, 'thabo@example.com');
+    assert.equal(ok.gift.recipientWhatsapp, '27821234567');
+    assert.equal(ok.gift.recipientEmail, null);
+  }
+  const noContact = validateGift({ ...good, recipientWhatsapp: '' }, today);
+  assert.equal(noContact.ok, false);
+  assert.ok(!noContact.ok && noContact.errors.recipientEmail);
+  const past = validateGift({ ...good, funeralDate: '2026-09-20' }, today);
+  assert.ok(!past.ok && past.errors.funeralDate);
+  const unsure = validateGift({ ...good, funeralDate: '', funeralDateUnsure: true }, today);
+  assert.ok(unsure.ok && unsure.gift.funeralDate === null);
+  const noDate = validateGift({ ...good, funeralDate: '' }, today);
+  assert.ok(!noDate.ok && noDate.errors.funeralDate);
+});
+
+test('gift helpers', () => {
+  assert.deepEqual(splitName('Naledi Grace Mokoena'), { firstName: 'Naledi Grace', lastName: 'Mokoena' });
+  assert.deepEqual(splitName('Naledi'), { firstName: 'Naledi', lastName: '' });
+  assert.equal(daysUntil('2026-10-04', new Date('2026-10-01T22:00:00')), 3);
+  assert.equal(daysUntil(null), null);
+});

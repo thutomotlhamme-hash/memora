@@ -112,6 +112,24 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="section alt" id="gift">
+          <div className="container cta-band">
+            <div>
+              <span className="eyebrow">Give a memorial</span>
+              <h2 className="h2" style={{ marginTop: 12 }}>
+                Take one thing off a grieving family’s plate.
+              </h2>
+              <p className="lede" style={{ marginTop: 14 }}>
+                Pay for the memorial on their behalf. We send them a private link by email and WhatsApp, with your message, and help them get it
+                ready before the funeral.
+              </p>
+            </div>
+            <Link className="btn primary lg" href="/gift">
+              Give a memorial
+            </Link>
+          </div>
+        </section>
+
         <section className="section" id="pricing">
           <div className="container">
             <div className="price-band">

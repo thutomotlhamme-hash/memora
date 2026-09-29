@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Highlights } from '@/components/landing/Highlights';
 import { LocalNav } from '@/components/landing/LocalNav';
 import { ArchPortrait, HeroJourneyLine, KeepsakeStack, LiveVisual, MapVisual, PhoneMemorial, ProcessionVisual, ProgrammeSheet, QrCard, RunSheetVisual } from '@/components/landing/Visuals';
-import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteHeader';
 import { paymentsOn } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 
@@ -12,7 +12,6 @@ export default function Home() {
   const price = paymentsOn ? `${PRICE_LABEL} once-off` : 'Free while we launch';
   return (
     <>
-      <SiteHeader sticky={false} hideCreate />
       <LocalNav
         links={[
           { href: '#highlights', label: 'Highlights' },

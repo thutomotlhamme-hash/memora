@@ -300,17 +300,17 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 
 /* ---------------------------------------------------------------- Landing */
 
-.local-nav { position: sticky; top: 0; z-index: 45; height: 52px; transition: background-color 0.5s var(--ease), border-color 0.5s var(--ease); border-bottom: 1px solid transparent; }
-.local-nav.stuck { background: rgba(251, 250, 248, 0.74); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom-color: rgba(0, 0, 0, 0.12); }
-.local-nav-bar { display: flex; justify-content: space-between; align-items: center; height: 100%; border-bottom: 1px solid var(--line-strong); }
-.local-nav.stuck .local-nav-bar { border-bottom-color: transparent; }
-.local-title { font-family: var(--display); font-weight: 420; font-size: 21px; letter-spacing: 0.011em; text-decoration: none; }
-.local-links { display: flex; align-items: center; gap: 22px; }
-.local-links a:not(.btn) { font-size: 12px; letter-spacing: 0; color: var(--ink); opacity: 0.8; text-decoration: none; transition: opacity 0.3s var(--ease), color 0.3s var(--ease); }
-.local-links a:not(.btn):hover { opacity: 1; color: var(--clay-ink); }
-.local-cta.btn.sm { min-height: 28px; padding: 0 12px; font-size: 12px; }
-@media (max-width: 700px) {
-  .local-links a:not(.btn) { display: none; }
+.local-nav { position: sticky; top: 0; z-index: 45; transition: background-color 0.5s var(--ease), border-color 0.5s var(--ease), box-shadow 0.5s var(--ease); border-bottom: 1px solid transparent; }
+.local-nav.stuck { background: rgba(251, 250, 248, 0.9); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom-color: rgba(30, 26, 36, 0.08); }
+.local-nav-bar { display: flex; align-items: center; gap: 24px; min-height: 60px; }
+.local-links { display: flex; align-items: center; gap: 26px; margin-left: auto; }
+.local-links a { font-size: 14px; color: var(--ink-2); text-decoration: none; transition: color 0.3s var(--ease); }
+.local-links a:hover { color: var(--clay-ink); }
+.local-account { display: flex; align-items: center; gap: 4px; padding-left: 20px; border-left: 1px solid var(--line-strong); }
+.local-account .btn { min-height: 36px; padding: 0 14px; font-size: 14px; }
+@media (max-width: 860px) {
+  .local-links { display: none; }
+  .local-account { margin-left: auto; padding-left: 0; border-left: 0; }
 }
 
 .stage { position: relative; padding: clamp(40px, 6vw, 64px) 0 clamp(72px, 9vw, 110px); text-align: center; overflow: hidden; }

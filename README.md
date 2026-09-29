@@ -171,3 +171,15 @@ V1 was a static single-page app (`app.js`, `backend.js`) with nine Supabase Edge
 - Server logic runs in Next.js route handlers instead of Edge Functions.
 
 To reuse the V1 Supabase project, first check it is still empty, then run `supabase/legacy/drop_memora_v1.sql` (destructive; read its header), delete the V1 Edge Functions, and apply the new migration.
+
+## End-to-end tests
+
+`npm run e2e` builds the app and drives it in Chromium at desktop and phone
+sizes (Playwright). The suite covers the main journeys (home page, the example
+memorial through the funeral day, creating a memorial, prayer week, vigil
+template) and their inverse: broken links, bad tokens, cross-site requests,
+no network, no backend, and corrupted saved drafts must all end on a calm,
+useful screen. The app runs against a Supabase address where nothing listens,
+so tests never touch real data. First run on a new machine:
+`npx playwright install chromium`. The same checks run on every push
+(`.github/workflows/e2e.yml`).

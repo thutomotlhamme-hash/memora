@@ -82,7 +82,8 @@ function Stage({
   useEffect(() => {
     const el = document.getElementById('now');
     if (!el || !('IntersectionObserver' in window)) return;
-    const io = new IntersectionObserver(([e]) => setAway(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0.05 });
+    // Once most of the live view has scrolled away, the bar takes over.
+    const io = new IntersectionObserver(([e]) => setAway(e.intersectionRatio < 0.25 && e.boundingClientRect.top < 0), { threshold: [0, 0.25, 0.5] });
     io.observe(el);
     return () => io.disconnect();
   }, []);

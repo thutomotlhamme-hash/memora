@@ -251,5 +251,6 @@ function friendly(message: string): string {
   if (/email not confirmed/i.test(message)) return 'Please confirm your email address first. Check your inbox for the link.';
   if (/already registered|already exists/i.test(message)) return 'An account with this email already exists. Tap “I already have an account”.';
   if (/rate limit|too many/i.test(message)) return 'Too many attempts. Please wait a minute and try again.';
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) return 'We couldn’t reach Memora just now. Check your connection and try again.';
   return message || 'Something went wrong. Please try again.';
 }

@@ -1,11 +1,13 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { Brand } from '../Brand';
+import { HeaderAccount } from '../HeaderAccount';
 
 /**
- * The product bar under the global header. Transparent at rest; once it sticks
- * to the top it turns into frosted glass with a hairline, like Apple's.
+ * The home page's one header: the brand, the page's sections and the account
+ * links in a single bar. Clear at rest; once it sticks to the top it turns into
+ * frosted glass with a hairline.
  */
 export function LocalNav({ links }: { links: { href: string; label: string }[] }) {
   const sentinel = useRef<HTMLDivElement>(null);
@@ -22,23 +24,21 @@ export function LocalNav({ links }: { links: { href: string; label: string }[] }
   return (
     <>
       <div ref={sentinel} aria-hidden="true" style={{ height: 1 }} />
-      <nav className={`local-nav${stuck ? ' stuck' : ''}`} aria-label="Memora">
+      <header className={`local-nav${stuck ? ' stuck' : ''}`}>
         <div className="container local-nav-bar">
-          <a className="local-title" href="#top">
-            Memora
-          </a>
-          <div className="local-links">
+          <Brand />
+          <nav className="local-links" aria-label="On this page">
             {links.map((l) => (
               <a key={l.href} href={l.href}>
                 {l.label}
               </a>
             ))}
-            <Link className="btn primary sm local-cta" href="/create">
-              Create
-            </Link>
+          </nav>
+          <div className="local-account">
+            <HeaderAccount hideCreate={false} />
           </div>
         </div>
-      </nav>
+      </header>
     </>
   );
 }

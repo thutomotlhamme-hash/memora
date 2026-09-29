@@ -123,13 +123,28 @@ export function Editor(props: EditorProps) {
     return () => clearTimeout(t);
   }, [draft, props.mode, pushRemote]);
 
+  // On the way out, save a guest's last keystrokes at once so nothing is lost.
   useEffect(() => {
+    const guest = props.mode === 'guest';
+    const flush = () => {
+      if (guest && dirty.current && saveGuestDraft(latest.current)) dirty.current = false;
+    };
     const warn = (e: BeforeUnloadEvent) => {
+      flush();
       if (dirty.current || inFlight.current) e.preventDefault();
     };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
     window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, []);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [props.mode]);
 
   // ---- Portrait -------------------------------------------------------------
   const [portraitBusy, setPortraitBusy] = useState(false);

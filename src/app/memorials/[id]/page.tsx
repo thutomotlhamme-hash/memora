@@ -20,7 +20,7 @@ export default async function MemorialEditorPage({ params }: { params: Promise<{
 
   const paymentsReady =
     Boolean(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) &&
-    (Boolean(process.env.PAYSTACK_SECRET_KEY) || (process.env.MEMORA_SIMULATE_PAYMENTS === 'true' && process.env.NODE_ENV !== 'production'));
+    (Boolean(process.env.YOCO_SECRET_KEY) || (process.env.MEMORA_SIMULATE_PAYMENTS === 'true' && process.env.NODE_ENV !== 'production'));
 
   return (
     <>

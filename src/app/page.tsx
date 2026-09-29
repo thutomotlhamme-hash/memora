@@ -122,7 +122,7 @@ export default function Home() {
               </h2>
               <p className="lede" style={{ marginTop: 14 }}>
                 Build and preview everything without paying. Publishing makes the memorial public for {publicDays()} days and
-                unlocks every download. Payments are handled securely by Paystack.
+                unlocks every download. Card payments are handled securely by Yoco.
               </p>
             </div>
             <Link className="btn primary lg" href="/create">

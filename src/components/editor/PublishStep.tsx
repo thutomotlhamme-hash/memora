@@ -111,13 +111,14 @@ function Checkout({
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState<'' | 'pay' | 'publish'>('');
-  const returning = useSearchParams().get('payment') === 'return';
+  const paymentParam = useSearchParams().get('payment');
+  const returning = paymentParam === 'return';
   const [pollDone, setPollDone] = useState(false);
   const confirming = returning && !meta.paid && !pollDone;
   const [error, setError] = useState('');
   const polled = useRef(false);
 
-  // Returning from Paystack: ask the server to check with Paystack directly.
+  // Returning from Yoco: ask the server to check with Yoco directly.
   useEffect(() => {
     if (polled.current || meta.paid || !returning) return;
     polled.current = true;
@@ -139,7 +140,7 @@ function Checkout({
       }
       if (attempts >= 12) {
         setPollDone(true);
-        setError('We haven’t received confirmation from Paystack yet. If you were charged, it will appear shortly. Refresh this page in a minute.');
+        setError('We haven’t received confirmation from Yoco yet. If you were charged, it will appear shortly. Refresh this page in a minute.');
         return;
       }
       timer = setTimeout(poll, 3000);
@@ -200,11 +201,11 @@ function Checkout({
             <div className="price">{owner.price}</div>
             <p>
               Includes the memorial page with Live Funeral Mode, the QR code, WhatsApp cards, a printable programme and the keepsake PDF. Secure
-              checkout by Paystack.
+              card checkout by Yoco.
             </p>
           </div>
           <button className="btn on-night primary lg" type="button" onClick={pay} disabled={Boolean(busy) || confirming || !owner.paymentsReady}>
-            {confirming ? 'Confirming payment…' : busy === 'pay' ? 'Opening checkout…' : 'Pay with Paystack'}
+            {confirming ? 'Confirming payment…' : busy === 'pay' ? 'Opening checkout…' : 'Pay securely with Yoco'}
           </button>
         </div>
       ) : (
@@ -220,9 +221,18 @@ function Checkout({
           <span>Checkout isn’t switched on for this deployment yet. Everything else is ready to go.</span>
         </div>
       )}
+      {!meta.paid && (paymentParam === 'cancelled' || paymentParam === 'failed') && !error && (
+        <div className={`note ${paymentParam === 'failed' ? 'error' : ''}`} style={{ marginTop: 16 }} role="status">
+          <span>
+            {paymentParam === 'failed'
+              ? 'The payment didn’t go through and you weren’t charged. You can try again, or use a different card.'
+              : 'Checkout was cancelled and nothing was charged. You can pay whenever you’re ready.'}
+          </span>
+        </div>
+      )}
       {confirming && (
         <div className="note" style={{ marginTop: 16 }} role="status">
-          <span>Checking with Paystack. This usually takes a few seconds, so please keep this page open.</span>
+          <span>Checking with Yoco. This usually takes a few seconds, so please keep this page open.</span>
         </div>
       )}
       {error && (

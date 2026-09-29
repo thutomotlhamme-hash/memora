@@ -12,7 +12,7 @@ This is **Memora 2**, a clean rebuild on Next.js + Supabase. The funeral-home pr
 | 2 · Funeral journey | Burial / cremation / other arrangement, then any number of stops (home, church, hall, cemetery, crematorium, reception, gathering point, custom) with date, times, exact pin, landmark, parking, procession notes. Place search (OpenStreetMap) and "use my location" fill the pin; the pin is always the source of truth. |
 | 3 · Story & programme | Life story, family message, and an optional formal order of service (prayer, scripture, hymn, tribute, eulogy…) |
 | 4 · Review | Everything in one place, with a readiness checklist and a private preview |
-| 5 · Publish & share | One payment (Paystack), then publish: permanent link, QR, share buttons |
+| 5 · Publish & share | One payment (Yoco), then publish: permanent link, QR, share buttons |
 
 - **Guest first.** Anyone can build and preview a whole memorial without an account. The draft lives only in the browser (`localStorage`) until they sign up. The dashboard then offers to move it, photo included, into the account.
 - **Live Funeral Mode.** The public page `/m/<slug>` switches between "in N days", "today", "happening now", "on the way", "concluded" from the guest's own clock and the stop and programme times. No GPS.
@@ -23,7 +23,7 @@ This is **Memora 2**, a clean rebuild on Next.js + Supabase. The funeral-home pr
 
 - **Next.js 16** (App Router, React 19, TypeScript), deployed on Netlify (or Vercel)
 - **Supabase**: Auth (email and password), Postgres with RLS, private Storage
-- **Paystack** checkout and webhook (ZAR)
+- **Yoco** hosted checkout and signed webhook (ZAR)
 - Leaflet + OpenStreetMap, `qrcode`, `jspdf`
 - Fonts: Newsreader and Inter, self-hosted via Fontsource
 
@@ -31,13 +31,14 @@ This is **Memora 2**, a clean rebuild on Next.js + Supabase. The funeral-home pr
 src/
   app/                    routes (pages + API route handlers)
     api/memorials/…       create · save · delete · checkout · payment-status · publish
-    api/paystack/webhook  signed webhook
+    api/yoco/webhook      signed Yoco webhook
     m/[slug]              public memorial (server-rendered, service role)
     memorials/…           dashboard, editor, preview, artifacts (owner only)
   components/             UI (editor steps, memorial view, live panel, share)
   lib/memorial.ts         domain model + the single source of truth for "ready to publish"
   lib/live.ts             Live Funeral Mode state machine
-  lib/server/…            data access, Paystack, request guards (server-only)
+  lib/server/…            data access, Yoco, request guards (server-only)
+scripts/                  register-yoco-webhook.mjs
 supabase/migrations/      schema, RLS, grants, draft-save RPC, storage policies
 tests/                    unit tests (node:test)
 ```
@@ -48,7 +49,7 @@ tests/                    unit tests (node:test)
 - Anonymous Supabase users are refused everywhere (restrictive policy). Guest drafts never reach the server.
 - The browser can edit only content columns. `status`, `slug`, the publish dates, orders and payments are server-owned and written with the service-role key after checks.
 - Publishing re-checks completeness **from the database** (not the browser) and requires a `PAID` order with a `CONFIRMED`, verified payment.
-- Payment is confirmed only by asking Paystack's Verify API (from the signed webhook or the return-from-checkout poll) and matching the amount, currency and reference against the server-owned order. The price is never sent by the browser.
+- Payment is confirmed only by fetching the checkout from Yoco's API (triggered by the signed webhook or the return-from-checkout poll) and requiring `completed` with the exact amount, currency and checkout id of the server-owned order. The price is never sent by the browser. Webhook signatures are checked with HMAC-SHA256 plus a 5-minute replay window.
 - Media is in a private bucket under `<case_id>/…`. Pages get short-lived signed URLs.
 - A published memorial cannot be deleted, and saves that would leave it incomplete are rejected.
 - The draft save runs as one transaction (`memora_save_draft`) under the caller's RLS.
@@ -73,17 +74,24 @@ Without Supabase variables, the guest editor and `/m/preview` still work, which 
 4. **Auth → Providers → Email**: keep "Confirm email" on. Turn on leaked-password protection.
 5. Copy the publishable key and the **secret** key into the env vars. The secret key is used only on the server.
 
-### Paystack
+### Yoco
 
-1. Put `PAYSTACK_SECRET_KEY` (start with `sk_test_…`) in the server env.
-2. Paystack → Settings → API Keys & Webhooks → Webhook URL: `https://<domain>/api/paystack/webhook`. Set it separately for Test and Live mode.
-3. Run one full test-mode payment before switching to a live key.
+Memora uses Yoco's hosted **Checkout API**: the family is sent to a Yoco payment page, then back to Memora. Memora never handles card details.
 
-Price: `MEMORA_PUBLISH_PRICE_MINOR` (default `29900` = R299, the one price agreed in V1 planning). Public period: `MEMORA_PUBLIC_DAYS` (default 90). For local work, `MEMORA_SIMULATE_PAYMENTS=true` records a confirmed payment without Paystack. It is ignored in production.
+1. **Account:** a Yoco business account with *Online payments / Payment Gateway* switched on (Business Portal → Selling Online → Payment Gateway).
+2. **Keys:** in the same area, copy the **test secret key** (`sk_test_…`). Put it in the hosting env as `YOCO_SECRET_KEY`. Never commit it or paste it into a chat.
+3. **Deploy** the site so it has a public `https://` URL, with `NEXT_PUBLIC_SITE_URL` set to it.
+4. **Webhook:** on your own computer, run
+   ```bash
+   YOCO_SECRET_KEY=sk_test_xxx node scripts/register-yoco-webhook.mjs https://your-site.netlify.app
+   ```
+   It registers `https://your-site/api/yoco/webhook` and prints a `whsec_…` secret. Put that in the env as `YOCO_WEBHOOK_SECRET` and redeploy. (`--list` shows what is registered.)
+5. **Test:** publish a test memorial and pay with one of Yoco's test cards. You should come back to Memora, see "Payment confirmed", and be able to publish.
+6. **Go live:** swap in the **live** secret key (`sk_live_…`), run the webhook script again with it (live and test webhooks are separate), update `YOCO_WEBHOOK_SECRET`, and redeploy.
 
 ### Netlify
 
-Connect the repo; `netlify.toml` builds with `npm run build` and Netlify's Next.js runtime. Add the env vars from `.env.example` in Site settings. `NEXT_PUBLIC_SITE_URL` must be the public URL, because Paystack's callback uses it.
+Connect the repo; `netlify.toml` builds with `npm run build` and Netlify's Next.js runtime. Add the env vars from `.env.example` in Site settings. `NEXT_PUBLIC_SITE_URL` must be the public URL, because Yoco's success, cancel and failure redirects use it.
 
 ## Scripts
 
@@ -98,7 +106,7 @@ Connect the repo; `netlify.toml` builds with `npm run build` and Netlify's Next.
 
 V1 was a static single-page app (`app.js`, `backend.js`) with nine Supabase Edge Functions and 20 migrations, shared between families and funeral homes.
 
-**Carried over:** the guest-first flow, the flexible funeral journey and its burial/cremation rules, the programme builder, Live Funeral Mode, all seven artifacts, Paystack's signed-webhook plus Verify flow, private media, the permanent-accounts-only policy, and "a browser can never mark anything paid or published".
+**Carried over:** the guest-first flow, the flexible funeral journey and its burial/cremation rules, the programme builder, Live Funeral Mode, all seven artifacts, server-side payment confirmation (a webhook plus a direct check with the provider), private media, the permanent-accounts-only policy, and "a browser can never mark anything paid or published".
 
 **Dropped with Memora Pro:** organisations, branches, staff roles and invites, the Pro dashboard, funeral-home branding, family-information intake links, and family-approval links.
 
@@ -106,6 +114,7 @@ V1 was a static single-page app (`app.js`, `backend.js`) with nine Supabase Edge
 - Family pricing is now live (it was parked in V1, where only Pro cases could pay).
 - An account can hold several memorials; V1 allowed one.
 - Payment and publish are now one step.
+- Payments moved from Paystack to Yoco.
 - Server logic runs in Next.js route handlers instead of Edge Functions.
 
 To reuse the V1 Supabase project, first check it is still empty, then run `supabase/legacy/drop_memora_v1.sql` (destructive; read its header), delete the V1 Edge Functions, and apply the new migration.

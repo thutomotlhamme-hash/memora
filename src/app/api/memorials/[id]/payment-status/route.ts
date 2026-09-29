@@ -2,13 +2,13 @@ import { getAdminSupabase } from '@/lib/supabase/admin';
 import { isCasePaid } from '@/lib/server/cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
-import { confirmOrderWithPaystack, paystackSecret } from '@/lib/server/paystack';
+import { confirmOrderWithYoco, yocoSecret } from '@/lib/server/yoco';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * Called when the family returns from checkout. Never trusts the redirect itself:
- * it asks Paystack directly about this memorial's latest pending order.
+ * it asks Yoco directly about this memorial's latest pending order.
  */
 export async function POST(request: Request, { params }: Ctx) {
   const { id } = await params;
@@ -22,13 +22,13 @@ export async function POST(request: Request, { params }: Ctx) {
   const admin = getAdminSupabase();
   if (!admin) return fail('Payments are not configured.', 503);
   if (await isCasePaid(admin, id)) return json({ paid: true });
-  if (!paystackSecret()) return json({ paid: false });
+  if (!yocoSecret()) return json({ paid: false });
 
   const { data: order } = await admin
     .from('memora_orders')
     .select('provider_reference')
     .eq('case_id', id)
-    .eq('provider', 'paystack')
+    .eq('provider', 'yoco')
     .eq('status', 'PENDING')
     .not('provider_reference', 'is', null)
     .order('created_at', { ascending: false })
@@ -37,7 +37,7 @@ export async function POST(request: Request, { params }: Ctx) {
   if (!order?.provider_reference) return json({ paid: false });
 
   try {
-    const result = await confirmOrderWithPaystack(admin, order.provider_reference);
+    const result = await confirmOrderWithYoco(admin, order.provider_reference);
     return json({ paid: result === 'confirmed' || result === 'already_paid', result });
   } catch {
     return json({ paid: false, result: 'pending' });

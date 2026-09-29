@@ -83,7 +83,7 @@ create table public.memora_orders (
   amount_minor integer not null check (amount_minor >= 0),
   currency text not null default 'ZAR',
   status text not null default 'PENDING' check (status in ('PENDING','PAID','FAILED','REFUNDED','CANCELLED')),
-  provider text not null default 'paystack',
+  provider text not null default 'yoco',
   provider_reference text unique,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

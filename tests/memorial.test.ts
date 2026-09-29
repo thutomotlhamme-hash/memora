@@ -99,3 +99,21 @@ test('live programme shows the current and next timed items', () => {
   assert.equal(s?.next?.title, 'Amazing Grace');
   assert.equal(liveProgrammeState({ mode: 'none', items: [] }, at('10:12')), null);
 });
+
+import { signYocoPayload, verifyYocoSignature } from '../src/lib/yoco-signature.ts';
+
+test('Yoco webhook signatures: valid, tampered, stale and multi-signature headers', async () => {
+  const secret = `whsec_${Buffer.from('memora-test-secret-32-bytes-long!').toString('base64')}`;
+  const body = JSON.stringify({ type: 'payment.succeeded', payload: { metadata: { checkoutId: 'ch_123' } } });
+  const now = 1_790_000_000;
+  const ts = String(now);
+  const sig = await signYocoPayload(secret, 'msg_1', ts, body);
+  const h = (signature: string, timestamp = ts) => ({ id: 'msg_1', timestamp, signature });
+
+  assert.equal(await verifyYocoSignature(secret, h(`v1,${sig}`), body, now), true);
+  assert.equal(await verifyYocoSignature(secret, h(`v1,bogus v1,${sig}`), body, now), true);
+  assert.equal(await verifyYocoSignature(secret, h(`v1,${sig}`), body.replace('ch_123', 'ch_999'), now), false);
+  assert.equal(await verifyYocoSignature(secret, h(`v1,${sig}`), body, now + 600), false);
+  assert.equal(await verifyYocoSignature('whsec_b3RoZXI=', h(`v1,${sig}`), body, now), false);
+  assert.equal(await verifyYocoSignature(secret, { id: null, timestamp: ts, signature: `v1,${sig}` }, body, now), false);
+});

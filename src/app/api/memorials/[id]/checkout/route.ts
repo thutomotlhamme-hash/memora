@@ -4,7 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/admin';
 import { isCasePaid, loadOwnedCase } from '@/lib/server/cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
-import { initializeTransaction, paystackSecret } from '@/lib/server/paystack';
+import { createCheckout, yocoSecret } from '@/lib/server/yoco';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -43,31 +43,31 @@ export async function POST(request: Request, { params }: Ctx) {
     return json({ paid: true, simulated: true });
   }
 
-  if (!paystackSecret()) return fail('Checkout is not switched on yet. Please try again soon.', 503);
+  if (!yocoSecret()) return fail('Checkout is not switched on yet. Please try again soon.', 503);
 
   const { data: order, error } = await admin
     .from('memora_orders')
-    .insert({ case_id: id, created_by: user.id, amount_minor: amountMinor, currency, status: 'PENDING', provider: 'paystack' })
+    .insert({ case_id: id, created_by: user.id, amount_minor: amountMinor, currency, status: 'PENDING', provider: 'yoco' })
     .select('id')
     .single();
   if (error || !order) return fail('Could not start the order.', 500);
 
-  // Paystack references may contain only alphanumerics, '-', '.' and '='.
-  const reference = `memora-${String(order.id).replaceAll('-', '')}`;
-  await admin.from('memora_orders').update({ provider_reference: reference }).eq('id', order.id);
-
+  const back = `${siteUrl()}/memorials/${id}?step=publish&payment=`;
   try {
-    const url = await initializeTransaction({
-      email: user.email || 'billing@memora.app',
+    const checkout = await createCheckout({
       amountMinor,
       currency,
-      reference,
-      callbackUrl: `${siteUrl()}/memorials/${id}?step=publish&payment=return`,
+      successUrl: `${back}return`,
+      cancelUrl: `${back}cancelled`,
+      failureUrl: `${back}failed`,
+      idempotencyKey: order.id,
+      metadata: { orderId: order.id, caseId: id },
     });
-    return json({ url });
+    await admin.from('memora_orders').update({ provider_reference: checkout.id, updated_at: new Date().toISOString() }).eq('id', order.id);
+    return json({ url: checkout.redirectUrl });
   } catch (err) {
-    console.error('Paystack initialize error', err);
+    console.error('Yoco checkout error', err);
     await admin.from('memora_orders').update({ status: 'FAILED', updated_at: new Date().toISOString() }).eq('id', order.id);
-    return fail('Could not open checkout with Paystack. Please try again.', 502);
+    return fail('Could not open checkout with Yoco. Please try again.', 502);
   }
 }

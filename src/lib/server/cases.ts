@@ -13,6 +13,7 @@ import {
   type Stop,
 } from '../memorial';
 import { loadPublicProcession } from './procession';
+import { refreshPublicPages } from './public-cache';
 
 const CASE_COLUMNS =
   'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at,live_current_key,live_started_at,run_version,programme_release_at';
@@ -171,6 +172,7 @@ export async function saveOwnedDraft(client: SupabaseClient, caseId: string, dra
   const payload = { ...draft, person: { ...draft.person, portraitUrl: '' } };
   const { data, error } = await client.rpc('memora_save_draft', { p_case_id: caseId, p_draft: payload });
   if (error) throw new Error(error.message);
+  refreshPublicPages();
   return String(data ?? new Date().toISOString());
 }
 

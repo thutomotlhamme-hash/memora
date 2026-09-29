@@ -5,8 +5,12 @@ import { displayName, lifeDates } from '@/lib/memorial';
 import { loadPublicMemorial } from '@/lib/server/cases';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
-// Always render from the live database so edits and the archive date apply at once.
-export const dynamic = 'force-dynamic';
+// Served from the edge cache and re-rendered at most once a minute, so guests
+// opening a shared link don't wait on the database. Saves, publishing, the
+// run-sheet and take-downs drop the cache straight away (refreshPublicPages);
+// the on-the-day parts refresh themselves through /api/live.
+export const revalidate = 60;
+export const generateStaticParams = async () => [];
 
 const load = cache(async (slug: string) => {
   const admin = getAdminSupabase();

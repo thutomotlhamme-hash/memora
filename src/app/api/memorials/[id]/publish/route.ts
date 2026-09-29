@@ -5,6 +5,7 @@ import { archiveDate } from '@/lib/plans';
 import { isCasePaid, loadOwnedCase } from '@/lib/server/cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
+import { refreshPublicPages } from '@/lib/server/public-cache';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -47,6 +48,7 @@ export async function POST(request: Request, { params }: Ctx) {
     .select('id,status,slug,published_at,archive_at,updated_at')
     .maybeSingle();
   if (error || !updated) return fail('Could not publish the memorial.', 500);
+  refreshPublicPages();
 
   await admin.from('memora_activity_log').insert({ case_id: id, actor_user_id: user.id, action: 'CASE_PUBLISHED', metadata: { slug, archive_at: archiveAt, free_launch: !paid } });
 

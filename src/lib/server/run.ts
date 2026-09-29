@@ -8,6 +8,7 @@ import type { ProcessionRecord } from '../procession';
 import { loadCaseById } from './cases';
 import { loadProcession } from './procession';
 import { linkSecret } from './links';
+import { refreshPublicPages } from './public-cache';
 
 // The coordinator's private run-sheet link: /run/<caseId>.<v>.<mac>
 // Signed with MEMORA_LINK_SECRET and bound to the memorial's run_version, so the
@@ -89,7 +90,10 @@ export async function applyRunUpdate(admin: SupabaseClient, caseId: string, u: R
     p_set_live: setLive,
     p_live_key: setLive ? (u.liveKey ? String(u.liveKey).slice(0, 80) : null) : null,
   });
-  if (!error) return 'ok';
+  if (!error) {
+    refreshPublicPages();
+    return 'ok';
+  }
   if (error.code === '40001' || /stale/.test(error.message)) return 'stale';
   if (error.code === 'P0002') return 'not_found';
   throw new Error(error.message);

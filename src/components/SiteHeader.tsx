@@ -1,13 +1,10 @@
 import Link from 'next/link';
-import { isSupabaseConfigured, paymentsOn } from '@/lib/config';
-import { roleForEmail } from '@/lib/server/admin-auth';
-import { getSessionUser } from '@/lib/supabase/server';
+import { paymentsOn } from '@/lib/config';
 import { Brand } from './Brand';
+import { HeaderAccount } from './HeaderAccount';
 
 /** `hideCreate` drops the "Create a memorial" button on pages where you're already creating one. */
-export async function SiteHeader({ hideCreate = false, sticky = true }: { hideCreate?: boolean; sticky?: boolean } = {}) {
-  const user = isSupabaseConfigured() ? await getSessionUser() : null;
-  const isTeam = user ? Boolean(await roleForEmail(user.email)) : false;
+export function SiteHeader({ hideCreate = false, sticky = true }: { hideCreate?: boolean; sticky?: boolean } = {}) {
   return (
     <header className={`site-header${sticky ? '' : ' static'}`}>
       <div className="container bar">
@@ -21,32 +18,7 @@ export async function SiteHeader({ hideCreate = false, sticky = true }: { hideCr
               Give a memorial
             </Link>
           )}
-          {user ? (
-            <>
-              {isTeam && (
-                <Link className="btn ghost" href="/admin">
-                  Admin
-                </Link>
-              )}
-              <Link className="btn ghost" href="/account">
-                Account
-              </Link>
-              <Link className="btn primary" href="/memorials">
-                My memorials
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link className="btn ghost" href="/account/login">
-                Log in
-              </Link>
-              {!hideCreate && (
-                <Link className="btn primary" href="/create">
-                  Create a memorial
-                </Link>
-              )}
-            </>
-          )}
+          <HeaderAccount hideCreate={hideCreate} />
         </nav>
       </div>
     </header>

@@ -11,6 +11,7 @@ import { accountLabel, isPhoneLogin, loginAddress } from '../account-id';
 import { ownerEmails } from './admin-auth';
 import { confirmGiftWithYoco, markGiftContacted } from './gifts';
 import { confirmOrderWithYoco, yocoSecret } from './yoco';
+import { refreshPublicPages } from './public-cache';
 
 type Row = Record<string, any>;
 
@@ -235,6 +236,7 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
       if (!input.reason?.trim()) return { ok: false, error: 'Give a reason (it’s kept in the log).', status: 400 };
       const { data } = await admin.from('memora_cases').update({ status: 'ARCHIVED', updated_at: now }).eq('id', input.id).eq('status', 'PUBLISHED').select('id').maybeSingle();
       if (!data) return { ok: false, error: 'Only published memorials can be taken down.', status: 409 };
+      refreshPublicPages();
       await log(admin, actor.id, 'CASE_UNPUBLISHED', input.id, { reason: input.reason.trim().slice(0, 500) });
       return { ok: true, message: 'Taken down. The public link now shows “not public”.' };
     }
@@ -245,6 +247,7 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
       const archiveAt = new Date(new Date(c.published_at).getTime() + PRODUCT.publicDays * 86_400_000);
       if (archiveAt.getTime() <= Date.now()) return { ok: false, error: 'Its public year has already ended.', status: 409 };
       await admin.from('memora_cases').update({ status: 'PUBLISHED', archive_at: archiveAt.toISOString(), updated_at: now }).eq('id', input.id);
+      refreshPublicPages();
       await log(admin, actor.id, 'CASE_RESTORED', input.id, {});
       return { ok: true, message: 'Restored. The public link works again.' };
     }

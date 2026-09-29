@@ -188,6 +188,14 @@ h1, h2, .display, .stage-title, .chapter-title { font-variation-settings: 'SOFT'
   background: var(--card); color: var(--ink); font-size: 17px; line-height: 1.35;
   transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
 }
+.input[type='date'], .input[type='time'], .input[type='datetime-local'] {
+  /* iOS Safari gives native date/time fields a fixed intrinsic width and
+     centred text; this keeps them inside the card like every other field. */
+  -webkit-appearance: none; appearance: none;
+  display: block; min-width: 0; max-width: 100%; text-align: left;
+}
+.input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.input::-webkit-datetime-edit { padding: 0; }
 .textarea { min-height: 150px; resize: vertical; line-height: 1.6; }
 .textarea.short { min-height: 88px; }
 .input::placeholder, .textarea::placeholder { color: var(--faint); }
@@ -1139,3 +1147,7 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
   .m-hero .dates, .m-hero .eyebrow { color: var(--ink-2); }
   .live-panel, .proc-card { display: none; }
 }
+
+/* Holds the header's account links' place while the browser checks sign-in. */
+.nav-pending { display: inline-block; width: 150px; height: 44px; }
+@media (max-width: 720px) { .nav-pending { width: 96px; } }

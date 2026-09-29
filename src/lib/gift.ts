@@ -20,7 +20,7 @@ export interface CleanGift {
   buyerEmail: string;
   recipientName: string;
   recipientEmail: string | null;
-  recipientWhatsapp: string | null;
+  recipientWhatsapp: string;
   lovedOneName: string;
   message: string;
   funeralDate: string | null;
@@ -49,11 +49,11 @@ export function validateGift(input: Partial<GiftInput>, today = new Date()): { o
   const funeralDate = /^\d{4}-\d{2}-\d{2}$/.test(s(input.funeralDate, 10)) ? s(input.funeralDate, 10) : '';
 
   if (!buyerName) errors.buyerName = 'Add your name so the family knows who the gift is from.';
-  if (!EMAIL.test(buyerEmail)) errors.buyerEmail = 'Add your email for the receipt.';
+  if (!EMAIL.test(buyerEmail)) errors.buyerEmail = 'Add your email so we can reach you about the gift.';
   if (!recipientName) errors.recipientName = 'Who should receive the gift?';
   if (recipientEmail && !EMAIL.test(recipientEmail)) errors.recipientEmail = 'This email address doesn’t look right.';
-  if (whatsappRaw && !recipientWhatsapp) errors.recipientWhatsapp = 'Use a number like 082 123 4567 or +27 82 123 4567.';
-  if (!recipientEmail && !whatsappRaw) errors.recipientWhatsapp = 'Add their WhatsApp number (or an email) so we can send the link.';
+  if (!whatsappRaw) errors.recipientWhatsapp = 'Add their WhatsApp number. It’s how the link reaches them, and how we help if they get stuck.';
+  else if (!recipientWhatsapp) errors.recipientWhatsapp = 'Use a number like 082 123 4567 or +27 82 123 4567.';
 
   if (!funeralDateUnsure) {
     if (!funeralDate) errors.funeralDate = 'Add a rough date, or tick “not sure yet”.';
@@ -73,7 +73,7 @@ export function validateGift(input: Partial<GiftInput>, today = new Date()): { o
       buyerEmail,
       recipientName,
       recipientEmail: recipientEmail || null,
-      recipientWhatsapp,
+      recipientWhatsapp: recipientWhatsapp as string,
       lovedOneName: s(input.lovedOneName, 120),
       message: s(input.message, 1000),
       funeralDate: funeralDateUnsure ? null : funeralDate,

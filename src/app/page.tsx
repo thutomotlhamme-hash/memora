@@ -120,8 +120,8 @@ export default function Home() {
                 Take one thing off a grieving family’s plate.
               </h2>
               <p className="lede" style={{ marginTop: 14 }}>
-                Pay for the memorial on their behalf. We send them a private link by email and WhatsApp, with your message, and help them get it
-                ready before the funeral.
+                Pay for the memorial on their behalf and send them a private link on WhatsApp. Our team helps them get it ready before the
+                funeral.
               </p>
             </div>
             <Link className="btn primary lg" href="/gift">

@@ -25,7 +25,7 @@ export default function GiftPage() {
             One less thing for the family to carry.
           </h1>
           <p className="lede">
-            When someone you care about loses a loved one, give them Memora. You pay; they receive a private link to create the memorial, already
+            When someone you care about loses a loved one, give them Memora. You pay; they get a private link to create the memorial, already
             paid for, with the funeral journey, programme, QR code and keepsakes.
           </p>
           <ol className="gift-steps">
@@ -34,12 +34,12 @@ export default function GiftPage() {
               <span>Tell us who it’s for and roughly when the funeral is.</span>
             </li>
             <li>
-              <strong>We send them the link</strong>
-              <span>By email and WhatsApp, with your message.</span>
+              <strong>You send them the link</strong>
+              <span>One tap opens WhatsApp with your message and their private link.</span>
             </li>
             <li>
               <strong>We help them finish in time</strong>
-              <span>Gentle reminders as the funeral gets close, and our team watches the date.</span>
+              <span>Our team checks in with them on WhatsApp before the funeral.</span>
             </li>
           </ol>
           <p className="small muted">

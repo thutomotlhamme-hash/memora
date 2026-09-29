@@ -82,13 +82,13 @@ export function GiftForm({ ready }: { ready: boolean }) {
 
       <fieldset>
         <legend className="h3">Who is it for?</legend>
-        <p className="muted small">We’ll send them a private link to create the memorial. It’s already paid for.</p>
+        <p className="muted small">They get a private link to create the memorial. It’s already paid for.</p>
         <div className="grid-2">
           <div className="span-2">{field('recipientName', 'Their name', { autoComplete: 'off', autoCapitalize: 'words', placeholder: 'e.g. Lerato Mokoena' })}</div>
-          {field('recipientWhatsapp', 'Their WhatsApp number (recommended)', { type: 'tel', autoComplete: 'off', inputMode: 'tel', placeholder: '082 123 4567' })}
+          {field('recipientWhatsapp', 'Their WhatsApp number', { type: 'tel', autoComplete: 'off', inputMode: 'tel', placeholder: '082 123 4567' })}
           {field('recipientEmail', 'Their email (optional)', { type: 'email', autoComplete: 'off', inputMode: 'email' })}
           <p className="hint span-2" style={{ margin: 0 }}>
-            We send the link on WhatsApp, and by email too if you add it.
+            After you pay, you send them the private link on WhatsApp in one tap. We use this number to help them finish in time.
           </p>
           <div className="span-2">
             {field('lovedOneName', 'Name of the person who passed away', { autoComplete: 'off', autoCapitalize: 'words' }, 'Optional. We’ll start the memorial with this name.')}
@@ -98,7 +98,7 @@ export function GiftForm({ ready }: { ready: boolean }) {
 
       <fieldset>
         <legend className="h3">When is the funeral?</legend>
-        <p className="muted small">A rough date is fine. It helps us make sure the memorial is ready in time, and we remind the family as the day gets close.</p>
+        <p className="muted small">A rough date is fine. Our team uses it to check in with the family so the memorial is ready in time.</p>
         <div className="grid-2">
           {field('funeralDate', 'Expected funeral date', { type: 'date', min: today, disabled: form.funeralDateUnsure })}
           <label className="check-row">
@@ -112,7 +112,7 @@ export function GiftForm({ ready }: { ready: boolean }) {
         <legend className="h3">From you</legend>
         <div className="grid-2">
           {field('buyerName', 'Your name', { autoComplete: 'name', autoCapitalize: 'words' })}
-          {field('buyerEmail', 'Your email', { type: 'email', autoComplete: 'email', inputMode: 'email' }, 'For your receipt.')}
+          {field('buyerEmail', 'Your email', { type: 'email', autoComplete: 'email', inputMode: 'email' }, 'So we can reach you about the gift.')}
           <div className="field span-2">
             <label htmlFor="gift-message">A message for them</label>
             <textarea

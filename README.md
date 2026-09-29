@@ -16,7 +16,7 @@ This is **Memora 2**, a clean rebuild on Next.js + Supabase. The funeral-home pr
 
 - **Guest first.** Anyone can build and preview a whole memorial without an account. The draft lives only in the browser (`localStorage`) until they sign up. The dashboard then offers to move it, photo included, into the account.
 - **Live Funeral Mode.** The public page `/m/<slug>` switches between "in N days", "today", "happening now", "on the way", "concluded" from the guest's own clock and the stop and programme times. No GPS.
-- **Give a memorial.** Anyone can buy a memorial for a grieving family at `/gift`, without an account. They enter the recipient's email and/or WhatsApp number, a rough funeral date (or "not sure yet") and a message. After payment, Memora sends the recipient a private one-time link (email + WhatsApp), emails the buyer a receipt and alerts the team. The recipient signs up, and the memorial is created already paid for. Reminders go out daily (up to 3) if it isn't started, and when the funeral is 3 days away and the memorial isn't published, the family is nudged and the team is alerted. The team sees everything on `/admin`.
+- **Give a memorial.** Anyone can buy a memorial for a grieving family at `/gift`, without an account. They enter the recipient's name and WhatsApp number (email optional), a rough funeral date (or "not sure yet") and a message, then pay. The thank-you page has a **Send on WhatsApp** button that opens the buyer's own WhatsApp with the message and private one-time link ready. The recipient signs up, and the memorial is created already paid for. The team follows up by hand from `/admin`: gifts sorted by funeral date, at-risk ones highlighted, each with a pre-written WhatsApp message, the link, and a "mark contacted" record.
 - **Artifact Studio.** After publishing: WhatsApp announcement, square memorial card, journey card, QR card, keepsake card (PNG), printable programme and keepsake book (paginated PDF). All are generated in the browser from the live memorial.
 - **Example:** `/m/preview` shows a sample memorial pinned to *today*, so Live Funeral Mode is always visible.
 
@@ -34,6 +34,7 @@ src/
     api/memorials/…       create · save · delete · checkout · payment-status · publish
     api/yoco/webhook      signed Yoco webhook (memorial and gift payments)
     api/gifts/…           buy · buyer status · redeem
+    api/admin/…           team: mark a gift as contacted
     gift/…                gift form, buyer thank-you page, recipient redeem page
     admin                 team gifts board
     m/[slug]              public memorial (server-rendered, service role)
@@ -109,10 +110,9 @@ For local work, `MEMORA_SIMULATE_PAYMENTS=true` records a confirmed payment with
 ### Gifts
 
 1. Set `MEMORA_LINK_SECRET` (a long random string). It signs the private gift links, so nothing secret is stored in the database.
-2. **Email:** create a [Resend](https://resend.com) account, verify your sending domain, then set `RESEND_API_KEY` and `MEMORA_FROM_EMAIL`.
-3. **Team:** set `MEMORA_TEAM_EMAIL` (alerts) and `MEMORA_ADMIN_EMAILS` (who can open `/admin`). They must sign up with those emails.
-4. **Reminders:** set `CRON_SECRET`. `netlify/functions/gift-reminders.mts` runs hourly on Netlify and calls `/api/cron/gift-reminders`.
-5. **WhatsApp (optional):** automatic WhatsApp messages need Meta's WhatsApp Cloud API: a Meta Business account, a WhatsApp business number and an approved *utility* message template with three variables ({{1}} recipient, {{2}} buyer, {{3}} link). Set `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_GIFT_TEMPLATE`. Until then, the buyer's thank-you page has a "Send it on WhatsApp" button that opens their own WhatsApp with the message and link ready.
+2. Set `MEMORA_ADMIN_EMAILS` to the team's emails; they sign up with those emails to open `/admin`.
+
+Nothing is sent automatically yet: the buyer sends the link on WhatsApp and the team follows up from `/admin`. Automatic email (e.g. Resend) and WhatsApp (Meta's Cloud API) can be added later without changing the gift flow.
 
 Gift payments use the same Yoco webhook. A checkout pays either for a memorial or for a gift.
 

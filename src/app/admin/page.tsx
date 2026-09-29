@@ -2,23 +2,19 @@ import { notFound } from 'next/navigation';
 import { SiteHeader } from '@/components/SiteHeader';
 import { fmtDate } from '@/lib/memorial';
 import { formatWhatsApp } from '@/lib/phone';
-import { loadGiftBoard } from '@/lib/server/gifts';
+import { giftWhatsAppText, loadGiftBoard } from '@/lib/server/gifts';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { getSessionUser } from '@/lib/supabase/server';
+import { siteUrl } from '@/lib/config';
+import { getAdminUser } from '@/lib/server/admin-auth';
+import { AdminGiftActions } from '@/components/AdminGiftActions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Gifts board', robots: { index: false } };
 
-function isAdmin(email: string): boolean {
-  const list = (process.env.MEMORA_ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-  return Boolean(email) && list.includes(email.toLowerCase());
-}
-
 export default async function AdminPage() {
-  const user = await getSessionUser();
   const admin = getAdminSupabase();
   // Not an admin → behave as if the page doesn't exist.
-  if (!user || !admin || !isAdmin(user.email)) notFound();
+  if (!admin || !(await getAdminUser())) notFound();
 
   const view = await loadGiftBoard(admin);
   const upcoming = view.filter((v) => v.days != null && v.days >= 0);
@@ -34,7 +30,7 @@ export default async function AdminPage() {
               Gifts board
             </h1>
             <p className="muted" style={{ margin: '8px 0 0' }}>
-              Sorted by expected funeral date. Rows in clay are within 3 days and not yet published.
+              Sorted by expected funeral date. Rows in clay are within 3 days and not yet published: contact those families first.
             </p>
           </div>
         </div>
@@ -65,17 +61,18 @@ export default async function AdminPage() {
                 <th>Family contact</th>
                 <th>Status</th>
                 <th>From</th>
+                <th>Follow up</th>
               </tr>
             </thead>
             <tbody>
               {view.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={6} className="muted">
                     No gifts yet.
                   </td>
                 </tr>
               )}
-              {view.map(({ g, p, days, stage, urgent, published }) => (
+              {view.map(({ g, p, days, stage, urgent, published, redeemLink }) => (
                 <tr key={g.id} className={urgent ? 'urgent' : ''}>
                   <td>
                     {g.funeral_date_estimate ? fmtDate(g.funeral_date_estimate) : 'Not sure yet'}
@@ -100,14 +97,32 @@ export default async function AdminPage() {
                       stage
                     )}
                     <span className="sub">
-                      {[g.email_sent_at && 'emailed', g.whatsapp_sent_at && 'WhatsApped', g.reminder_count ? `${g.reminder_count} reminder${g.reminder_count > 1 ? 's' : ''}` : '']
-                        .filter(Boolean)
-                        .join(' · ') || (g.status === 'PENDING' ? '' : 'link not sent automatically')}
+                      {g.team_contact_count
+                        ? `contacted ${g.team_contact_count}× · last ${fmtDate(String(g.team_contacted_at).slice(0, 10))}`
+                        : g.status === 'PENDING'
+                          ? ''
+                          : 'not contacted yet'}
                     </span>
                   </td>
                   <td>
                     {g.buyer_name}
                     <span className="sub">{g.buyer_email}</span>
+                  </td>
+                  <td>
+                    {g.status !== 'PENDING' && !published && (
+                      <AdminGiftActions
+                        giftId={g.id}
+                        whatsapp={g.recipient_whatsapp}
+                        link={redeemLink}
+                        text={
+                          redeemLink
+                            ? giftWhatsAppText(g as { recipient_name: string; buyer_name: string; loved_one_name?: string }, redeemLink)
+                            : `Hi ${g.recipient_name}, it's the Memora team checking in on the memorial${g.loved_one_name ? ` for ${g.loved_one_name}` : ''}.${
+                                g.funeral_date_estimate ? ` The funeral is around ${fmtDate(g.funeral_date_estimate)}.` : ''
+                              } Can we help you finish it? You can continue here: ${siteUrl()}/memorials`
+                        }
+                      />
+                    )}
                   </td>
                 </tr>
               ))}

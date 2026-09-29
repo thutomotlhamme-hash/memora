@@ -10,9 +10,9 @@ type View = {
   recipientName: string;
   lovedOneName: string;
   funeralDate: string | null;
-  emailSent: boolean;
-  whatsappSent: boolean;
-  recipientWhatsapp: string | null;
+  recipientWhatsapp: string;
+  message: string;
+  buyerName: string;
   redeemed: boolean;
   redeemLink: string | null;
 };
@@ -72,45 +72,43 @@ export function GiftThanks({ token }: { token: string }) {
     );
   }
 
-  const sentBy = [view.emailSent && 'email', view.whatsappSent && 'WhatsApp'].filter(Boolean).join(' and ');
-  const text = `Hi ${view.recipientName}, I've arranged a Memora memorial${view.lovedOneName ? ` for ${view.lovedOneName}` : ''} for you. It's paid for. Use this private link to create it: ${view.redeemLink}`;
-  const wa = view.recipientWhatsapp ? `https://wa.me/${view.recipientWhatsapp}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  const text = [
+    `Hi ${view.recipientName}, I've arranged a Memora memorial${view.lovedOneName ? ` for ${view.lovedOneName}` : ''} for you, and it's already paid for.`,
+    view.message ? view.message : '',
+    `Use this private link to create it: ${view.redeemLink}`,
+    `It stays private until you choose to publish it. — ${view.buyerName}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+  const wa = `https://wa.me/${view.recipientWhatsapp}?text=${encodeURIComponent(text)}`;
 
   return (
     <div className="panel">
       <span className="pill ok dot">Paid</span>
       <h1 className="h1" style={{ margin: '14px 0 12px' }}>
-        Thank you. Your gift is on its way.
+        {view.redeemed ? 'Thank you. They’ve started the memorial.' : `Thank you. Now send ${view.recipientName} the link.`}
       </h1>
-      <p className="lede">
-        {view.redeemed
-          ? `${view.recipientName} has already started the memorial.`
-          : sentBy
-            ? `We’ve sent ${view.recipientName} their private link by ${sentBy}.`
-            : `Send ${view.recipientName} their private link on WhatsApp below. It only works once, so share it with them alone.`}
-      </p>
-      <div className="stack" style={{ marginTop: 24, ['--stack' as string]: '14px' }}>
-        {view.funeralDate && (
-          <div className="note">
-            <span>
-              We’ve noted the funeral is around <strong>{fmtDate(view.funeralDate)}</strong>. We’ll remind {view.recipientName} as it gets close, and our team is
-              watching the date.
-            </span>
-          </div>
-        )}
-        {!view.redeemed && view.redeemLink && (
-          <>
-            <div className="row">
-              <a className="btn primary" href={wa} target="_blank" rel="noopener noreferrer">
-                {view.whatsappSent ? 'Also send it yourself on WhatsApp' : 'Send it on WhatsApp'}
-              </a>
-            </div>
+      {!view.redeemed && view.redeemLink ? (
+        <>
+          <p className="lede">Tap the button to open WhatsApp with the message and private link ready to send. The link works once, so send it to {view.recipientName} alone.</p>
+          <div className="stack" style={{ marginTop: 24, ['--stack' as string]: '14px' }}>
+            <a className="btn primary lg" href={wa} target="_blank" rel="noopener noreferrer">
+              Send on WhatsApp
+            </a>
             <CopyField value={view.redeemLink} />
             <p className="small muted" style={{ margin: 0 }}>
-              A receipt with this page’s link has been emailed to you.
+              Bookmark this page in case you need the link again.
             </p>
-          </>
-        )}
+          </div>
+        </>
+      ) : (
+        <p className="lede">Nothing more to do. Thank you for looking after them.</p>
+      )}
+      <div className="note" style={{ marginTop: 24 }}>
+        <span>
+          Our team will also check in with {view.recipientName} on WhatsApp to help them finish
+          {view.funeralDate ? <> before the funeral, around <strong>{fmtDate(view.funeralDate)}</strong>.</> : ' in good time.'}
+        </span>
       </div>
     </div>
   );

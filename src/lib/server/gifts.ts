@@ -3,12 +3,10 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { siteUrl } from '../config';
 import { daysUntil, splitName, type CleanGift } from '../gift';
-import { emptyDraft, fmtDate, readiness } from '../memorial';
-import { formatWhatsApp } from '../phone';
-import { CURRENCY, PRICE_LABEL, PRODUCT } from '../plans';
+import { emptyDraft, readiness } from '../memorial';
+import { CURRENCY, PRODUCT } from '../plans';
 import { loadOwnedCase, saveOwnedDraft } from './cases';
 import { signGiftToken } from './links';
-import { emailLayout, escapeHtml, sendEmail, sendWhatsAppTemplate } from './notify';
 import { createCheckout, fetchCheckout } from './yoco';
 
 export type GiftRow = Record<string, any>;
@@ -17,10 +15,6 @@ export const redeemUrl = (giftId: string) => `${siteUrl()}/gift/r/${signGiftToke
 export const buyerUrl = (giftId: string) => `${siteUrl()}/gift/thanks/${signGiftToken('buyer', giftId)}`;
 
 const simulationAllowed = () => process.env.MEMORA_SIMULATE_PAYMENTS === 'true' && process.env.NODE_ENV !== 'production';
-
-function funeralLine(g: GiftRow): string {
-  return g.funeral_date_estimate ? `around ${fmtDate(g.funeral_date_estimate)}` : 'date not yet known';
-}
 
 /** Creates a pending gift and a Yoco checkout for it. Returns where to send the buyer. */
 export async function startGiftCheckout(admin: SupabaseClient, gift: CleanGift, buyerUserId: string | null): Promise<string> {
@@ -47,7 +41,6 @@ export async function startGiftCheckout(admin: SupabaseClient, gift: CleanGift, 
 
   if (simulationAllowed()) {
     await admin.from('memora_gifts').update({ status: 'PAID', paid_at: new Date().toISOString(), provider_reference: `sim-${row.id}` }).eq('id', row.id);
-    await deliverGift(admin, row.id);
     return buyerUrl(row.id);
   }
 
@@ -72,15 +65,12 @@ export async function startGiftCheckout(admin: SupabaseClient, gift: CleanGift, 
 
 /**
  * Confirms a gift payment by fetching the checkout from Yoco (never trusting a
- * redirect or webhook body), then delivers the gift. Idempotent.
+ * redirect or webhook body). Idempotent.
  */
 export async function confirmGiftWithYoco(admin: SupabaseClient, checkoutId: string): Promise<'confirmed' | 'already_paid' | 'pending' | 'mismatch' | 'no_gift'> {
   const { data: gift } = await admin.from('memora_gifts').select('id,status,amount_minor,currency,provider_reference').eq('provider', 'yoco').eq('provider_reference', checkoutId).maybeSingle();
   if (!gift) return 'no_gift';
-  if (gift.status === 'PAID' || gift.status === 'REDEEMED') {
-    await deliverGift(admin, gift.id);
-    return 'already_paid';
-  }
+  if (gift.status === 'PAID' || gift.status === 'REDEEMED') return 'already_paid';
   const checkout = await fetchCheckout(checkoutId);
   if (String(checkout?.status).toLowerCase() !== 'completed') return 'pending';
   const matches =
@@ -97,91 +87,7 @@ export async function confirmGiftWithYoco(admin: SupabaseClient, checkoutId: str
     .update({ status: 'PAID', paid_at: new Date().toISOString(), provider_payment_id: String(checkout.paymentId || checkout.id), updated_at: new Date().toISOString() })
     .eq('id', gift.id)
     .eq('status', 'PENDING');
-  await deliverGift(admin, gift.id);
   return 'confirmed';
-}
-
-async function sendRecipientLink(g: GiftRow, kind: 'first' | 'reminder' | 'urgent') {
-  const link = redeemUrl(g.id);
-  const who = escapeHtml(g.buyer_name);
-  const forWhom = g.loved_one_name ? ` for ${escapeHtml(g.loved_one_name)}` : '';
-  const subject =
-    kind === 'first'
-      ? `${g.buyer_name} has given you a Memora memorial`
-      : kind === 'urgent'
-        ? `The funeral is close: finish the memorial${g.loved_one_name ? ` for ${g.loved_one_name}` : ''}`
-        : `A reminder: your Memora memorial is ready to start`;
-  const intro =
-    kind === 'first'
-      ? `${who} has paid for a Memora memorial${forWhom}, so you don’t have to. With it you can tell their story, map every stop of the funeral with directions, build the programme, and share one link and QR code with everyone.`
-      : kind === 'urgent'
-        ? `The funeral${forWhom} is ${escapeHtml(funeralLine(g))}. The memorial ${escapeHtml(g.buyer_name)} gave you is still waiting. Guests will need the directions and programme, so it’s worth finishing it now.`
-        : `${who} gave you a Memora memorial${forWhom}. It’s paid for and waiting whenever you’re ready. It only takes a few minutes to start, and you can finish it bit by bit.`;
-  const paragraphs = [`Dear ${escapeHtml(g.recipient_name)},`, intro];
-  if (kind === 'first' && g.message) paragraphs.push(`<em>“${escapeHtml(g.message)}”</em> <br>— ${who}`);
-  paragraphs.push('Everything stays private until you choose to publish it.');
-  const html = emailLayout({ preheader: subject, heading: kind === 'first' ? 'A gift, to help you remember.' : 'Your memorial is waiting.', paragraphs, cta: { label: 'Start the memorial', href: link } });
-  const text = `${paragraphs.map((p) => p.replace(/<[^>]+>/g, '')).join('\n\n')}\n\nStart the memorial: ${link}`;
-  const [email, whatsapp] = await Promise.all([
-    sendEmail(g.recipient_email, subject, html, text),
-    sendWhatsAppTemplate(g.recipient_whatsapp, [g.recipient_name, g.buyer_name, link]),
-  ]);
-  return { email, whatsapp };
-}
-
-async function alertTeam(subject: string, g: GiftRow, extra: string[] = []) {
-  const to = process.env.MEMORA_TEAM_EMAIL;
-  if (!to) return;
-  const lines = [
-    `<strong>Funeral:</strong> ${escapeHtml(funeralLine(g))}`,
-    `<strong>Loved one:</strong> ${escapeHtml(g.loved_one_name || '—')}`,
-    `<strong>Recipient:</strong> ${escapeHtml(g.recipient_name)} · ${escapeHtml(g.recipient_email || '')} ${g.recipient_whatsapp ? escapeHtml(formatWhatsApp(g.recipient_whatsapp)) : ''}`,
-    `<strong>From:</strong> ${escapeHtml(g.buyer_name)} · ${escapeHtml(g.buyer_email)}`,
-    ...extra,
-  ];
-  await sendEmail(to, subject, emailLayout({ preheader: subject, heading: subject, paragraphs: lines, cta: { label: 'Open the gifts board', href: `${siteUrl()}/admin` } }), lines.join('\n').replace(/<[^>]+>/g, ''));
-}
-
-/**
- * Sends the gift link to the recipient (email + WhatsApp), a receipt to the buyer
- * and an alert to the team, exactly once: the first caller claims delivery with a
- * conditional update, so the webhook and the thank-you page can't both send it.
- */
-export async function deliverGift(admin: SupabaseClient, giftId: string): Promise<void> {
-  const now = new Date().toISOString();
-  const { data: g } = await admin
-    .from('memora_gifts')
-    .update({ delivery_started_at: now, updated_at: now })
-    .eq('id', giftId)
-    .in('status', ['PAID', 'REDEEMED'])
-    .is('delivery_started_at', null)
-    .select('*')
-    .maybeSingle();
-  if (!g) return;
-
-  const { email, whatsapp } = await sendRecipientLink(g, 'first');
-  await admin
-    .from('memora_gifts')
-    .update({ email_sent_at: email.sent ? now : null, whatsapp_sent_at: whatsapp.sent ? now : null, updated_at: new Date().toISOString() })
-    .eq('id', g.id);
-  if (!email.sent && g.recipient_email) console.warn('Gift email not sent', { giftId, error: email.error });
-  if (!whatsapp.sent && g.recipient_whatsapp) console.warn('Gift WhatsApp not sent', { giftId, error: whatsapp.error });
-
-  const receipt = [
-    `Thank you, ${escapeHtml(g.buyer_name)}. Your gift of ${PRICE_LABEL}${g.loved_one_name ? ` for ${escapeHtml(g.loved_one_name)}` : ''} is paid.`,
-    email.sent || whatsapp.sent
-      ? `We’ve sent ${escapeHtml(g.recipient_name)} their private link${email.sent && whatsapp.sent ? ' by email and WhatsApp' : email.sent ? ' by email' : ' on WhatsApp'}. We’ll send gentle reminders if they haven’t started, and our team is watching the funeral date.`
-      : `Use the page below to send ${escapeHtml(g.recipient_name)} their private link on WhatsApp.`,
-  ];
-  await sendEmail(
-    g.buyer_email,
-    `Your Memora gift for ${g.recipient_name}`,
-    emailLayout({ preheader: 'Your gift is on its way', heading: 'Your gift is on its way.', paragraphs: receipt, cta: { label: 'View your gift', href: buyerUrl(g.id) } }),
-    `${receipt.join('\n\n').replace(/<[^>]+>/g, '')}\n\n${buyerUrl(g.id)}`,
-  );
-  await alertTeam(`New gift: funeral ${funeralLine(g)}`, g, [
-    `<strong>Link sent by:</strong> ${[email.sent && 'email', whatsapp.sent && 'WhatsApp'].filter(Boolean).join(' + ') || 'not sent automatically, buyer must share it'}`,
-  ]);
 }
 
 export interface BuyerView {
@@ -190,9 +96,9 @@ export interface BuyerView {
   recipientName: string;
   lovedOneName: string;
   funeralDate: string | null;
-  emailSent: boolean;
-  whatsappSent: boolean;
-  recipientWhatsapp: string | null;
+  recipientWhatsapp: string;
+  message: string;
+  buyerName: string;
   redeemed: boolean;
   redeemLink: string | null;
 }
@@ -217,9 +123,9 @@ export async function buyerGiftView(admin: SupabaseClient, giftId: string): Prom
     recipientName: g.recipient_name,
     lovedOneName: g.loved_one_name,
     funeralDate: g.funeral_date_estimate,
-    emailSent: Boolean(g.email_sent_at),
-    whatsappSent: Boolean(g.whatsapp_sent_at),
     recipientWhatsapp: g.recipient_whatsapp,
+    message: g.message,
+    buyerName: g.buyer_name,
     redeemed: g.status === 'REDEEMED',
     redeemLink: paid ? redeemUrl(g.id) : null,
   };
@@ -288,57 +194,9 @@ export async function giftForCase(admin: SupabaseClient, caseId: string): Promis
   return data ? { buyerName: data.buyer_name, funeralDate: data.funeral_date_estimate } : null;
 }
 
-/**
- * Hourly job. (1) Gifts paid but not started: remind the recipient daily, up to 3
- * times. (2) Funeral within 3 days and memorial not yet published: nudge the
- * recipient and alert the team, once a day.
- */
-export async function runGiftReminders(admin: SupabaseClient): Promise<{ reminders: number; urgent: number }> {
-  const now = new Date();
-  const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
-  let reminders = 0;
-  let urgent = 0;
-
-  const { data: waiting } = await admin
-    .from('memora_gifts')
-    .select('*')
-    .eq('status', 'PAID')
-    .lt('paid_at', dayAgo)
-    .lt('reminder_count', 3)
-    .or(`last_reminder_at.is.null,last_reminder_at.lt."${dayAgo}"`)
-    .limit(100);
-  for (const g of waiting ?? []) {
-    await sendRecipientLink(g, 'reminder');
-    await admin.from('memora_gifts').update({ reminder_count: g.reminder_count + 1, last_reminder_at: now.toISOString() }).eq('id', g.id);
-    reminders++;
-  }
-
-  const soon = new Date(now.getTime() + 3 * 86_400_000).toISOString().slice(0, 10);
-  const today = now.toISOString().slice(0, 10);
-  const { data: close } = await admin
-    .from('memora_gifts')
-    .select('*, memora_cases(status)')
-    .in('status', ['PAID', 'REDEEMED'])
-    .gte('funeral_date_estimate', today)
-    .lte('funeral_date_estimate', soon)
-    .or(`last_urgent_alert_at.is.null,last_urgent_alert_at.lt."${dayAgo}"`)
-    .limit(100);
-  for (const g of close ?? []) {
-    const caseStatus = (Array.isArray(g.memora_cases) ? g.memora_cases[0] : g.memora_cases)?.status;
-    if (caseStatus === 'PUBLISHED') continue;
-    const days = daysUntil(g.funeral_date_estimate, now);
-    await sendRecipientLink(g, 'urgent');
-    await alertTeam(`Funeral in ${days} day${days === 1 ? '' : 's'}: memorial not published`, g, [
-      `<strong>Status:</strong> ${g.status === 'PAID' ? 'gift not started yet' : 'memorial started, not published'}`,
-    ]);
-    await admin.from('memora_gifts').update({ last_urgent_alert_at: now.toISOString() }).eq('id', g.id);
-    urgent++;
-  }
-  return { reminders, urgent };
-}
-
 export interface BoardRow {
   g: GiftRow;
+  redeemLink: string | null;
   p: { status: string; pct: number; slug: string } | undefined;
   days: number | null;
   stage: string;
@@ -376,6 +234,20 @@ export async function loadGiftBoard(admin: SupabaseClient, now = new Date()): Pr
     const stage =
       g.status === 'PENDING' ? 'Awaiting payment' : g.status === 'PAID' ? 'Link sent · not started' : published ? 'Published' : `In progress · ${p?.pct ?? 0}%`;
     const urgent = g.status !== 'PENDING' && !published && days != null && days >= 0 && days <= 3;
-    return { g, p, days, stage, urgent, published };
+    return { g, p, days, stage, urgent, published, redeemLink: g.status === 'PAID' ? redeemUrl(g.id) : null };
   });
+}
+
+/** The team records a manual follow-up from the gifts board. */
+export async function markGiftContacted(admin: SupabaseClient, giftId: string): Promise<boolean> {
+  const { data: g } = await admin.from('memora_gifts').select('team_contact_count').eq('id', giftId).maybeSingle();
+  if (!g) return false;
+  const now = new Date().toISOString();
+  await admin.from('memora_gifts').update({ team_contact_count: g.team_contact_count + 1, team_contacted_at: now, updated_at: now }).eq('id', giftId);
+  return true;
+}
+
+/** A WhatsApp message with the private link, ready for the buyer or the team to send. */
+export function giftWhatsAppText(g: { recipient_name: string; buyer_name: string; loved_one_name?: string }, link: string): string {
+  return `Hi ${g.recipient_name}, ${g.buyer_name} has arranged a Memora memorial${g.loved_one_name ? ` for ${g.loved_one_name}` : ''} for your family, and it's already paid for. You can create it here: ${link}\n\nIt stays private until you choose to publish it.`;
 }

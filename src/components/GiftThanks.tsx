@@ -52,7 +52,7 @@ export function GiftThanks({ token }: { token: string }) {
     return (
       <div className="panel">
         <h1 className="h1">This link isn’t valid.</h1>
-        <p className="muted">Please use the link from your receipt email.</p>
+        <p className="muted">Please open the page you were sent back to after paying.</p>
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function GiftThanks({ token }: { token: string }) {
         </h1>
         <p className="muted">
           {state === 'timeout'
-            ? 'We haven’t had confirmation yet. If you were charged, your gift will be sent as soon as it arrives, and you’ll get a receipt by email. You can refresh this page.'
+            ? 'We haven’t had confirmation yet. If you were charged, refresh this page in a minute and the WhatsApp link will appear. Keep this page’s address.'
             : 'We’re checking with Yoco. Please keep this page open.'}
         </p>
       </div>

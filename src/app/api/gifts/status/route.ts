@@ -3,7 +3,7 @@ import { buyerGiftView } from '@/lib/server/gifts';
 import { fail, json, sameOrigin } from '@/lib/server/http';
 import { verifyGiftToken } from '@/lib/server/links';
 
-/** The buyer's view of their gift, authorised by the signed link in their receipt. */
+/** The buyer's view of their gift, authorised by the signed link Yoco sends them back to. */
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return fail('Cross-site request refused.', 403);
   const admin = getAdminSupabase();

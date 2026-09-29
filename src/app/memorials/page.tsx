@@ -13,6 +13,7 @@ export const metadata = { title: 'My memorials' };
 function statusPill(status: string, archiveAt: string | null) {
   if (status === 'PUBLISHED' && archiveAt && new Date(archiveAt) <= new Date()) return <span className="pill">Private</span>;
   if (status === 'PUBLISHED') return <span className="pill live dot">Live</span>;
+  if (status === 'ARCHIVED') return <span className="pill">Private</span>;
   return <span className="pill">Draft</span>;
 }
 

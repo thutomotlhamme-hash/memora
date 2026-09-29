@@ -488,6 +488,12 @@ button { cursor: pointer; }
 
 /* ---------------------------------------------------------------- Admin */
 
+.admin-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); margin-bottom: 24px; scrollbar-width: none; }
+.admin-tabs a { flex: none; padding: 12px 14px; font-weight: 550; font-size: 15px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.admin-tabs a[aria-current='page'] { color: var(--ink); border-bottom-color: var(--ink); }
+.urgent-row { background: var(--clay-soft); padding-left: 10px; padding-right: 10px; border-radius: var(--r-sm); }
+
+
 .board { width: 100%; border-collapse: collapse; font-size: 14.5px; }
 .board th { text-align: left; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--line-strong); }
 .board td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }

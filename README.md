@@ -34,7 +34,7 @@ src/
     api/memorials/…       create · save · delete · checkout · payment-status · publish
     api/yoco/webhook      signed Yoco webhook (memorial and gift payments)
     api/gifts/…           buy · buyer status · redeem
-    api/admin/…           team: mark a gift as contacted
+    api/admin/actions     every admin action (checked and logged)
     gift/…                gift form, buyer thank-you page, recipient redeem page
     admin                 team gifts board
     m/[slug]              public memorial (server-rendered, service role)
@@ -107,10 +107,14 @@ Memora uses Yoco's hosted **Checkout API**: the family is sent to a Yoco payment
 
 For local work, `MEMORA_SIMULATE_PAYMENTS=true` records a confirmed payment without Yoco. It is ignored in production.
 
+### Admin
+
+`/admin` is for whoever runs Memora. Owners are the emails in `MEMORA_ADMIN_EMAILS` (Netlify); owners add staff on Admin → Team. Access needs a signed-in, **confirmed** email, re-checked on every request. It covers: what needs attention now, gifts, memorials (take down or restore), payments (re-check with Yoco, mark refunded) and the team. See [docs/ADMIN.md](docs/ADMIN.md) for the handbook, including what to do when payments, gifts or links go wrong.
+
 ### Gifts
 
 1. Set `MEMORA_LINK_SECRET` (a long random string). It signs the private gift links, so nothing secret is stored in the database.
-2. Set `MEMORA_ADMIN_EMAILS` to the team's emails; they sign up with those emails to open `/admin`.
+2. Set `MEMORA_ADMIN_EMAILS` to the owner's email (more staff can be added from Admin → Team).
 
 Nothing is sent automatically yet: the buyer sends the link on WhatsApp and the team follows up from `/admin`. Automatic email (e.g. Resend) and WhatsApp (Meta's Cloud API) can be added later without changing the gift flow.
 

@@ -36,7 +36,7 @@ export default async function PublicMemorial({ params }: { params: Promise<{ slu
       <StatusScreen
         eyebrow="Memorial"
         title={m.name ? `The memorial for ${m.name} is now private.` : 'This memorial is now private.'}
-        body="Its public period has ended. The family still has their memorial, programme and keepsakes."
+        body="It’s no longer shown publicly. The family still has their memorial, programme and keepsakes."
       />
     );
   }

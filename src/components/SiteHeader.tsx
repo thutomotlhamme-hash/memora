@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { isSupabaseConfigured } from '@/lib/config';
+import { roleForEmail } from '@/lib/server/admin-auth';
 import { getSessionUser } from '@/lib/supabase/server';
 import { Brand } from './Brand';
 
 /** `hideCreate` drops the "Create a memorial" button on pages where you're already creating one. */
 export async function SiteHeader({ hideCreate = false }: { hideCreate?: boolean } = {}) {
   const user = isSupabaseConfigured() ? await getSessionUser() : null;
+  const isTeam = user ? Boolean(await roleForEmail(user.email)) : false;
   return (
     <header className="site-header">
       <div className="container bar">
@@ -19,6 +21,11 @@ export async function SiteHeader({ hideCreate = false }: { hideCreate?: boolean 
           </Link>
           {user ? (
             <>
+              {isTeam && (
+                <Link className="btn ghost" href="/admin">
+                  Admin
+                </Link>
+              )}
               <Link className="btn ghost" href="/account">
                 Account
               </Link>

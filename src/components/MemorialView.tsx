@@ -4,6 +4,7 @@ import { Brand } from './Brand';
 import { LivePanel } from './LivePanel';
 import { LiveProvider } from './LiveMemorial';
 import { MemorialShare } from './MemorialShare';
+import { ProcessionCard } from './ProcessionCard';
 import { JourneyTimeline, ProgrammeTimeline } from './MemorialTimelines';
 
 /**
@@ -79,6 +80,7 @@ export function MemorialView({ draft, path, banner, live }: { draft: Draft; path
 function MemorialBody({ draft, path, name, formal, hasJourney }: { draft: Draft; path: string; name: string; formal: boolean; hasJourney: boolean }) {
   return (
     <>
+      <ProcessionCard journey={draft.journey} />
       <LivePanel journey={draft.journey} programme={draft.programme} />
 
       <section className="m-section" id="story">

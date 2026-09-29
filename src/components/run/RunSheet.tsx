@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useNow } from '@/lib/hooks';
 import { PROGRAMME_TYPE_LABELS, fmtDate, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammeType, type Stop } from '@/lib/memorial';
+import type { ProcessionRecord } from '@/lib/procession';
+import { ProcessionControl } from './ProcessionControl';
 import { insertItem, moveItem, shiftFrom, shiftTodaysStops, startItem, toMinutes } from '@/lib/runsheet';
 
 // The funeral-day coordinator's console. Every change is shown at once, saved in
@@ -19,6 +21,7 @@ export type RunSnapshot = {
   programme: ProgrammeItem[];
   liveKey: string | null;
   updatedAt: string;
+  procession?: ProcessionRecord | null;
 };
 
 type Pending = { programme?: ProgrammeItem[]; stopTimes?: Map<string, { id: string; time: string; departTime: string }>; liveKey?: string | null };
@@ -124,7 +127,9 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
         if (res.status === 404) return setRevoked(true);
         if (!res.ok) return;
         const body = (await res.json()) as RunSnapshot;
-        if (busy.current || pending.current || body.updatedAt === base.current) return;
+        // Another phone may have started or ended the procession without changing the programme.
+        if (body.updatedAt === base.current) return setSnap((s) => ({ ...s, procession: body.procession ?? null }));
+        if (busy.current || pending.current) return;
         base.current = body.updatedAt;
         setSnap(body);
       } catch {
@@ -332,6 +337,14 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
           )}
         </div>
       </section>
+
+      <ProcessionControl
+        token={token}
+        journey={snap.journey}
+        record={snap.procession ?? null}
+        onRecord={(r) => setSnap((s) => ({ ...s, procession: r }))}
+        onRevoked={() => setRevoked(true)}
+      />
 
       <section className="run-late">
         <div>

@@ -22,6 +22,8 @@ This is **Memora 2**, a clean rebuild on Next.js + Supabase. The funeral-home pr
   - add, edit and remove items;
   - push everything still to come later or earlier (+5, +10, +15 or −5 minutes), optionally moving today's later stops such as the cemetery departure too.
 
+  - **Share the procession:** from the lead car, the coordinator shares the phone's location. Guests see a live map on the memorial with a rough arrival estimate. Only the latest position is kept, and sharing ends on arrival, when paused or ended, or after 6 hours.
+
   Guests' memorial pages pick up the changes within about 25 seconds, and the item happening now is highlighted. Two phones never overwrite each other: a save based on an old version is refused and the phone reloads the latest one. The family's editor does the same. **Reset link** turns off every copy already shared.
 - **Give a memorial.** Anyone can buy a memorial for a grieving family at `/gift`, without an account. They enter the recipient's name and WhatsApp number (email optional), a rough funeral date (or "not sure yet") and a message, then pay. The thank-you page has a **Send on WhatsApp** button that opens the buyer's own WhatsApp with the message and private one-time link ready. The recipient signs up, and the memorial is created already paid for. The team follows up by hand from `/admin`: gifts sorted by funeral date, at-risk ones highlighted, each with a pre-written WhatsApp message, the link, and a "mark contacted" record.
 - **Artifact Studio.** After publishing: WhatsApp announcement, square memorial card, journey card, QR card, keepsake card (PNG), printable programme and keepsake book (paginated PDF). All are generated in the browser from the live memorial.

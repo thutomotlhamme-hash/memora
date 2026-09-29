@@ -11,6 +11,7 @@ import {
   type ProgrammeItem,
   type Stop,
 } from '../memorial';
+import { loadPublicProcession } from './procession';
 
 const CASE_COLUMNS =
   'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at,live_current_key,live_started_at,run_version';
@@ -208,9 +209,9 @@ export async function loadLiveSnapshot(admin: SupabaseClient, slug: string) {
   if (!/^[a-z0-9-]{1,80}$/.test(slug)) return null;
   const { data: c } = await admin.from('memora_cases').select(CASE_COLUMNS).eq('slug', slug).eq('status', 'PUBLISHED').maybeSingle();
   if (!c || (c.archive_at && new Date(c.archive_at).getTime() <= Date.now())) return null;
-  const { person, stops, items } = await loadChildren(admin, c.id);
+  const [{ person, stops, items }, procession] = await Promise.all([loadChildren(admin, c.id), loadPublicProcession(admin, c.id)]);
   const draft = rowsToDraft(c, person, stops, items);
-  return { journey: draft.journey, programme: draft.programme, liveKey: (c.live_current_key as string | null) ?? null, updatedAt: c.updated_at as string };
+  return { journey: draft.journey, programme: draft.programme, liveKey: (c.live_current_key as string | null) ?? null, updatedAt: c.updated_at as string, procession };
 }
 
 export { emptyDraft };

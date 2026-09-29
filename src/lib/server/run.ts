@@ -4,7 +4,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { siteUrl } from '../config';
 import { displayName, normaliseDraft, type ProgrammeItem } from '../memorial';
+import type { ProcessionRecord } from '../procession';
 import { loadCaseById } from './cases';
+import { loadProcession } from './procession';
 import { linkSecret } from './links';
 
 // The coordinator's private run-sheet link: /run/<caseId>.<v>.<mac>
@@ -44,10 +46,11 @@ export interface RunSnapshot {
   programme: ProgrammeItem[];
   liveKey: string | null;
   updatedAt: string;
+  procession: ProcessionRecord | null;
 }
 
 export async function loadRunSnapshot(admin: SupabaseClient, caseId: string): Promise<RunSnapshot | null> {
-  const loaded = await loadCaseById(admin, caseId);
+  const [loaded, procession] = await Promise.all([loadCaseById(admin, caseId), loadProcession(admin, caseId)]);
   if (!loaded) return null;
   return {
     name: displayName(loaded.draft.person, 'the memorial'),
@@ -57,6 +60,7 @@ export async function loadRunSnapshot(admin: SupabaseClient, caseId: string): Pr
     programme: loaded.draft.programme.items,
     liveKey: loaded.meta.liveKey ?? null,
     updatedAt: loaded.meta.updatedAt ?? '',
+    procession,
   };
 }
 

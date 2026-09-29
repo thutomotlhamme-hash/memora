@@ -2,23 +2,27 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { localDateKey, type Draft } from '@/lib/memorial';
+import type { PublicProcession } from '@/lib/procession';
 
 // Guests' pages on the funeral day. The coordinator reshuffles the programme,
 // starts items and pushes times back on /run/<token>; guests with the memorial
 // open see it within half a minute, without reloading.
 
-export type LiveData = { journey: Draft['journey']; programme: Draft['programme']; liveKey: string | null };
+export type LiveData = { journey: Draft['journey']; programme: Draft['programme']; liveKey: string | null; procession?: PublicProcession | null };
 
 const LiveContext = createContext<LiveData | null>(null);
 const POLL_MS = 25_000;
+/** While the procession is on the road, follow it more closely. */
+const MOVING_POLL_MS = 12_000;
 
 export function LiveProvider({ slug, initial, children }: { slug: string; initial: LiveData; children: React.ReactNode }) {
   const [data, setData] = useState<LiveData>(initial);
 
   useEffect(() => {
     let stopped = false;
-    const shouldPoll = (d: LiveData) => Boolean(d.liveKey) || d.journey.some((s) => s.date === localDateKey());
+    const shouldPoll = (d: LiveData) => Boolean(d.liveKey || d.procession) || d.journey.some((s) => s.date === localDateKey());
     let current = initial;
+    let timer: ReturnType<typeof setTimeout>;
 
     const tick = async () => {
       if (stopped || document.hidden || !shouldPoll(current)) return;
@@ -27,20 +31,24 @@ export function LiveProvider({ slug, initial, children }: { slug: string; initia
         if (!res.ok) return;
         const body = (await res.json()) as LiveData;
         if (stopped || !Array.isArray(body.journey) || !body.programme) return;
-        current = { journey: body.journey, programme: body.programme, liveKey: body.liveKey ?? null };
+        current = { journey: body.journey, programme: body.programme, liveKey: body.liveKey ?? null, procession: body.procession ?? null };
         setData(current);
       } catch {
         // Offline for a moment: keep showing what we have.
       }
     };
-    const t = setInterval(() => void tick(), POLL_MS);
+    const loop = async () => {
+      await tick();
+      if (!stopped) timer = setTimeout(() => void loop(), current.procession?.state === 'moving' ? MOVING_POLL_MS : POLL_MS);
+    };
+    void loop();
     const onVisible = () => {
       if (!document.hidden) void tick();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       stopped = true;
-      clearInterval(t);
+      clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [slug, initial]);

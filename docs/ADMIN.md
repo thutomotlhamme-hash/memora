@@ -66,3 +66,13 @@ The person running the programme on the day is **not** an admin and doesn't need
 | The family is editing while the coordinator runs the day | The family's editor refuses to overwrite the coordinator's changes and asks them to **Reload latest**. |
 | Guests don't see a change | Their page updates about every 25 seconds while it's open on the funeral day. A refresh shows it immediately. |
 | The whole programme was deleted by accident | That's not possible: the run-sheet always keeps at least one item. For bigger mistakes, the family fixes the programme in the editor. |
+
+### Procession tracking
+
+| Situation | What to do |
+| --- | --- |
+| "Location is blocked for this site" | On the coordinator's phone: browser settings → Site settings → Location → allow the Memora site, then tap the button again. |
+| Guests see "Waiting for the next update" | The phone lost signal or its screen locked. Unlock it and keep the run-sheet open. Sharing continues by itself. |
+| The wrong phone is sharing, or the coordinator changed cars | Tap **Continue from this phone** on the phone in the lead car. |
+| Someone doesn't want their location shown | **Pause** hides it immediately. **End sharing** erases it. |
+| Sharing was forgotten | It ends by itself on arrival or 6 hours after it started, and the position is erased. |

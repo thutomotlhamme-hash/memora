@@ -30,6 +30,11 @@ export default function PrivacyPage() {
           reference.
         </li>
         <li>
+          <strong>Procession location (funeral day only):</strong> if the family’s coordinator chooses to share the procession, their phone sends its
+          location while the run-sheet is open. We keep only the latest position, never a history. Anyone with the memorial link can see it while
+          sharing is on. It is erased when sharing is paused or ended, on arrival, or six hours after it started, whichever comes first.
+        </li>
+        <li>
           <strong>Guest drafts:</strong> a memorial started without an account stays in your own browser and is not sent to us until you create an
           account.
         </li>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useNow } from '@/lib/hooks';
+import { useLiveData } from './LiveMemorial';
 import { liveFuneralState, liveProgrammeState } from '@/lib/live';
 import { directionsUrl, fmtDate, stopLabel, type Draft, type Stop } from '@/lib/memorial';
 
@@ -37,13 +38,14 @@ function StopCard({ stop, kind }: { stop: Stop; kind: 'now' | 'next' }) {
  * Funeral-day guide. Rendered only after mount (it depends on the guest's own
  * clock and time zone) and refreshed every minute while the page is open.
  */
-export function LivePanel({ journey, programme }: { journey: Draft['journey']; programme: Draft['programme'] }) {
+export function LivePanel(props: { journey: Draft['journey']; programme: Draft['programme'] }) {
   const now = useNow();
+  const { journey, programme, liveKey } = useLiveData({ ...props, liveKey: null });
   if (!now) return null;
 
   const live = liveFuneralState(journey, now);
   if (live.phase === 'none') return null;
-  const prog = live.phase === 'at_stop' || live.phase === 'in_transit' || live.phase === 'before_start' ? liveProgrammeState(programme, now) : null;
+  const prog = live.phase === 'at_stop' || live.phase === 'in_transit' || live.phase === 'before_start' ? liveProgrammeState(programme, now, liveKey) : null;
 
   let pill = '';
   let headline = '';
@@ -107,7 +109,7 @@ export function LivePanel({ journey, programme }: { journey: Draft['journey']; p
           )}
           {prog.next && (
             <div className="r">
-              <span>Next · {prog.next.time}</span>
+              <span>Next{prog.next.time ? ` · ${prog.next.time}` : ''}</span>
               <div>
                 <strong>{prog.next.title}</strong>
                 {prog.next.presenter ? <span className="muted"> · {prog.next.presenter}</span> : null}

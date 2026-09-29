@@ -8,6 +8,7 @@ import { CopyField, QrImage, ShareButtons } from '@/components/Share';
 import { useToast } from '@/components/Toast';
 import { displayName, fmtDate, slugify, type CaseMeta, type Draft, type Readiness } from '@/lib/memorial';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
+import { RunSheetLink } from './RunSheetLink';
 import { PanelFoot, type Nav, type StepId } from './shared';
 
 type Owner = { caseId: string; paymentsReady: boolean };
@@ -288,6 +289,7 @@ function Published({ draft, meta, caseId, nav }: { draft: Draft; meta: CaseMeta;
           </div>
         </div>
       )}
+      <RunSheetLink caseId={caseId} name={name} />
       <PanelFoot nav={nav} />
     </div>
   );

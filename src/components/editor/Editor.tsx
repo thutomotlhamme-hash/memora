@@ -21,7 +21,7 @@ export type EditorProps =
   | { mode: 'guest' }
   | { mode: 'owner'; caseId: string; initialDraft: Draft; initialMeta: CaseMeta; paymentsReady: boolean; gift?: { buyerName: string; funeralDate: string | null } | null };
 
-type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: string };
+type SaveState = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: string; stale?: boolean };
 
 /** Guest drafts live in localStorage, so the guest editor renders only in the browser. */
 export function GuestEditor() {
@@ -63,6 +63,13 @@ export function Editor(props: EditorProps) {
   }, [draft]);
   const inFlight = useRef(false);
   const queued = useRef(false);
+  // The version this editor last saw. If the funeral-day coordinator changes the
+  // programme meanwhile, the server refuses the save instead of overwriting it.
+  const base = useRef<string | null>(owner?.initialMeta.updatedAt ?? null);
+  const metaUpdatedAt = meta?.updatedAt ?? null;
+  useEffect(() => {
+    if (metaUpdatedAt && (!base.current || metaUpdatedAt > base.current)) base.current = metaUpdatedAt;
+  }, [metaUpdatedAt]);
 
   const caseId = owner?.caseId ?? null;
   const pushRemote = useCallback(async () => {
@@ -80,16 +87,19 @@ export function Editor(props: EditorProps) {
         const res = await fetch(`/api/memorials/${caseId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ draft: latest.current }),
+          body: JSON.stringify({ draft: latest.current, baseUpdatedAt: base.current }),
         });
         const body = await res.json().catch(() => ({}));
+        if (res.status === 409 && body?.code === 'STALE') throw Object.assign(new Error(body.error), { stale: true });
         if (!res.ok) throw new Error(body?.error || 'Could not save your changes.');
+        if (body?.updatedAt) base.current = body.updatedAt;
       } while (queued.current);
       dirty.current = false;
       setSave({ kind: 'saved' });
     } catch (err) {
       queued.current = false;
-      setSave({ kind: 'error', message: err instanceof Error ? err.message : 'Could not save.' });
+      const stale = Boolean((err as { stale?: boolean })?.stale);
+      setSave({ kind: 'error', message: err instanceof Error ? err.message : 'Could not save.', stale });
     } finally {
       inFlight.current = false;
     }
@@ -255,7 +265,20 @@ export function Editor(props: EditorProps) {
               <span>
                 <strong>Not saved.</strong> {save.message}
               </span>
-              {owner && (
+              {owner && save.stale && (
+                <button
+                  className="btn sm"
+                  type="button"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => {
+                    dirty.current = false;
+                    window.location.reload();
+                  }}
+                >
+                  Reload latest
+                </button>
+              )}
+              {owner && !save.stale && (
                 <button className="btn sm" type="button" onClick={() => void pushRemote()} style={{ marginLeft: 'auto' }}>
                   Retry
                 </button>

@@ -1,0 +1,70 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { liveProgrammeState } from '../src/lib/live.ts';
+import type { ProgrammeItem, Stop } from '../src/lib/memorial.ts';
+import { insertItem, isTimedSequence, moveItem, shiftFrom, shiftTodaysStops, startItem } from '../src/lib/runsheet.ts';
+
+const item = (id: string, time: string): ProgrammeItem => ({ id, type: 'custom', time, title: id, presenter: '', detail: '' });
+const service = () => [item('welcome', '10:00'), item('hymn', '10:10'), item('tribute', '10:15'), item('eulogy', '10:35')];
+const times = (items: ProgrammeItem[]) => items.map((i) => `${i.id}@${i.time}`);
+
+test('dragging an item re-times the programme so it still reads top to bottom', () => {
+  // Tribute (20 min) moves before the hymn (5 min).
+  const moved = moveItem(service(), 2, 1);
+  assert.deepEqual(times(moved), ['welcome@10:00', 'tribute@10:10', 'hymn@10:30', 'eulogy@10:35']);
+  assert.ok(isTimedSequence(moved));
+});
+
+test('moving an item in an untimed programme only changes the order', () => {
+  const items = [item('a', ''), item('b', ''), item('c', '')];
+  assert.deepEqual(
+    moveItem(items, 0, 2).map((i) => i.id),
+    ['b', 'c', 'a'],
+  );
+  assert.equal(moveItem(items, 0, 9), items);
+});
+
+test('starting an item late pushes everything after it', () => {
+  const { items, delay } = startItem(service(), 'hymn', new Date('2026-09-29T10:22:00'), true);
+  assert.equal(delay, 12);
+  assert.deepEqual(times(items), ['welcome@10:00', 'hymn@10:22', 'tribute@10:27', 'eulogy@10:47']);
+});
+
+test('starting an item without shifting only records when it began', () => {
+  const { items } = startItem(service(), 'hymn', new Date('2026-09-29T10:22:00'), false);
+  assert.deepEqual(times(items), ['welcome@10:00', 'hymn@10:22', 'tribute@10:15', 'eulogy@10:35']);
+});
+
+test('running late moves only what is still to come', () => {
+  assert.deepEqual(times(shiftFrom(service(), 2, 10)), ['welcome@10:00', 'hymn@10:10', 'tribute@10:25', 'eulogy@10:45']);
+  assert.deepEqual(times(shiftFrom(service(), 3, -5)), ['welcome@10:00', 'hymn@10:10', 'tribute@10:15', 'eulogy@10:30']);
+});
+
+test('a new item without a time fits in after the item above', () => {
+  const next = insertItem(service(), 1, item('poem', ''));
+  assert.deepEqual(times(next), ['welcome@10:00', 'hymn@10:10', 'poem@10:15', 'tribute@10:15', 'eulogy@10:35']);
+  assert.deepEqual(insertItem(service(), -1, item('prelude', '09:50')).map((i) => i.id)[0], 'prelude');
+});
+
+test('the coordinator’s live item wins over the clock for guests', () => {
+  const programme = { mode: 'formal' as const, items: service() };
+  const byClock = liveProgrammeState(programme, new Date('2026-09-29T10:20:00'));
+  assert.equal(byClock?.current?.id, 'tribute');
+  const byCoordinator = liveProgrammeState(programme, new Date('2026-09-29T10:20:00'), 'hymn');
+  assert.equal(byCoordinator?.current?.id, 'hymn');
+  assert.equal(byCoordinator?.next?.id, 'tribute');
+  // An unknown key (item since deleted) falls back to the clock.
+  assert.equal(liveProgrammeState(programme, new Date('2026-09-29T10:20:00'), 'gone')?.current?.id, 'tribute');
+});
+
+test('only today’s later stops move with the programme', () => {
+  const stop = (id: string, date: string, time: string, departTime = ''): Stop => ({
+    id, type: 'other', title: id, date, time, departTime, address: '', landmark: '', parking: '', transport: '', notes: '', lat: 0, lng: 0,
+  });
+  const journey = [stop('home', '2026-09-29', '08:00'), stop('church', '2026-09-29', '10:00', '12:00'), stop('cemetery', '2026-09-29', '12:30'), stop('tombstone', '2026-10-30', '09:00')];
+  // 10:20, the service is under way: the church keeps its start but leaves later; the cemetery moves; other days don't.
+  assert.deepEqual(shiftTodaysStops(journey, '2026-09-29', new Date('2026-09-29T10:20:00'), 15), [
+    { id: 'church', time: '10:00', departTime: '12:15' },
+    { id: 'cemetery', time: '12:45', departTime: '' },
+  ]);
+});

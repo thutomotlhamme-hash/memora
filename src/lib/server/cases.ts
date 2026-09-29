@@ -13,11 +13,11 @@ import {
 } from '../memorial';
 
 const CASE_COLUMNS =
-  'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at';
+  'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at,live_current_key,live_started_at,run_version';
 const PERSON_COLUMNS = 'first_name,last_name,preferred_name,birth_date,passing_date,portrait_path';
 const STOP_COLUMNS =
-  'id,stop_type,title,event_date,event_time,departure_time,address_text,landmark,parking_notes,transport_notes,notes,latitude,longitude,sort_order';
-const ITEM_COLUMNS = 'id,item_type,start_time,title,presenter,detail,sort_order';
+  'id,stop_key,stop_type,title,event_date,event_time,departure_time,address_text,landmark,parking_notes,transport_notes,notes,latitude,longitude,sort_order';
+const ITEM_COLUMNS = 'id,item_key,item_type,start_time,title,presenter,detail,sort_order';
 
 const hhmm = (v: unknown) => (v ? String(v).slice(0, 5) : '');
 
@@ -38,7 +38,7 @@ function rowsToDraft(c: Row, person: Row | null, stops: Row[], items: Row[], por
     disposition: { type: c.disposition_type ?? '', notes: c.disposition_notes ?? '' },
     journey: stops.map(
       (s): Stop => ({
-        id: s.id,
+        id: s.stop_key ?? s.id,
         type: s.stop_type,
         title: s.title,
         date: s.event_date,
@@ -57,7 +57,7 @@ function rowsToDraft(c: Row, person: Row | null, stops: Row[], items: Row[], por
       mode: c.programme_mode ?? '',
       items: items.map(
         (i): ProgrammeItem => ({
-          id: i.id,
+          id: i.item_key ?? i.id,
           type: i.item_type,
           time: hhmm(i.start_time),
           title: i.title,
@@ -78,6 +78,8 @@ function toMeta(c: Row, paid: boolean): CaseMeta {
     archiveAt: c.archive_at ?? null,
     paid,
     updatedAt: c.updated_at ?? null,
+    liveKey: c.live_current_key ?? null,
+    liveStartedAt: c.live_started_at ?? null,
   };
 }
 
@@ -190,6 +192,25 @@ export async function loadPublicMemorial(admin: SupabaseClient, slug: string): P
   const draft = rowsToDraft(c, person, stops, items, portraitUrl);
   draft.person.portraitPath = '';
   return { state: 'ok', draft, meta: toMeta(c, true) };
+}
+
+/** Loads any memorial by id with the service role, for trusted server flows (run-sheet). */
+export async function loadCaseById(admin: SupabaseClient, caseId: string): Promise<{ draft: Draft; meta: CaseMeta; runVersion: number } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(caseId)) return null;
+  const { data: c } = await admin.from('memora_cases').select(CASE_COLUMNS).eq('id', caseId).maybeSingle();
+  if (!c) return null;
+  const { person, stops, items } = await loadChildren(admin, caseId);
+  return { draft: rowsToDraft(c, person, stops, items), meta: toMeta(c, false), runVersion: Number(c.run_version ?? 1) };
+}
+
+/** The parts of a live memorial that change on the day, for guests' pages to poll. */
+export async function loadLiveSnapshot(admin: SupabaseClient, slug: string) {
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) return null;
+  const { data: c } = await admin.from('memora_cases').select(CASE_COLUMNS).eq('slug', slug).eq('status', 'PUBLISHED').maybeSingle();
+  if (!c || (c.archive_at && new Date(c.archive_at).getTime() <= Date.now())) return null;
+  const { person, stops, items } = await loadChildren(admin, c.id);
+  const draft = rowsToDraft(c, person, stops, items);
+  return { journey: draft.journey, programme: draft.programme, liveKey: (c.live_current_key as string | null) ?? null, updatedAt: c.updated_at as string };
 }
 
 export { emptyDraft };

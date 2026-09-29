@@ -62,6 +62,9 @@ export interface CaseMeta {
   archiveAt: string | null;
   paid: boolean;
   updatedAt: string | null;
+  /** Programme item the funeral-day coordinator marked as happening now. */
+  liveKey?: string | null;
+  liveStartedAt?: string | null;
 }
 
 export function emptyDraft(): Draft {

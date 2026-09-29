@@ -61,11 +61,21 @@ export function liveFuneralState(journey: Stop[], now = new Date()): LivePhase {
   return { phase: 'at_stop', currentStop, nextStop };
 }
 
+/**
+ * What's happening in the service. When the funeral-day coordinator has marked
+ * an item as started (liveKey), that wins over the clock: current is that item
+ * and next is the one after it in the running order.
+ */
 export function liveProgrammeState(
   programme: Draft['programme'],
   now = new Date(),
+  liveKey?: string | null,
 ): { current: ProgrammeItem | null; next: ProgrammeItem | null } | null {
   if (programme.mode !== 'formal') return null;
+  if (liveKey) {
+    const i = programme.items.findIndex((item) => item.id === liveKey);
+    if (i >= 0) return { current: programme.items[i], next: programme.items[i + 1] ?? null };
+  }
   const timed = programme.items.filter((i) => timeToMinutes(i.time) != null);
   if (!timed.length) return null;
   const minutes = now.getHours() * 60 + now.getMinutes();

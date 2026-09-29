@@ -52,3 +52,17 @@ Every admin action is recorded in `memora_activity_log` with who did it and why.
 | "Admin isn't set up yet" | `MEMORA_ADMIN_EMAILS` or `SUPABASE_SECRET_KEY` is missing in Netlify | Add both and redeploy. |
 | A staff member leaves | | Team → **Remove**. Access stops immediately. |
 | The owner leaves or changes email | | Change `MEMORA_ADMIN_EMAILS` in Netlify and redeploy. |
+
+## The funeral-day coordinator (run-sheet)
+
+The person running the programme on the day is **not** an admin and doesn't need an account. The family gets their link after publishing (Publish step → **Get the run-sheet link**) and sends it on WhatsApp. The link works until the family resets it or the memorial is taken down.
+
+| Situation | What to do |
+| --- | --- |
+| The coordinator's link says "isn't working" | The family reset it, or it was copied incompletely. The family opens the editor → Publish → **Get the run-sheet link** and resends it. |
+| The link was sent to the wrong person | The family presses **Reset link**. The old link stops working at once. |
+| Two people are running it on two phones | That's fine. If both change something at the same moment, the second change is refused and that phone switches to the latest version with a message to redo it. |
+| The coordinator has no signal | Changes stay on the phone ("No signal · will retry") and are sent when the connection returns. Keep the page open. |
+| The family is editing while the coordinator runs the day | The family's editor refuses to overwrite the coordinator's changes and asks them to **Reload latest**. |
+| Guests don't see a change | Their page updates about every 25 seconds while it's open on the funeral day. A refresh shows it immediately. |
+| The whole programme was deleted by accident | That's not possible: the run-sheet always keeps at least one item. For bigger mistakes, the family fixes the programme in the editor. |

@@ -49,5 +49,5 @@ export default async function PublicMemorial({ params }: { params: Promise<{ slu
       />
     );
   }
-  return <MemorialView draft={m.draft} path={`/m/${slug}`} />;
+  return <MemorialView draft={m.draft} path={`/m/${slug}`} live={{ slug, liveKey: m.meta.liveKey ?? null }} />;
 }

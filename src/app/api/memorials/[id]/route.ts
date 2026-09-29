@@ -13,10 +13,15 @@ export async function PUT(request: Request, { params }: Ctx) {
   if (auth instanceof Response) return auth;
   const { supabase } = auth;
 
-  const { data: c } = await supabase.from('memora_cases').select('id,status').eq('id', id).maybeSingle();
+  const { data: c } = await supabase.from('memora_cases').select('id,status,updated_at').eq('id', id).maybeSingle();
   if (!c) return fail('Memorial not found.', 404);
 
-  const body = (await request.json().catch(() => null)) as { draft?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { draft?: unknown; baseUpdatedAt?: string } | null;
+  // Someone (e.g. the funeral-day coordinator) changed it since this editor loaded:
+  // never silently overwrite their changes.
+  if (body?.baseUpdatedAt && new Date(c.updated_at).getTime() > new Date(body.baseUpdatedAt).getTime()) {
+    return fail('This memorial was changed somewhere else (for example on the funeral-day run-sheet). Reload to get the latest version.', 409, { code: 'STALE' });
+  }
   if (!body?.draft) return fail('Nothing to save.', 400);
   const draft = normaliseDraft(body.draft);
   // Only keep a portrait path that belongs to this memorial's own folder.

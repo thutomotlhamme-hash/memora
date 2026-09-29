@@ -16,6 +16,13 @@ This is **Memora 2**, a clean rebuild on Next.js + Supabase. The funeral-home pr
 
 - **Guest first.** Anyone can build and preview a whole memorial without an account. The draft lives only in the browser (`localStorage`) until they sign up. The dashboard then offers to move it, photo included, into the account.
 - **Live Funeral Mode.** The public page `/m/<slug>` switches between "in N days", "today", "happening now", "on the way", "concluded" from the guest's own clock and the stop and programme times. No GPS.
+- **Funeral-day run-sheet.** After publishing, the family gets a private link for whoever runs the programme on the day (programme director, MC). No account is needed. On their phone at `/run/<link>` they can:
+  - tap **Start** or **Next** to mark what's happening now;
+  - drag items into a new order, with times re-flowing so each item keeps its length;
+  - add, edit and remove items;
+  - push everything still to come later or earlier (+5, +10, +15 or −5 minutes), optionally moving today's later stops such as the cemetery departure too.
+
+  Guests' memorial pages pick up the changes within about 25 seconds, and the item happening now is highlighted. Two phones never overwrite each other: a save based on an old version is refused and the phone reloads the latest one. The family's editor does the same. **Reset link** turns off every copy already shared.
 - **Give a memorial.** Anyone can buy a memorial for a grieving family at `/gift`, without an account. They enter the recipient's name and WhatsApp number (email optional), a rough funeral date (or "not sure yet") and a message, then pay. The thank-you page has a **Send on WhatsApp** button that opens the buyer's own WhatsApp with the message and private one-time link ready. The recipient signs up, and the memorial is created already paid for. The team follows up by hand from `/admin`: gifts sorted by funeral date, at-risk ones highlighted, each with a pre-written WhatsApp message, the link, and a "mark contacted" record.
 - **Artifact Studio.** After publishing: WhatsApp announcement, square memorial card, journey card, QR card, keepsake card (PNG), printable programme and keepsake book (paginated PDF). All are generated in the browser from the live memorial.
 - **Example:** `/m/preview` shows a sample memorial pinned to *today*, so Live Funeral Mode is always visible.
@@ -110,6 +117,10 @@ For local work, `MEMORA_SIMULATE_PAYMENTS=true` records a confirmed payment with
 ### Admin
 
 `/admin` is for whoever runs Memora. Owners are the emails in `MEMORA_ADMIN_EMAILS` (Netlify); owners add staff on Admin → Team. Access needs a signed-in, **confirmed** email, re-checked on every request. It covers: what needs attention now, gifts, memorials (take down or restore), payments (re-check with Yoco, mark refunded) and the team. See [docs/ADMIN.md](docs/ADMIN.md) for the handbook, including what to do when payments, gifts or links go wrong.
+
+### Funeral-day run-sheet
+
+This uses the same `MEMORA_LINK_SECRET`. A link is `/run/<memorial id>.<version>.<signature>`. Resetting it bumps `run_version` in `memora_cases`, and every older link stops working. Coordinator changes go through `memora_run_update` (service role only, with a row lock and a version check). Guests' pages poll `/api/live/<slug>` only when the memorial has a stop today or an item is marked live.
 
 ### Gifts
 

@@ -68,7 +68,7 @@ const ITEMS: Item[] = [
   },
   {
     key: 'qr',
-    kind: 'Print · 1080 × 1350',
+    kind: 'Print · 4 × 5 in · 300 dpi',
     title: 'QR card',
     body: 'A framed QR code for the entrance, the guest book table or the back of the programme.',
     action: 'Download PNG',
@@ -79,7 +79,7 @@ const ITEMS: Item[] = [
     key: 'programme',
     kind: 'A4 PDF',
     title: 'Printable programme',
-    body: 'The order of service and funeral journey, paginated and ready to print.',
+    body: 'A cover with their portrait, the order of service with start times, the journey and a closing page with a QR code. Ready to print.',
     action: 'Download PDF',
     run: A.programmePdf,
     preview: (n) => (
@@ -92,7 +92,7 @@ const ITEMS: Item[] = [
   },
   {
     key: 'keepsake-card',
-    kind: 'Print · 1080 × 1512',
+    kind: 'Print · 5 × 7 in · 300 dpi',
     title: 'Keepsake card',
     body: 'A small card with a line from their story, to print and hand to guests.',
     action: 'Download PNG',
@@ -109,7 +109,7 @@ const ITEMS: Item[] = [
     key: 'keepsake',
     kind: 'A4 PDF',
     title: 'Keepsake book',
-    body: 'Everything, preserved: their story, the programme, the journey and the family’s words.',
+    body: 'Everything, preserved and printable: their story, the programme, the journey and the family’s words.',
     action: 'Download PDF',
     run: A.keepsakePdf,
     dark: true,

@@ -2,46 +2,60 @@
 
 // Artifact Engine: every card and PDF is regenerated from the one memorial each
 // time it is downloaded, so nothing goes stale and nothing is typed twice.
+//
+// Designed for print as much as for phones: the Jacaranda palette, Fraunces and
+// Instrument Sans (embedded in the PDFs, so text stays sharp at any size), the
+// arch portrait and the journey line. Printable cards render at 300 dpi.
 
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
-import { dispositionLabel, displayName, fmtDate, funeralDate, lifeDates, partStart, partStartLabel, programmeParts, programmeTypeLabel, stopLabel, type Draft } from './memorial';
+import {
+  dispositionLabel,
+  displayName,
+  fmtDate,
+  funeralDate,
+  initials,
+  lifeDates,
+  partStart,
+  partStartLabel,
+  programmeParts,
+  programmeTypeLabel,
+  stopLabel,
+  type Draft,
+  type Stop,
+} from './memorial';
 
 const C = {
   paper: '#ffffff',
-  paper2: '#f4f1f8',
-  night: '#15121c',
-  night3: '#2c2636',
-  ink: '#1e1a24',
-  ink2: '#424245',
-  muted: '#6b6475',
+  petal: '#fbfaf8',
+  mist: '#f2eef7',
+  bloom: '#c9b8e8',
   clay: '#5b3e8c',
-  clayLight: '#e8a94a',
+  clayInk: '#3f2a66',
+  ink: '#1e1a24',
+  dusk: '#6b6475',
+  line: '#e4deec',
+  night: '#15121c',
+  night2: '#221d2b',
+  candle: '#e8a94a',
   onNight: '#f4f1f8',
   onNightMuted: '#a79fb3',
 };
-// Display type: semibold, like the site's headlines.
-const SERIF = '"Inter Variable", "Helvetica Neue", Arial, sans-serif';
-const SANS = '"Inter Variable", Arial, sans-serif';
-
-/** The Memora arch: a semicircular top over softly rounded feet. */
-function archPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, foot = 26) {
-  const r = w / 2;
-  ctx.beginPath();
-  ctx.moveTo(x, y + r);
-  ctx.arc(x + r, y + r, r, Math.PI, 0);
-  ctx.lineTo(x + w, y + h - foot);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - foot, y + h);
-  ctx.lineTo(x + foot, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - foot);
-  ctx.closePath();
-}
+const DISPLAY = '"Fraunces Variable", Georgia, "Times New Roman", serif';
+const SANS = '"Instrument Sans Variable", "Helvetica Neue", Arial, sans-serif';
 
 export interface ArtifactInput {
   draft: Draft;
   url: string;
   slug: string;
 }
+
+const file = (slug: string, kind: string, ext: string) => `memora-${slug || 'memorial'}-${kind}.${ext}`;
+const bare = (url: string) => url.replace(/^https?:\/\//, '');
+
+// ---------------------------------------------------------------------------
+// Canvas helpers
+// ---------------------------------------------------------------------------
 
 async function loadImage(src: string): Promise<HTMLImageElement | null> {
   if (!src) return null;
@@ -61,7 +75,12 @@ async function loadImage(src: string): Promise<HTMLImageElement | null> {
 
 async function ensureFonts() {
   try {
-    await Promise.all([document.fonts.load(`600 48px ${SERIF}`), document.fonts.load(`24px ${SANS}`), document.fonts.load(`600 24px ${SANS}`)]);
+    await Promise.all([
+      document.fonts.load(`400 48px ${DISPLAY}`),
+      document.fonts.load(`italic 400 32px ${DISPLAY}`),
+      document.fonts.load(`400 24px ${SANS}`),
+      document.fonts.load(`600 24px ${SANS}`),
+    ]);
   } catch {
     /* fall back to system fonts */
   }
@@ -73,6 +92,7 @@ function canvas(w: number, h: number) {
   c.height = h;
   const ctx = c.getContext('2d');
   if (!ctx) throw new Error('This browser cannot create images.');
+  ctx.textBaseline = 'alphabetic';
   return { c, ctx };
 }
 
@@ -90,26 +110,43 @@ function download(c: HTMLCanvasElement, filename: string): Promise<void> {
   );
 }
 
-function wrap(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines = 8): number {
+/** Word-wrap onto lines no wider than maxWidth; the last shown line gets an ellipsis when cut. */
+function lines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines = 8): string[] {
   const words = String(text || '').split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
+  const out: string[] = [];
   let line = '';
   for (const word of words) {
     const test = line ? `${line} ${word}` : word;
     if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
+      out.push(line);
       line = word;
     } else line = test;
   }
-  if (line) lines.push(line);
-  const shown = lines.slice(0, maxLines);
-  if (lines.length > maxLines && shown.length) shown[shown.length - 1] = `${shown[shown.length - 1].replace(/[,.;:]?$/, '')}…`;
+  if (line) out.push(line);
+  const shown = out.slice(0, maxLines);
+  if (out.length > maxLines && shown.length) shown[shown.length - 1] = `${shown[shown.length - 1].replace(/[,.;:]?$/, '')}…`;
+  return shown;
+}
+
+function wrap(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines = 8): number {
+  const shown = lines(ctx, text, maxWidth, maxLines);
   shown.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
   return y + shown.length * lineHeight;
 }
 
+/** Shrink a font until one line fits (for names). */
+function fit(ctx: CanvasRenderingContext2D, text: string, font: (size: number) => string, size: number, maxWidth: number, min = size * 0.6): number {
+  let s = size;
+  ctx.font = font(s);
+  while (s > min && ctx.measureText(text).width > maxWidth) {
+    s -= 2;
+    ctx.font = font(s);
+  }
+  return s;
+}
+
+/** Letter-spaced small caps label, centred or left depending on textAlign. */
 function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, spacing: number) {
-  // Letter-spaced small caps label, centred or left depending on textAlign.
   const chars = text.split('');
   const width = chars.reduce((w, ch) => w + ctx.measureText(ch).width + spacing, -spacing);
   const align = ctx.textAlign;
@@ -122,24 +159,152 @@ function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: numbe
   ctx.textAlign = align;
 }
 
+/** The Memora arch: a semicircular top over softly rounded feet. */
+function archPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, foot = w * 0.06) {
+  const r = w / 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y + r);
+  ctx.arc(x + r, y + r, r, Math.PI, 0);
+  ctx.lineTo(x + w, y + h - foot);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - foot, y + h);
+  ctx.lineTo(x + foot, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - foot);
+  ctx.closePath();
+}
+
 function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
   const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
   const sw = w / scale;
   const sh = h / scale;
-  ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, x, y, w, h);
+  // Portraits keep the face: crop from a little above centre.
+  ctx.drawImage(img, (img.naturalWidth - sw) / 2, Math.max(0, (img.naturalHeight - sh) * 0.35), sw, sh, x, y, w, h);
 }
 
-function monogram(ctx: CanvasRenderingContext2D, draft: Draft, x: number, y: number, w: number, h: number, bg: string, fg: string) {
-  ctx.fillStyle = bg;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = fg;
-  ctx.font = `600 ${Math.round(Math.min(w, h) * 0.28)}px ${SERIF}`;
-  ctx.textAlign = 'center';
-  const p = draft.person;
-  ctx.fillText(((p.preferredName || p.firstName || 'M')[0] + (p.lastName || '')[0] || '').toUpperCase(), x + w / 2, y + h / 2 + Math.min(w, h) * 0.1);
+/**
+ * The portrait in its arch, with a fine outline floating just outside it: the
+ * signature of every Memora keepsake.
+ */
+function archPortrait(
+  ctx: CanvasRenderingContext2D,
+  draft: Draft,
+  img: HTMLImageElement | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  o: { outline: string; gap: number; stroke: number; empty: string; emptyInk: string },
+) {
+  ctx.save();
+  archPath(ctx, x, y, w, h);
+  ctx.clip();
+  if (img) drawCover(ctx, img, x, y, w, h);
+  else {
+    ctx.fillStyle = o.empty;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = o.emptyInk;
+    ctx.textAlign = 'center';
+    ctx.font = `400 ${Math.round(w * 0.3)}px ${DISPLAY}`;
+    ctx.fillText(initials(draft.person), x + w / 2, y + h * 0.62);
+  }
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = o.outline;
+  ctx.lineWidth = o.stroke;
+  archPath(ctx, x - o.gap, y - o.gap, w + o.gap * 2, h + o.gap * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
-const file = (slug: string, kind: string, ext: string) => `memora-${slug || 'memorial'}-${kind}.${ext}`;
+/** A short rule, a candle dot, a short rule. */
+function ornament(ctx: CanvasRenderingContext2D, cx: number, y: number, half: number, lineColor: string, dot = C.candle, r = 4) {
+  ctx.save();
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = Math.max(1, r / 3);
+  ctx.beginPath();
+  ctx.moveTo(cx - half, y);
+  ctx.lineTo(cx - r * 3, y);
+  ctx.moveTo(cx + r * 3, y);
+  ctx.lineTo(cx + half, y);
+  ctx.stroke();
+  ctx.fillStyle = dot;
+  ctx.beginPath();
+  ctx.arc(cx, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** The journey-line M, as in the logo. */
+function brandMark(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
+  const s = size / 40;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3.4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(8, 32);
+  ctx.lineTo(8, 10);
+  ctx.lineTo(20, 26);
+  ctx.lineTo(32, 10);
+  ctx.lineTo(32, 32);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(8, 32, 3.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = C.candle;
+  ctx.beginPath();
+  ctx.arc(32, 32, 3.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rgb: string, alpha: number) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${rgb},${alpha})`);
+  g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(x - r, y - r, r * 2, r * 2);
+}
+
+async function qrImage(url: string, dark = C.ink, light = '#ffffff') {
+  return loadImage(await QRCode.toDataURL(url, { width: 1200, margin: 0, color: { dark, light }, errorCorrectionLevel: 'M' }));
+}
+
+/** The first sentence of their story, or the family's words, for a keepsake. */
+function keepsakeLine(draft: Draft): string {
+  const pick = (t: string) => t.trim().split(/(?<=[.!?])\s+/)[0] ?? '';
+  const line = pick(draft.story.obituary) || pick(draft.story.familyMessage);
+  return line.length > 8 ? line : 'Forever in our hearts.';
+}
+
+/** The stops people most need, in order: the vigil, the service, the burial or cremation. */
+function keyStops(draft: Draft): Stop[] {
+  const wanted = ['vigil', 'church', 'hall', 'cemetery', 'crematorium'];
+  const found = draft.journey.filter((s) => wanted.includes(s.type));
+  return (found.length ? found : draft.journey).slice(0, 3);
+}
+
+/** What guests call each gathering. */
+const GATHERING: Partial<Record<Stop['type'], string>> = {
+  vigil: 'Night vigil',
+  church: 'Funeral service',
+  hall: 'Funeral service',
+  cemetery: 'Burial',
+  crematorium: 'Cremation',
+  reception: 'Refreshments',
+  aftertears: 'After-tears',
+};
+const gathering = (s: Stop) => GATHERING[s.type] ?? stopLabel(s.type);
+/** Leave out a label that only repeats the stop's own title. */
+const unlessTitle = (label: string, s: Stop) => (label.toLowerCase() === s.title.trim().toLowerCase() ? '' : label);
+
+const shortDate = (date: string) => {
+  const d = new Date(`${date}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? fmtDate(date) : `${d.toLocaleDateString('en-ZA', { weekday: 'long' })} ${d.getDate()} ${d.toLocaleDateString('en-ZA', { month: 'long' })}`;
+};
 
 // ---------------------------------------------------------------------------
 // PNG cards
@@ -148,380 +313,769 @@ const file = (slug: string, kind: string, ext: string) => `memora-${slug || 'mem
 /** 1080×1080 square for WhatsApp Status, Instagram and family groups. */
 export async function socialCard({ draft, slug }: ArtifactInput) {
   await ensureFonts();
-  const { c, ctx } = canvas(1080, 1080);
-  ctx.fillStyle = C.paper;
-  ctx.fillRect(0, 0, 1080, 1080);
+  const W = 1080;
+  const { c, ctx } = canvas(W, W);
+  ctx.fillStyle = C.petal;
+  ctx.fillRect(0, 0, W, W);
+  glow(ctx, W / 2, 330, 520, '201,184,232', 0.45);
   const img = await loadImage(draft.person.portraitUrl);
-  const px = 190;
-  const py = 80;
-  const pw = 700;
-  const ph = 700;
-  ctx.save();
-  archPath(ctx, px + 70, py, pw - 140, ph);
-  ctx.clip();
-  if (img) drawCover(ctx, img, px + 70, py, pw - 140, ph);
-  else monogram(ctx, draft, px + 70, py, pw - 140, ph, C.night, C.onNightMuted);
-  ctx.restore();
+  archPortrait(ctx, draft, img, 355, 96, 370, 470, { outline: C.bloom, gap: 16, stroke: 2, empty: C.mist, emptyInk: C.clay });
+
   ctx.textAlign = 'center';
   ctx.fillStyle = C.clay;
-  ctx.font = `600 20px ${SANS}`;
-  spaced(ctx, 'IN LOVING MEMORY', 540, 850, 4);
+  ctx.font = `600 19px ${SANS}`;
+  spaced(ctx, 'IN LOVING MEMORY', W / 2, 660, 5);
+  const name = displayName(draft.person);
+  fit(ctx, name, (s) => `400 ${s}px ${DISPLAY}`, 78, 920);
   ctx.fillStyle = C.ink;
-  ctx.font = `600 64px ${SERIF}`;
-  wrap(ctx, displayName(draft.person), 540, 928, 900, 68, 1);
-  ctx.fillStyle = C.muted;
-  ctx.font = `26px ${SANS}`;
-  ctx.fillText(lifeDates(draft.person), 540, 984);
+  ctx.fillText(name, W / 2, 752);
+  ctx.fillStyle = C.dusk;
+  ctx.font = `400 26px ${SANS}`;
+  ctx.fillText(lifeDates(draft.person), W / 2, 806);
+  ornament(ctx, W / 2, 866, 70, C.bloom);
+  ctx.fillStyle = C.dusk;
+  ctx.font = `italic 400 30px ${DISPLAY}`;
+  wrap(ctx, keepsakeLine(draft), W / 2, 934, 760, 42, 2);
+  brandMark(ctx, W / 2 - 14, 1010, 28, C.bloom);
   await download(c, file(slug, 'social', 'png'));
 }
 
 /** 1080×1350 portrait death notice for immediate sharing. */
 export async function announcementCard({ draft, url, slug }: ArtifactInput) {
   await ensureFonts();
-  const { c, ctx } = canvas(1080, 1350);
+  const W = 1080;
+  const H = 1350;
+  const { c, ctx } = canvas(W, H);
   ctx.fillStyle = C.night;
-  ctx.fillRect(0, 0, 1080, 1350);
-  ctx.textAlign = 'center';
+  ctx.fillRect(0, 0, W, H);
+  glow(ctx, W / 2, 250, 560, '232,169,74', 0.24);
   const img = await loadImage(draft.person.portraitUrl);
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(540, 330, 170, 0, Math.PI * 2);
-  ctx.clip();
-  if (img) drawCover(ctx, img, 370, 160, 340, 340);
-  else monogram(ctx, draft, 370, 160, 340, 340, C.night3, C.onNightMuted);
-  ctx.restore();
-  ctx.fillStyle = C.clayLight;
-  ctx.font = `600 22px ${SANS}`;
-  spaced(ctx, 'WITH DEEP SORROW', 540, 590, 5);
+  archPortrait(ctx, draft, img, 400, 110, 280, 350, { outline: 'rgba(232,169,74,.55)', gap: 14, stroke: 2, empty: C.night2, emptyInk: C.onNightMuted });
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.candle;
+  ctx.font = `600 19px ${SANS}`;
+  spaced(ctx, 'WITH DEEP SORROW', W / 2, 548, 5);
+  const name = displayName(draft.person);
+  fit(ctx, name, (s) => `400 ${s}px ${DISPLAY}`, 80, 940);
   ctx.fillStyle = C.onNight;
-  ctx.font = `600 68px ${SERIF}`;
-  let y = wrap(ctx, displayName(draft.person), 540, 680, 900, 74, 2);
+  ctx.fillText(name, W / 2, 640);
   ctx.fillStyle = C.onNightMuted;
-  ctx.font = `26px ${SANS}`;
-  ctx.fillText(lifeDates(draft.person), 540, y + 6);
-  y += 80;
-  ctx.strokeStyle = 'rgba(250,249,245,.18)';
-  ctx.beginPath();
-  ctx.moveTo(360, y);
-  ctx.lineTo(720, y);
-  ctx.stroke();
-  y += 70;
+  ctx.font = `400 26px ${SANS}`;
+  ctx.fillText(lifeDates(draft.person), W / 2, 692);
+  ornament(ctx, W / 2, 748, 70, 'rgba(244,241,248,.25)');
+
   ctx.fillStyle = C.onNight;
-  ctx.font = `400 30px ${SANS}`;
-  y = wrap(ctx, `The family sadly announces the passing of ${displayName(draft.person)}.`, 540, y, 820, 44, 3);
-  const first = draft.journey[0];
-  ctx.fillStyle = C.clayLight;
-  ctx.font = `26px ${SANS}`;
-  wrap(ctx, first ? `${stopLabel(first.type)} · ${fmtDate(first.date)} at ${first.time} · ${first.title}` : 'Funeral details to follow.', 540, y + 30, 860, 36, 2);
+  ctx.font = `italic 400 34px ${DISPLAY}`;
+  let y = wrap(ctx, `The family sadly announces the passing of their beloved ${draft.person.preferredName || draft.person.firstName || 'loved one'}.`, W / 2, 820, 820, 48, 3);
+
+  // The details people act on: where and when.
+  const stops = keyStops(draft);
+  y += 34;
+  const rowH = 74;
+  const boxH = stops.length ? stops.length * rowH + 40 : 96;
+  ctx.fillStyle = C.night2;
+  ctx.beginPath();
+  ctx.roundRect(110, y, 860, boxH, 28);
+  ctx.fill();
+  ctx.textAlign = 'left';
+  if (!stops.length) {
+    ctx.fillStyle = C.onNightMuted;
+    ctx.font = `400 26px ${SANS}`;
+    ctx.fillText('Funeral details to follow.', 150, y + 58);
+  }
+  stops.forEach((s, i) => {
+    const ry = y + 26 + i * rowH;
+    ctx.fillStyle = C.candle;
+    ctx.font = `600 17px ${SANS}`;
+    spaced(ctx, gathering(s).toUpperCase(), 150, ry + 22, 2);
+    ctx.fillStyle = C.onNight;
+    ctx.font = `400 25px ${SANS}`;
+    const line = [shortDate(s.date), s.time, unlessTitle(s.title, { ...s, title: gathering(s) })].filter(Boolean).join(' · ');
+    ctx.fillText(lines(ctx, line, 780, 1)[0] ?? '', 150, ry + 56);
+  });
+  ctx.textAlign = 'center';
   ctx.fillStyle = C.onNightMuted;
-  ctx.font = `20px ${SANS}`;
-  ctx.fillText('Details, directions and programme', 540, 1230);
+  ctx.font = `400 20px ${SANS}`;
+  ctx.fillText('Details, directions and live updates', W / 2, H - 92);
   ctx.fillStyle = C.onNight;
   ctx.font = `600 24px ${SANS}`;
-  ctx.fillText(url.replace(/^https?:\/\//, ''), 540, 1272);
+  ctx.fillText(bare(url), W / 2, H - 56);
   await download(c, file(slug, 'announcement', 'png'));
 }
 
 /** 1080×1350 route card with times, stops and the memorial link. */
 export async function journeyCard({ draft, url, slug }: ArtifactInput) {
   await ensureFonts();
-  const { c, ctx } = canvas(1080, 1350);
-  ctx.fillStyle = C.paper;
-  ctx.fillRect(0, 0, 1080, 1350);
+  const W = 1080;
+  const H = 1350;
+  const { c, ctx } = canvas(W, H);
+  ctx.fillStyle = C.petal;
+  ctx.fillRect(0, 0, W, H);
+  glow(ctx, 900, 80, 420, '201,184,232', 0.35);
+
   ctx.textAlign = 'left';
   ctx.fillStyle = C.clay;
-  ctx.font = `600 20px ${SANS}`;
-  spaced(ctx, 'FUNERAL JOURNEY', 80, 110, 4);
+  ctx.font = `600 19px ${SANS}`;
+  spaced(ctx, 'THE FUNERAL JOURNEY', 90, 116, 5);
+  const name = displayName(draft.person);
+  fit(ctx, name, (s) => `400 ${s}px ${DISPLAY}`, 72, 900);
   ctx.fillStyle = C.ink;
-  ctx.font = `600 64px ${SERIF}`;
-  const nameEnd = wrap(ctx, displayName(draft.person), 80, 190, 920, 70, 2);
-  ctx.fillStyle = C.muted;
-  ctx.font = `26px ${SANS}`;
-  ctx.fillText(`${dispositionLabel(draft.disposition.type)} · ${fmtDate(funeralDate(draft))}`, 80, nameEnd + 6);
-  let y = nameEnd + 90;
-  const stops = draft.journey.slice(0, 6);
+  ctx.fillText(name, 90, 200);
+  ctx.fillStyle = C.dusk;
+  ctx.font = `400 25px ${SANS}`;
+  ctx.fillText([dispositionLabel(draft.disposition.type), draft.person && lifeDates(draft.person)].filter(Boolean).join(' · '), 90, 248);
+
+  const stops = draft.journey.slice(0, 7);
+  const lineX = 262;
+  let y = 330;
+  const rowGap = stops.length > 5 ? 118 : 138;
+  let lastDate = '';
+  const pins: { y: number; last: boolean }[] = [];
   stops.forEach((s, i) => {
-    const top = y;
+    if (s.date && s.date !== lastDate) {
+      ctx.fillStyle = C.clay;
+      ctx.font = `600 17px ${SANS}`;
+      spaced(ctx, shortDate(s.date).toUpperCase(), lineX + 44, y, 3);
+      y += 42;
+      lastDate = s.date;
+    }
+    ctx.textAlign = 'right';
     ctx.fillStyle = C.ink;
-    ctx.beginPath();
-    ctx.arc(104, y + 2, 24, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = C.paper;
-    ctx.font = `600 20px ${SANS}`;
-    ctx.textAlign = 'center';
-    ctx.fillText(String(i + 1), 104, y + 9);
+    ctx.font = `400 40px ${DISPLAY}`;
+    ctx.fillText(s.time || '', lineX - 38, y + 14);
     ctx.textAlign = 'left';
+    pins.push({ y, last: i === stops.length - 1 });
     ctx.fillStyle = C.ink;
     ctx.font = `600 30px ${SANS}`;
-    ctx.fillText(`${s.time}  ${s.title}`.slice(0, 48), 156, y + 12);
-    ctx.fillStyle = C.muted;
-    ctx.font = `22px ${SANS}`;
-    let yy = wrap(ctx, [stopLabel(s.type), s.address].filter(Boolean).join(' · '), 156, y + 50, 840, 30, 2);
+    ctx.fillText(lines(ctx, s.title, 700, 1)[0] ?? '', lineX + 44, y + 12);
+    ctx.fillStyle = C.dusk;
+    ctx.font = `400 22px ${SANS}`;
+    const sub = [unlessTitle(stopLabel(s.type), s), s.landmark && !s.address.includes(s.landmark) ? `${s.address} · ${s.landmark}` : s.address].filter(Boolean).join(' · ');
+    ctx.fillText(lines(ctx, sub, 700, 1)[0] ?? '', lineX + 44, y + 48);
     if (s.departTime) {
       ctx.fillStyle = C.clay;
-      ctx.fillText(`Departs ${s.departTime}`, 156, yy + 2);
-      yy += 32;
+      ctx.fillText(`Until ${s.departTime}`, lineX + 44, y + 80);
     }
-    y = Math.max(top + 128, yy + 36);
-    if (i < stops.length - 1) {
-      ctx.strokeStyle = 'rgba(20,20,19,.18)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(104, top + 32);
-      ctx.lineTo(104, y - 28);
-      ctx.stroke();
-    }
+    y += rowGap + (s.departTime ? 18 : 0);
   });
+  // The journey line, drawn behind the pins.
+  if (pins.length > 1) {
+    ctx.strokeStyle = C.bloom;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(lineX, pins[0].y);
+    ctx.lineTo(lineX, pins[pins.length - 1].y);
+    ctx.stroke();
+  }
+  pins.forEach((p, i) => {
+    ctx.fillStyle = p.last ? C.candle : i === 0 ? C.clay : C.paper;
+    ctx.strokeStyle = p.last ? C.candle : C.clay;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(lineX, p.y, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  // Footer band with the QR code.
   ctx.fillStyle = C.night;
   ctx.beginPath();
-  ctx.roundRect(60, 1180, 960, 110, 20);
+  ctx.roundRect(60, H - 200, W - 120, 150, 30);
   ctx.fill();
-  ctx.fillStyle = C.onNightMuted;
-  ctx.font = `20px ${SANS}`;
-  ctx.fillText('Live directions and updates on the day', 96, 1224);
+  const qr = await qrImage(url, C.night, C.onNight);
   ctx.fillStyle = C.onNight;
-  ctx.font = `600 24px ${SANS}`;
-  ctx.fillText(url.replace(/^https?:\/\//, ''), 96, 1260);
+  ctx.beginPath();
+  ctx.roundRect(W - 200, H - 184, 118, 118, 14);
+  ctx.fill();
+  if (qr) ctx.drawImage(qr, W - 190, H - 174, 98, 98);
+  ctx.fillStyle = C.candle;
+  ctx.font = `600 17px ${SANS}`;
+  spaced(ctx, 'ON THE DAY', 104, H - 140, 4);
+  ctx.fillStyle = C.onNight;
+  ctx.font = `400 26px ${SANS}`;
+  ctx.fillText('Live directions, times and the procession', 104, H - 104);
+  ctx.fillStyle = C.onNightMuted;
+  ctx.font = `400 21px ${SANS}`;
+  ctx.fillText(bare(url), 104, H - 72);
   await download(c, file(slug, 'funeral-journey', 'png'));
 }
 
-/** 1080×1512 printable keepsake card to hand to guests. */
+/** 5 × 7 in keepsake card at 300 dpi (1500 × 2100), to print and hand to guests. */
 export async function keepsakeCard({ draft, slug }: ArtifactInput) {
   await ensureFonts();
-  const { c, ctx } = canvas(1080, 1512);
+  const W = 1500;
+  const H = 2100;
+  const { c, ctx } = canvas(W, H);
   ctx.fillStyle = C.paper;
-  ctx.fillRect(0, 0, 1080, 1512);
+  ctx.fillRect(0, 0, W, H);
+  // A fine double frame, like engraved stationery.
   ctx.strokeStyle = C.clay;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(44, 44, 992, 1424);
-  ctx.textAlign = 'center';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(66, 66, W - 132, H - 132);
+  ctx.strokeStyle = C.bloom;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(84, 84, W - 168, H - 168);
+
   const img = await loadImage(draft.person.portraitUrl);
-  ctx.save();
-  archPath(ctx, 290, 130, 500, 620);
-  ctx.clip();
-  if (img) drawCover(ctx, img, 290, 130, 500, 620);
-  else monogram(ctx, draft, 290, 130, 500, 620, C.night, C.onNightMuted);
-  ctx.restore();
+  archPortrait(ctx, draft, img, 440, 220, 620, 800, { outline: C.bloom, gap: 22, stroke: 2.5, empty: C.mist, emptyInk: C.clay });
+
+  ctx.textAlign = 'center';
   ctx.fillStyle = C.clay;
-  ctx.font = `600 22px ${SANS}`;
-  spaced(ctx, 'IN LOVING MEMORY', 540, 840, 5);
+  ctx.font = `600 26px ${SANS}`;
+  spaced(ctx, 'IN LOVING MEMORY', W / 2, 1172, 7);
+  const name = displayName(draft.person);
+  const size = fit(ctx, name, (s) => `400 ${s}px ${DISPLAY}`, 108, 1180, 70);
   ctx.fillStyle = C.ink;
-  ctx.font = `600 64px ${SERIF}`;
-  let y = wrap(ctx, displayName(draft.person), 540, 930, 880, 70, 2);
-  ctx.fillStyle = C.muted;
-  ctx.font = `26px ${SANS}`;
-  ctx.fillText(lifeDates(draft.person), 540, y + 4);
-  y += 90;
-  const line = draft.story.obituary.split(/(?<=[.!?])\s+/)[0] || 'Forever in our hearts.';
-  ctx.fillStyle = C.ink2;
-  ctx.font = `400 30px ${SANS}`;
-  wrap(ctx, line, 540, y, 780, 46, 4);
+  ctx.fillText(name, W / 2, 1172 + 30 + size);
+  let y = 1172 + 30 + size + 70;
+  ctx.fillStyle = C.dusk;
+  ctx.font = `400 36px ${SANS}`;
+  ctx.fillText(lifeDates(draft.person), W / 2, y);
+  y += 96;
+  ornament(ctx, W / 2, y, 110, C.bloom, C.candle, 6);
+  y += 110;
+  ctx.fillStyle = C.ink;
+  ctx.font = `italic 400 46px ${DISPLAY}`;
+  wrap(ctx, keepsakeLine(draft), W / 2, y, 1060, 66, 4);
+  brandMark(ctx, W / 2 - 20, H - 190, 40, C.bloom);
   await download(c, file(slug, 'keepsake-card', 'png'));
 }
 
-/** 1080×1350 framed QR card for entrances, tables and programmes. */
+/** 4 × 5 in QR card at 300 dpi (1200 × 1500) for entrances, tables and programmes. */
 export async function qrCard({ draft, url, slug }: ArtifactInput) {
   await ensureFonts();
-  const { c, ctx } = canvas(1080, 1350);
-  ctx.fillStyle = C.paper;
-  ctx.fillRect(0, 0, 1080, 1350);
+  const W = 1200;
+  const H = 1500;
+  const { c, ctx } = canvas(W, H);
+  ctx.fillStyle = C.petal;
+  ctx.fillRect(0, 0, W, H);
+  glow(ctx, W / 2, 760, 640, '201,184,232', 0.4);
+
   ctx.textAlign = 'center';
   ctx.fillStyle = C.clay;
-  ctx.font = `600 22px ${SANS}`;
-  spaced(ctx, 'SCAN TO REMEMBER', 540, 130, 5);
+  ctx.font = `600 24px ${SANS}`;
+  spaced(ctx, 'SCAN TO REMEMBER', W / 2, 150, 6);
+  const name = displayName(draft.person);
+  fit(ctx, name, (s) => `400 ${s}px ${DISPLAY}`, 84, 1000);
   ctx.fillStyle = C.ink;
-  ctx.font = `600 60px ${SERIF}`;
-  let y = wrap(ctx, displayName(draft.person), 540, 215, 900, 66, 2);
-  ctx.fillStyle = C.muted;
-  ctx.font = `24px ${SANS}`;
-  ctx.fillText(lifeDates(draft.person), 540, y + 2);
-  y += 50;
-  const qr = await loadImage(await QRCode.toDataURL(url, { width: 1200, margin: 1, color: { dark: C.ink, light: '#ffffff' }, errorCorrectionLevel: 'M' }));
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.roundRect(220, y, 640, 640, 28);
+  ctx.fillText(name, W / 2, 250);
+  ctx.fillStyle = C.dusk;
+  ctx.font = `400 30px ${SANS}`;
+  ctx.fillText(lifeDates(draft.person), W / 2, 306);
+
+  // The QR code sits in an arch-topped white panel.
+  const pw = 700;
+  const ph = 860;
+  const px = (W - pw) / 2;
+  const py = 380;
+  ctx.save();
+  ctx.shadowColor = 'rgba(63,42,102,.14)';
+  ctx.shadowBlur = 50;
+  ctx.shadowOffsetY = 18;
+  ctx.fillStyle = C.paper;
+  archPath(ctx, px, py, pw, ph, 36);
   ctx.fill();
-  if (qr) ctx.drawImage(qr, 250, y + 30, 580, 580);
-  y += 700;
-  ctx.fillStyle = C.ink2;
-  ctx.font = `26px ${SANS}`;
-  ctx.fillText('Story · programme · funeral journey · directions', 540, y);
-  ctx.fillStyle = C.muted;
-  ctx.font = `22px ${SANS}`;
-  ctx.fillText(url.replace(/^https?:\/\//, ''), 540, y + 44);
+  ctx.restore();
+  ctx.strokeStyle = C.bloom;
+  ctx.lineWidth = 2;
+  archPath(ctx, px - 16, py - 16, pw + 32, ph + 32, 44);
+  ctx.stroke();
+  const qr = await qrImage(url);
+  if (qr) ctx.drawImage(qr, px + 110, py + 330, pw - 220, pw - 220);
+  brandMark(ctx, W / 2 - 30, py + 170, 60, C.clay);
+  ctx.fillStyle = C.dusk;
+  ctx.font = `600 20px ${SANS}`;
+  spaced(ctx, 'MEMORIAL', W / 2, py + 290, 5);
+
+  ctx.fillStyle = C.ink;
+  ctx.font = `italic 400 34px ${DISPLAY}`;
+  ctx.fillText('Their story, the programme and directions', W / 2, 1352);
+  ctx.fillStyle = C.dusk;
+  ctx.font = `400 26px ${SANS}`;
+  ctx.fillText(bare(url), W / 2, 1404);
   await download(c, file(slug, 'qr-card', 'png'));
 }
 
 // ---------------------------------------------------------------------------
-// PDFs — one pagination helper shared by the programme and the keepsake pack.
+// PDFs — A4, with Fraunces and Instrument Sans embedded so type prints crisp.
 // ---------------------------------------------------------------------------
 
 const PAGE_W = 210;
 const PAGE_H = 297;
-const MARGIN = 22;
+const MARGIN = 24;
 const BOTTOM = 26;
+type RGB = [number, number, number];
+const rgb = (hex: string): RGB => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+const P = { ink: rgb(C.ink), dusk: rgb(C.dusk), clay: rgb(C.clay), bloom: rgb(C.bloom), line: rgb(C.line), candle: rgb(C.candle), mist: rgb(C.mist) };
+
+const PDF_FONTS: [file: string, family: string, style: string][] = [
+  ['fraunces-display.ttf', 'FrauncesDisplay', 'normal'],
+  ['fraunces-text.ttf', 'Fraunces', 'normal'],
+  ['fraunces-italic.ttf', 'Fraunces', 'italic'],
+  ['instrument-sans.ttf', 'Instrument', 'normal'],
+  ['instrument-sans-semibold.ttf', 'Instrument', 'bold'],
+];
+let fontData: Promise<Map<string, string> | null> | null = null;
+
+function toBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/** Fetched once, when the first PDF is made. Null if they can't load (PDFs fall back to Helvetica/Times). */
+function loadPdfFonts() {
+  fontData ??= Promise.all(
+    PDF_FONTS.map(async ([f]) => {
+      const res = await fetch(`/fonts/pdf/${f}`);
+      if (!res.ok) throw new Error('font');
+      return [f, toBase64(await res.arrayBuffer())] as const;
+    }),
+  )
+    .then((pairs) => new Map(pairs))
+    .catch(() => null);
+  return fontData;
+}
+
+type Face = 'display' | 'serif' | 'italic' | 'sans' | 'sansBold';
 
 class Pdf {
-  doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   y = MARGIN;
-  constructor(private footer: string) {}
+  private embedded = false;
 
-  private foot() {
-    const y = PAGE_H - 14;
-    this.doc.setDrawColor(224, 221, 211);
-    this.doc.setLineWidth(0.2);
-    this.doc.line(MARGIN, y - 5, PAGE_W - MARGIN, y - 5);
-    this.doc.setFont('helvetica', 'normal');
-    this.doc.setFontSize(8);
-    this.doc.setTextColor(102, 101, 95);
-    this.doc.text(this.footer, MARGIN, y);
-    this.doc.text(String(this.doc.getNumberOfPages()), PAGE_W - MARGIN, y, { align: 'right' });
-  }
-  ensure(space: number) {
-    if (this.y + space > PAGE_H - BOTTOM) {
-      this.foot();
-      this.doc.addPage();
-      this.y = MARGIN + 4;
+  constructor(
+    private name: string,
+    private footerNote: string,
+  ) {}
+
+  async init() {
+    const fonts = await loadPdfFonts();
+    if (fonts) {
+      for (const [f, family, style] of PDF_FONTS) {
+        this.doc.addFileToVFS(f, fonts.get(f)!);
+        this.doc.addFont(f, family, style);
+      }
+      this.embedded = true;
     }
+    this.doc.setProperties({ title: `In loving memory of ${this.name}`, creator: 'Memora' });
+    return this;
   }
-  cover(draft: Draft, subtitle: string, portrait: HTMLImageElement | null) {
+
+  face(face: Face, size: number, color: RGB = P.ink) {
     const d = this.doc;
-    this.y = MARGIN + 6;
-    if (portrait) {
-      const w = 52;
-      const h = 65;
-      const cv = document.createElement('canvas');
-      cv.width = 520;
-      cv.height = 650;
-      const ctx = cv.getContext('2d');
-      if (ctx) {
-        drawCover(ctx, portrait, 0, 0, 520, 650);
-        d.addImage(cv.toDataURL('image/jpeg', 0.88), 'JPEG', (PAGE_W - w) / 2, this.y, w, h);
-        this.y += h + 12;
-      }
+    if (this.embedded) {
+      const map: Record<Face, [string, string]> = {
+        display: ['FrauncesDisplay', 'normal'],
+        serif: ['Fraunces', 'normal'],
+        italic: ['Fraunces', 'italic'],
+        sans: ['Instrument', 'normal'],
+        sansBold: ['Instrument', 'bold'],
+      };
+      d.setFont(...map[face]);
+    } else {
+      const map: Record<Face, [string, string]> = {
+        display: ['times', 'normal'],
+        serif: ['times', 'normal'],
+        italic: ['times', 'italic'],
+        sans: ['helvetica', 'normal'],
+        sansBold: ['helvetica', 'bold'],
+      };
+      d.setFont(...map[face]);
     }
-    d.setFont('helvetica', 'bold');
-    d.setFontSize(8.5);
-    d.setTextColor(181, 85, 47);
-    d.text('IN LOVING MEMORY', PAGE_W / 2, this.y, { align: 'center', charSpace: 0.8 });
-    this.y += 13;
-    d.setFont('helvetica', 'bold');
-    d.setFontSize(32);
-    d.setTextColor(20, 20, 19);
-    for (const line of d.splitTextToSize(displayName(draft.person), PAGE_W - MARGIN * 2)) {
+    d.setFontSize(size);
+    d.setTextColor(...color);
+  }
+
+  /** Line height in mm for a font size in pt. */
+  lh = (size: number, leading = 1.45) => size * 0.3528 * leading;
+
+  split(text: string, width: number): string[] {
+    return this.doc.splitTextToSize(String(text).replace(/\s*\n\s*/g, ' '), width) as string[];
+  }
+
+  private footer() {
+    const d = this.doc;
+    const page = d.getNumberOfPages();
+    if (page === 1) return; // the cover stays clean
+    const y = PAGE_H - 13;
+    d.setDrawColor(...P.line);
+    d.setLineWidth(0.2);
+    d.line(MARGIN, y - 5, PAGE_W - MARGIN, y - 5);
+    this.face('italic', 8.5, P.dusk);
+    d.text(`In loving memory of ${this.name}`, MARGIN, y);
+    this.face('sans', 8, P.dusk);
+    d.text(String(page), PAGE_W - MARGIN, y, { align: 'right' });
+  }
+
+  newPage() {
+    this.footer();
+    this.doc.addPage();
+    this.y = MARGIN + 2;
+  }
+
+  ensure(space: number) {
+    if (this.y + space > PAGE_H - BOTTOM) this.newPage();
+  }
+
+  private ornament(cx: number, y: number, half = 12) {
+    const d = this.doc;
+    d.setDrawColor(...P.bloom);
+    d.setLineWidth(0.3);
+    d.line(cx - half, y, cx - 2.2, y);
+    d.line(cx + 2.2, y, cx + half, y);
+    d.setFillColor(...P.candle);
+    d.circle(cx, y, 0.9, 'F');
+  }
+
+  /** The cover: arch portrait, name, dates, and what this document is. */
+  async cover(draft: Draft, title: string, subtitle: string) {
+    const d = this.doc;
+    // Fine double frame.
+    d.setDrawColor(...P.clay);
+    d.setLineWidth(0.35);
+    d.rect(12, 12, PAGE_W - 24, PAGE_H - 24);
+    d.setDrawColor(...P.bloom);
+    d.setLineWidth(0.2);
+    d.rect(14.5, 14.5, PAGE_W - 29, PAGE_H - 29);
+
+    // Arch portrait, rendered at 300 dpi with its outline.
+    const img = await loadImage(draft.person.portraitUrl);
+    const pw = 72;
+    const ph = 92;
+    const pad = 4;
+    const px = 12; // pixels per mm ≈ 300 dpi
+    const { c, ctx } = canvas(Math.round((pw + pad * 2) * px), Math.round((ph + pad * 2) * px));
+    ctx.fillStyle = C.paper;
+    ctx.fillRect(0, 0, c.width, c.height);
+    await ensureFonts();
+    archPortrait(ctx, draft, img, pad * px, pad * px, pw * px, ph * px, { outline: C.bloom, gap: 2.2 * px, stroke: 0.35 * px, empty: C.mist, emptyInk: C.clay });
+    const top = 38;
+    d.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', (PAGE_W - pw) / 2 - pad, top - pad, pw + pad * 2, ph + pad * 2);
+    this.y = top + ph + 18;
+
+    this.face('sansBold', 8.5, P.clay);
+    d.text('IN LOVING MEMORY', PAGE_W / 2, this.y, { align: 'center', charSpace: 1.1 });
+    this.y += 16;
+    let size = 36;
+    this.face('display', size);
+    while (size > 24 && d.getTextWidth(displayName(draft.person)) > PAGE_W - 50) this.face('display', (size -= 1));
+    for (const line of this.split(displayName(draft.person), PAGE_W - 50)) {
       d.text(line, PAGE_W / 2, this.y, { align: 'center' });
-      this.y += 12;
+      this.y += this.lh(size, 1.15);
     }
-    d.setFont('helvetica', 'normal');
-    d.setFontSize(11);
-    d.setTextColor(102, 101, 95);
+    this.y += 1;
+    this.face('sans', 11, P.dusk);
     d.text(lifeDates(draft.person), PAGE_W / 2, this.y, { align: 'center' });
-    this.y += 6;
+    this.y += 11;
+    this.ornament(PAGE_W / 2, this.y);
+    this.y += 11;
+    this.face('italic', 16, P.clay);
+    d.text(title, PAGE_W / 2, this.y, { align: 'center' });
+    this.y += 7;
     if (subtitle) {
-      d.text(subtitle, PAGE_W / 2, this.y, { align: 'center' });
-      this.y += 6;
-    }
-    this.rule();
-  }
-  rule() {
-    this.ensure(8);
-    this.y += 4;
-    this.doc.setDrawColor(224, 221, 211);
-    this.doc.setLineWidth(0.25);
-    this.doc.line(MARGIN, this.y, PAGE_W - MARGIN, this.y);
-    this.y += 10;
-  }
-  heading(text: string) {
-    this.ensure(22);
-    this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(8.5);
-    this.doc.setTextColor(181, 85, 47);
-    this.doc.text(text.toUpperCase(), MARGIN, this.y, { charSpace: 0.6 });
-    this.y += 8;
-  }
-  text(value: string, opts: { size?: number; bold?: boolean; serif?: boolean; color?: [number, number, number]; gap?: number; indent?: number } = {}) {
-    if (!value) return;
-    const size = opts.size ?? 11;
-    const lineH = size * 0.46;
-    this.doc.setFont(opts.serif ? 'times' : 'helvetica', opts.bold ? 'bold' : 'normal');
-    this.doc.setFontSize(size);
-    this.doc.setTextColor(...(opts.color ?? [40, 39, 36]));
-    for (const para of String(value).split(/\n{2,}/)) {
-      for (const line of this.doc.splitTextToSize(para.replace(/\n/g, ' '), PAGE_W - MARGIN * 2 - (opts.indent ?? 0))) {
-        this.ensure(lineH + 1);
-        this.doc.text(line, MARGIN + (opts.indent ?? 0), this.y);
-        this.y += lineH;
+      this.face('sans', 10, P.dusk);
+      for (const line of this.split(subtitle, PAGE_W - 60)) {
+        d.text(line, PAGE_W / 2, this.y, { align: 'center' });
+        this.y += this.lh(10);
       }
-      this.y += lineH * 0.6;
     }
-    this.y += opts.gap ?? 1;
+    // A line from their story rests at the foot of the cover.
+    this.face('italic', 12.5, P.ink);
+    const quote = this.split(`“${keepsakeLine(draft).replace(/[.]$/, '')}.”`, PAGE_W - 70).slice(0, 3);
+    let qy = PAGE_H - 34 - (quote.length - 1) * this.lh(12.5, 1.5);
+    for (const line of quote) {
+      d.text(line, PAGE_W / 2, qy, { align: 'center' });
+      qy += this.lh(12.5, 1.5);
+    }
   }
+
+  /** A section opener: small caps label, a title and a hairline. */
+  section(label: string, title: string) {
+    this.ensure(34);
+    const d = this.doc;
+    this.face('sansBold', 8, P.clay);
+    d.text(label.toUpperCase(), MARGIN, this.y, { charSpace: 0.9 });
+    this.y += 9;
+    this.face('display', 22);
+    d.text(title, MARGIN, this.y);
+    this.y += 5;
+    d.setDrawColor(...P.line);
+    d.setLineWidth(0.25);
+    d.line(MARGIN, this.y, PAGE_W - MARGIN, this.y);
+    this.y += 9;
+  }
+
+  /** Flowing text. A drop cap opens the story. */
+  prose(value: string, opts: { size?: number; italic?: boolean; dropCap?: boolean; align?: 'left' | 'center' } = {}) {
+    const d = this.doc;
+    const size = opts.size ?? 11.5;
+    const lh = this.lh(size, 1.55);
+    const width = PAGE_W - MARGIN * 2;
+    const paras = String(value || '')
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    paras.forEach((para, pi) => {
+      let text = para;
+      let capLines = 0;
+      let capW = 0;
+      if (opts.dropCap && pi === 0 && /^[A-Za-zÀ-ÿ]/.test(para)) {
+        const cap = para[0];
+        text = para.slice(1);
+        this.ensure(lh * 3);
+        this.face('display', size * 5.1, P.clay);
+        capW = d.getTextWidth(cap) + 2.6;
+        d.text(cap, MARGIN - 0.6, this.y + lh * 2);
+        capLines = 3;
+      }
+      this.face(opts.italic ? 'italic' : 'serif', size, P.ink);
+      // The first lines wrap beside the drop cap.
+      const words = text.split(/\s+/).filter(Boolean);
+      const out: { text: string; indent: number }[] = [];
+      let line = '';
+      const widthFor = () => (out.length < capLines ? width - capW : width);
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (d.getTextWidth(test) > widthFor() && line) {
+          out.push({ text: line, indent: out.length < capLines ? capW : 0 });
+          line = w;
+        } else line = test;
+      }
+      if (line) out.push({ text: line, indent: out.length < capLines ? capW : 0 });
+      for (const l of out) {
+        this.ensure(lh);
+        if (opts.align === 'center') d.text(l.text, PAGE_W / 2, this.y, { align: 'center' });
+        else d.text(l.text, MARGIN + l.indent, this.y);
+        this.y += lh;
+      }
+      this.y += lh * 0.55;
+    });
+  }
+
   programme(draft: Draft) {
     if (draft.programme.mode !== 'formal' || !draft.programme.items.length) return;
-    this.heading('Order of service');
+    const d = this.doc;
+    this.section('Order of service', 'The programme');
     const groups = programmeParts(draft.programme.items);
-    const headings = groups.length > 1 || groups[0]?.part !== 'service' || Boolean(partStart(draft.journey, draft.programme.items, 'service'));
-    groups.forEach((g) => {
-      if (headings) {
-        this.ensure(22);
-        this.text(g.label.toUpperCase(), { size: 9, color: [91, 62, 140], gap: 1 });
-        const when = partStartLabel(partStart(draft.journey, draft.programme.items, g.part), g.part);
-        if (when) this.text(when, { size: 11, serif: true, gap: 2 });
+    const timeX = MARGIN;
+    const railX = MARGIN + 21;
+    const textX = MARGIN + 27;
+    const textW = PAGE_W - MARGIN - textX;
+    groups.forEach((g, gi) => {
+      const when = partStartLabel(partStart(draft.journey, draft.programme.items, g.part), g.part);
+      if (groups.length > 1 || g.part !== 'service' || when) {
+        this.ensure(30);
+        if (gi > 0) this.y += 4;
+        this.face('sansBold', 8, g.part === 'vigil' ? P.candle : P.clay);
+        d.text(g.label.toUpperCase(), MARGIN, this.y, { charSpace: 0.9 });
+        if (when) {
+          this.y += 5.5;
+          this.face('italic', 11, P.dusk);
+          d.text(when, MARGIN, this.y);
+        }
+        this.y += 8;
       }
-      g.items.forEach((item) => {
-        this.ensure(16);
-        this.text([item.time, item.title].filter(Boolean).join('   '), { size: 13, serif: true, gap: -1 });
-        const meta = [programmeTypeLabel(item.type), item.presenter, item.detail].filter(Boolean).join(' · ');
-        this.text(meta, { size: 9.5, color: [107, 100, 117], gap: 3 });
+      g.items.forEach((item, i) => {
+        this.face('serif', 13);
+        const title = this.split(item.title, textW);
+        this.face('sans', 9.5);
+        const meta = [item.presenter].filter(Boolean);
+        const detail = item.detail ? this.split(item.detail, textW) : [];
+        const h = 4 + title.length * this.lh(13, 1.25) + meta.length * this.lh(9.5) + detail.length * this.lh(9.5) + 5;
+        this.ensure(h);
+        const top = this.y;
+        // Rail and dot: the journey line through the service.
+        d.setDrawColor(...P.bloom);
+        d.setLineWidth(0.35);
+        if (i < g.items.length - 1) d.line(railX, top + 4, railX, top + h + 4);
+        d.setFillColor(...(i === 0 ? P.clay : [255, 255, 255] as RGB));
+        d.setDrawColor(...P.clay);
+        d.setLineWidth(0.35);
+        d.circle(railX, top + 4, 1.3, 'FD');
+        if (item.time) {
+          this.face('serif', 12, P.clay);
+          d.text(item.time, timeX, top + 5.4);
+        }
+        this.face('sansBold', 7, P.dusk);
+        d.text(programmeTypeLabel(item.type).toUpperCase(), textX, top, { charSpace: 0.6 });
+        this.y = top + 5.4;
+        this.face('serif', 13);
+        for (const l of title) {
+          d.text(l, textX, this.y);
+          this.y += this.lh(13, 1.25);
+        }
+        if (meta.length) {
+          this.face('sans', 9.5, P.dusk);
+          d.text(meta.join(' · '), textX, this.y);
+          this.y += this.lh(9.5);
+        }
+        if (detail.length) {
+          this.face('italic', 9.5, P.dusk);
+          for (const l of detail) {
+            d.text(l, textX, this.y);
+            this.y += this.lh(9.5);
+          }
+        }
+        this.y = top + h;
       });
     });
-    this.rule();
+    this.y += 4;
   }
-  journey(draft: Draft) {
+
+  async journey(draft: Draft, url: string) {
     if (!draft.journey.length) return;
-    this.heading(`Funeral journey · ${dispositionLabel(draft.disposition.type)}`);
+    const d = this.doc;
+    this.section(`Funeral journey · ${dispositionLabel(draft.disposition.type)}`, 'Where to be, and when');
+    const railX = MARGIN + 4;
+    const textX = MARGIN + 13;
+    const textW = PAGE_W - MARGIN - textX;
+    let lastDate = '';
     draft.journey.forEach((s, i) => {
-      this.ensure(20);
-      this.text(`${i + 1}.  ${s.time}   ${s.title}`, { size: 13, serif: true, gap: -1 });
-      this.text([fmtDate(s.date), stopLabel(s.type), s.address].filter(Boolean).join(' · '), { size: 9.5, color: [102, 101, 95], gap: -1 });
-      const extra = [s.departTime && `Until ${s.departTime}`, s.landmark && `Entrance: ${s.landmark}`, s.transport].filter(Boolean).join(' · ');
-      this.text(extra, { size: 9.5, color: [91, 62, 140], gap: 3 });
+      const where = s.landmark && !s.address.includes(s.landmark) ? [s.address, `Entrance: ${s.landmark}`] : [s.address];
+      const notes = [s.departTime && `Until ${s.departTime}`, s.parking && (/^park/i.test(s.parking) ? s.parking : `Parking: ${s.parking}`), s.transport].filter(
+        Boolean,
+      ) as string[];
+      this.face('sans', 9.5);
+      const label = stopLabel(s.type);
+      const sub = this.split([label.toLowerCase() === s.title.toLowerCase() ? '' : label, ...where].filter(Boolean).join(' · '), textW);
+      const extra = notes.length ? this.split(notes.join(' · '), textW) : [];
+      const dateH = s.date !== lastDate ? 9 : 0;
+      const h = dateH + 6 + sub.length * this.lh(9.5) + extra.length * this.lh(9.5) + 7;
+      this.ensure(h);
+      if (s.date && s.date !== lastDate) {
+        this.face('sansBold', 8, P.clay);
+        d.text(shortDate(s.date).toUpperCase(), textX, this.y, { charSpace: 0.8 });
+        this.y += dateH;
+        lastDate = s.date;
+      }
+      const top = this.y;
+      if (i < draft.journey.length - 1) {
+        d.setDrawColor(...P.bloom);
+        d.setLineWidth(0.5);
+        d.line(railX, top, railX, top + h - dateH + 2);
+      }
+      const last = i === draft.journey.length - 1;
+      d.setFillColor(...(last ? P.candle : P.clay));
+      d.circle(railX, top - 1.2, 3.1, 'F');
+      this.face('sansBold', 7.5, [255, 255, 255]);
+      d.text(String(i + 1), railX, top - 0.1, { align: 'center' });
+      this.face('serif', 13.5);
+      d.text([s.time, s.title].filter(Boolean).join('  ·  '), textX, top);
+      this.y = top + 5.6;
+      this.face('sans', 9.5, P.dusk);
+      for (const l of sub) {
+        d.text(l, textX, this.y);
+        this.y += this.lh(9.5);
+      }
+      if (extra.length) {
+        this.face('sans', 9.5, P.clay);
+        for (const l of extra) {
+          d.text(l, textX, this.y);
+          this.y += this.lh(9.5);
+        }
+      }
+      this.y = top + h - dateH;
     });
-    this.rule();
+    // The QR code for the day fits here if there's room; otherwise the closing page carries it.
+    if (this.y + 46 < PAGE_H - BOTTOM) await this.qrPanel(url, 'On the day', 'Scan for live directions, times and the procession.');
   }
+
+  /** A soft panel with the memorial's QR code. */
+  async qrPanel(url: string, label: string, line: string) {
+    const d = this.doc;
+    const h = 34;
+    this.ensure(h + 6);
+    this.y += 2;
+    d.setFillColor(...P.mist);
+    d.roundedRect(MARGIN, this.y, PAGE_W - MARGIN * 2, h, 4, 4, 'F');
+    const qr = await QRCode.toDataURL(url, { width: 600, margin: 0, color: { dark: C.ink, light: C.mist }, errorCorrectionLevel: 'M' });
+    d.addImage(qr, 'PNG', PAGE_W - MARGIN - 29, this.y + 5, 24, 24);
+    this.face('sansBold', 8, P.clay);
+    d.text(label.toUpperCase(), MARGIN + 7, this.y + 11, { charSpace: 0.9 });
+    this.face('serif', 12.5);
+    d.text(line, MARGIN + 7, this.y + 18.5, { maxWidth: PAGE_W - MARGIN * 2 - 44 });
+    this.face('sans', 9, P.dusk);
+    d.text(bare(url), MARGIN + 7, this.y + 27);
+    this.y += h + 8;
+  }
+
+  /** The last word: the family's message, centred, with a QR code to the memorial. */
+  async closing(draft: Draft, url: string) {
+    const d = this.doc;
+    this.newPage();
+    this.y = 86;
+    this.face('sansBold', 8.5, P.clay);
+    d.text(draft.story.familyMessage ? 'FROM THE FAMILY' : 'FOREVER IN OUR HEARTS', PAGE_W / 2, this.y, { align: 'center', charSpace: 1.1 });
+    this.y += 14;
+    if (draft.story.familyMessage) this.prose(draft.story.familyMessage, { italic: true, size: 14, align: 'center' });
+    else {
+      this.face('display', 24);
+      d.text(displayName(draft.person), PAGE_W / 2, this.y, { align: 'center' });
+      this.y += 10;
+    }
+    this.y += 6;
+    this.ornament(PAGE_W / 2, this.y);
+    this.y += 22;
+    const qr = await QRCode.toDataURL(url, { width: 700, margin: 0, color: { dark: C.ink, light: '#ffffff' }, errorCorrectionLevel: 'M' });
+    const s = 34;
+    this.ensure(s + 24);
+    d.addImage(qr, 'PNG', (PAGE_W - s) / 2, this.y, s, s);
+    this.y += s + 8;
+    this.face('italic', 11, P.dusk);
+    d.text('Scan to visit their memorial', PAGE_W / 2, this.y, { align: 'center' });
+    this.y += 5.5;
+    this.face('sans', 9, P.dusk);
+    d.text(bare(url), PAGE_W / 2, this.y, { align: 'center' });
+    // A quiet maker's mark at the foot.
+    this.face('sans', 7.5, P.bloom);
+    d.text(this.footerNote, PAGE_W / 2, PAGE_H - 30, { align: 'center', charSpace: 0.6 });
+  }
+
   save(filename: string) {
-    this.foot();
+    this.footer();
     this.doc.save(filename);
   }
 }
 
+function serviceLine(draft: Draft): string {
+  const svc = partStart(draft.journey, draft.programme.items, 'service');
+  const date = svc?.date || funeralDate(draft);
+  return [date ? shortDate(date) : '', svc?.time ? `at ${svc.time}` : '', svc?.place ?? ''].filter(Boolean).join(' · ');
+}
+
 /** Printable order of service with the funeral journey. */
 export async function programmePdf({ draft, url, slug }: ArtifactInput) {
-  const pdf = new Pdf(`Memora · ${url.replace(/^https?:\/\//, '')}`);
-  pdf.cover(draft, funeralDate(draft) ? `Funeral service · ${fmtDate(funeralDate(draft))}` : '', await loadImage(draft.person.portraitUrl));
+  const pdf = await new Pdf(displayName(draft.person), 'MEMORA').init();
+  await pdf.cover(draft, 'Order of service', serviceLine(draft));
+  pdf.newPage();
   pdf.programme(draft);
-  pdf.journey(draft);
-  if (draft.story.familyMessage) {
-    pdf.heading('From the family');
-    pdf.text(draft.story.familyMessage, { serif: true, size: 12 });
+  if (draft.journey.length) {
+    if (draft.programme.items.length) pdf.ensure(80);
+    await pdf.journey(draft, url);
   }
+  await pdf.closing(draft, url);
   pdf.save(file(slug, 'programme', 'pdf'));
 }
 
 /** The complete keepsake: story, programme, journey and family message. */
 export async function keepsakePdf({ draft, url, slug }: ArtifactInput) {
-  const pdf = new Pdf(`Memora · ${url.replace(/^https?:\/\//, '')}`);
-  pdf.cover(draft, '', await loadImage(draft.person.portraitUrl));
+  const pdf = await new Pdf(displayName(draft.person), 'MEMORA').init();
+  await pdf.cover(draft, 'A life remembered', serviceLine(draft));
+  pdf.newPage();
   if (draft.story.obituary) {
-    pdf.heading('Their story');
-    pdf.text(draft.story.obituary, { serif: true, size: 12.5, gap: 4 });
-    pdf.rule();
+    pdf.section('Their story', 'A life remembered');
+    pdf.prose(draft.story.obituary, { size: 12, dropCap: true });
+    pdf.newPage();
   }
   pdf.programme(draft);
-  pdf.journey(draft);
-  if (draft.story.familyMessage) {
-    pdf.heading('From the family');
-    pdf.text(draft.story.familyMessage, { serif: true, size: 12.5 });
+  if (draft.journey.length) {
+    if (draft.programme.items.length) pdf.ensure(80);
+    await pdf.journey(draft, url);
   }
+  await pdf.closing(draft, url);
   pdf.save(file(slug, 'keepsake', 'pdf'));
 }

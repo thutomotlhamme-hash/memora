@@ -39,7 +39,7 @@ export function ProcessionCard({ journey }: { journey: Draft['journey'] }) {
   }
 
   return (
-    <section className="proc-card" aria-live="polite">
+    <section className="proc-card" id="procession" aria-live="polite">
       <div className="proc-head">
         <div>
           <span className="pill live dot">{p.state === 'moving' ? 'Live' : 'Procession'}</span>

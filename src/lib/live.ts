@@ -10,7 +10,7 @@ export type LivePhase =
   | { phase: 'upcoming'; daysUntil: number; date: string }
   | { phase: 'between'; date: string }
   | { phase: 'before_start'; nextStop: Stop }
-  | { phase: 'at_stop'; currentStop: Stop; nextStop: Stop }
+  | { phase: 'at_stop'; currentStop: Stop; nextStop: Stop | null }
   | { phase: 'in_transit'; currentStop: Stop; nextStop: Stop }
   | { phase: 'concluded_today'; currentStop: Stop }
   | { phase: 'concluded' };
@@ -19,6 +19,9 @@ export function timeToMinutes(value: string | null | undefined): number | null {
   const m = String(value ?? '').match(/^(\d{1,2}):(\d{2})/);
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
+
+/** With no end time, the day's last gathering (a reception) is taken to last this long. A night vigil runs until midnight. */
+export const LAST_STOP_HOURS = 3;
 
 function daysBetween(fromKey: string, toKey: string): number {
   return Math.round((new Date(`${toKey}T00:00:00`).getTime() - new Date(`${fromKey}T00:00:00`).getTime()) / 86_400_000);
@@ -55,8 +58,12 @@ export function liveFuneralState(journey: Stop[], now = new Date()): LivePhase {
   }
   if (!currentStop && !nextStop) return { phase: 'none' };
   if (!currentStop) return { phase: 'before_start', nextStop: nextStop! };
-  if (!nextStop) return { phase: 'concluded_today', currentStop };
   const depart = timeToMinutes(currentStop.departTime);
+  if (!nextStop) {
+    // The last gathering of the day is still happening until it ends.
+    const ends = depart ?? (currentStop.type === 'vigil' ? 24 * 60 : (timeToMinutes(currentStop.time) ?? 0) + LAST_STOP_HOURS * 60);
+    return minutes < ends ? { phase: 'at_stop', currentStop, nextStop: null } : { phase: 'concluded_today', currentStop };
+  }
   if (depart != null && depart <= minutes) return { phase: 'in_transit', currentStop, nextStop };
   return { phase: 'at_stop', currentStop, nextStop };
 }

@@ -163,6 +163,10 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   const items = snap.programme;
   const liveIndex = snap.liveKey ? items.findIndex((i) => i.id === snap.liveKey) : -1;
   const nextItem = items[liveIndex + 1] ?? null;
+  // Tonight's vigil, or today's service: the first item to start is the first of today's part.
+  const todays = snap.journey.filter((st) => st.date === localDateKey());
+  const vigilNight = todays.some((st) => st.type === 'vigil') && !todays.some((st) => st.type !== 'vigil');
+  const firstItem = items.find((i) => (partOf(i) === 'vigil') === vigilNight) ?? items[0] ?? null;
   const today = now ? localDateKey(now) : '';
   const todaysStops = snap.journey.filter((s) => s.date === today);
 
@@ -330,9 +334,9 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
           </>
         )}
         <div className="row" style={{ marginTop: 14 }}>
-          {liveIndex < 0 && items[0] && (
-            <button className="btn on-night primary" type="button" onClick={() => start(items[0].id)}>
-              Start: {items[0].title}
+          {liveIndex < 0 && firstItem && (
+            <button className="btn on-night primary" type="button" onClick={() => start(firstItem.id)}>
+              Start: {firstItem.title}
             </button>
           )}
           {liveIndex >= 0 && nextItem && (
@@ -346,6 +350,7 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
             </button>
           )}
         </div>
+        {snap.status === 'PUBLISHED' && <p className="run-note">Guests with the memorial open see this full-screen within about 15 seconds.</p>}
       </section>
 
       <ProcessionControl

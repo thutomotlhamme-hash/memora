@@ -3,6 +3,7 @@ import { dispositionLabel, displayName, initials, lifeDates, slugify, type Draft
 import { Brand } from './Brand';
 import { LivePanel } from './LivePanel';
 import { LiveProvider } from './LiveMemorial';
+import { LiveStage } from './LiveStage';
 import { MemorialShare } from './MemorialShare';
 import { ProcessionCard } from './ProcessionCard';
 import { JourneyTimeline, ProgrammeTimeline } from './MemorialTimelines';
@@ -21,6 +22,31 @@ export function MemorialView({ draft, path, banner, live }: { draft: Draft; path
   return (
     <div className="memorial">
       {banner}
+      {live ? (
+        <LiveProvider slug={live.slug} initial={{ journey: draft.journey, programme: draft.programme, liveKey: live.liveKey }}>
+          <MemorialPage draft={draft} path={path} name={name} formal={formal} hasJourney={hasJourney} />
+        </LiveProvider>
+      ) : (
+        <MemorialPage draft={draft} path={path} name={name} formal={formal} hasJourney={hasJourney} />
+      )}
+      <footer className="m-footer">
+        <Brand />
+        <div>
+          Made with Memora · <Link href="/">Create a memorial</Link>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+type BodyProps = { draft: Draft; path: string; name: string; formal: boolean; hasJourney: boolean };
+
+/** Everything inside the live data: the on-the-day stage first, then the memorial itself. */
+function MemorialPage({ draft, path, name, formal, hasJourney }: BodyProps) {
+  const p = draft.person;
+  return (
+    <>
+      <LiveStage journey={draft.journey} programme={draft.programme} name={displayName(p, '')} portraitUrl={p.portraitUrl} />
       <section className="m-hero">
         <div className="m-sky" aria-hidden="true">
           {Array.from({ length: 14 }, (_, i) => (
@@ -65,26 +91,13 @@ export function MemorialView({ draft, path, banner, live }: { draft: Draft; path
       </nav>
 
       <main className="container">
-        {live ? (
-          <LiveProvider slug={live.slug} initial={{ journey: draft.journey, programme: draft.programme, liveKey: live.liveKey }}>
-            <MemorialBody draft={draft} path={path} name={name} formal={formal} hasJourney={hasJourney} />
-          </LiveProvider>
-        ) : (
-          <MemorialBody draft={draft} path={path} name={name} formal={formal} hasJourney={hasJourney} />
-        )}
+        <MemorialBody draft={draft} path={path} name={name} formal={formal} hasJourney={hasJourney} />
       </main>
-
-      <footer className="m-footer">
-        <Brand />
-        <div>
-          Made with Memora · <Link href="/">Create a memorial</Link>
-        </div>
-      </footer>
-    </div>
+    </>
   );
 }
 
-function MemorialBody({ draft, path, name, formal, hasJourney }: { draft: Draft; path: string; name: string; formal: boolean; hasJourney: boolean }) {
+function MemorialBody({ draft, path, name, formal, hasJourney }: BodyProps) {
   return (
     <>
       <ProcessionCard journey={draft.journey} />

@@ -79,7 +79,18 @@ test('Live Funeral Mode follows the clock through the day', () => {
   assert.equal(s1.phase === 'at_stop' && s1.currentStop.title, 'Celebration service');
   assert.equal(liveFuneralState(j, at('12:00')).phase, 'in_transit');
   assert.equal(liveFuneralState(j, at('12:45')).phase, 'at_stop');
-  assert.equal(liveFuneralState(j, at('15:30')).phase, 'concluded_today');
+  const last = liveFuneralState(j, at('15:30'));
+  assert.equal(last.phase, 'at_stop', 'the reception is still on');
+  assert.equal(last.phase === 'at_stop' && last.nextStop, null);
+  assert.equal(liveFuneralState(j, at('17:30')).phase, 'concluded_today');
+});
+
+test('a night vigil on its own is live for the evening', () => {
+  const vigil = { ...complete().journey[0], id: 'v', date: '2026-09-01', type: 'vigil' as const, title: 'Night vigil', time: '18:00', departTime: '' };
+  assert.equal(liveFuneralState([vigil], at('17:00')).phase, 'before_start');
+  assert.equal(liveFuneralState([vigil], at('19:30')).phase, 'at_stop');
+  assert.equal(liveFuneralState([vigil], at('23:30')).phase, 'at_stop', 'vigils run late');
+  assert.equal(liveFuneralState([{ ...vigil, departTime: '21:00' }], at('22:30')).phase, 'concluded_today');
 });
 
 test('Live Funeral Mode before, between and after funeral days', () => {

@@ -12,8 +12,9 @@ export type LiveData = { journey: Draft['journey']; programme: Draft['programme'
 
 const LiveContext = createContext<LiveData | null>(null);
 const POLL_MS = 25_000;
-/** While the procession is on the road, follow it more closely. */
+/** While the procession is on the road, or the coordinator is running the programme, follow closely. */
 const MOVING_POLL_MS = 12_000;
+const RUNNING_POLL_MS = 15_000;
 
 export function LiveProvider({ slug, initial, children }: { slug: string; initial: LiveData; children: React.ReactNode }) {
   const [data, setData] = useState<LiveData>(initial);
@@ -39,7 +40,7 @@ export function LiveProvider({ slug, initial, children }: { slug: string; initia
     };
     const loop = async () => {
       await tick();
-      if (!stopped) timer = setTimeout(() => void loop(), current.procession?.state === 'moving' ? MOVING_POLL_MS : POLL_MS);
+      if (!stopped) timer = setTimeout(() => void loop(), current.procession?.state === 'moving' ? MOVING_POLL_MS : current.liveKey ? RUNNING_POLL_MS : POLL_MS);
     };
     void loop();
     const onVisible = () => {

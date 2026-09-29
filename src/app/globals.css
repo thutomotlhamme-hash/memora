@@ -865,6 +865,7 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .run-now { background: var(--night); color: var(--on-night); border-radius: var(--r-lg); padding: 20px 22px; }
 .run-now .k { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay-on-night); }
 .run-now .t { font-family: var(--display); font-weight: 420; font-size: clamp(24px, 5vw, 32px); line-height: 1.15; margin-top: 6px; }
+.run-now .run-note { margin: 12px 0 0; font-size: 13px; color: var(--on-night-muted); }
 .run-now .p { color: var(--on-night-muted); margin-top: 4px; }
 .run-late { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); }
 .check-row.small { min-height: 32px; font-size: 14px; color: var(--ink-2); align-self: auto; }
@@ -1151,3 +1152,85 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 /* Holds the header's account links' place while the browser checks sign-in. */
 .nav-pending { display: inline-block; width: 150px; height: 44px; }
 @media (max-width: 720px) { .nav-pending { width: 96px; } }
+
+/* ---------------------------------------------------------------- On the day: the live stage
+   While a gathering is on, the memorial opens on this full-screen night view. */
+
+.stage-live {
+  position: relative; overflow: hidden; isolation: isolate;
+  min-height: 100vh; min-height: 100svh;
+  background: var(--night); color: var(--on-night);
+  display: grid; align-items: start;
+  animation: sl-in 0.9s var(--ease) both;
+}
+.sl-glow {
+  position: absolute; left: 50%; top: -120px; z-index: -1;
+  width: min(760px, 130vw); height: 460px; transform: translateX(-50%);
+  border-radius: 50%; background: radial-gradient(closest-side, rgba(232, 169, 74, 0.3), rgba(232, 169, 74, 0));
+  animation: bloom-breathe 6s ease-in-out infinite;
+}
+.sl-inner {
+  width: 100%; max-width: 580px; margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 14px; min-height: inherit;
+}
+.sl-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--on-night); }
+.sl-who { display: inline-flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; color: var(--on-night-muted); }
+.sl-who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-who img { width: 30px; height: 36px; object-fit: cover; border-radius: 999px 999px 8px 8px; flex: none; }
+.sl-kicker { display: flex; align-items: center; gap: 9px; margin-top: clamp(18px, 6vh, 56px); font-size: 13px; font-weight: 600; color: var(--candle); }
+.sl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--candle); flex: none; animation: sl-pulse 2.2s ease-out infinite; }
+.sl-title { margin: 0 0 6px; font-family: var(--display); font-weight: 400; font-variation-settings: 'SOFT' 50, 'WONK' 0; font-size: clamp(40px, 11vw, 64px); line-height: 1.03; letter-spacing: -0.02em; color: var(--on-night); animation: blur-rise 1s var(--ease) 0.1s both; }
+.sl-card { position: relative; display: block; border-radius: 24px; padding: 20px; background: var(--night-2); color: inherit; text-decoration: none; animation: rise-in 0.8s var(--ease) 0.2s both; }
+.sl-card.now { box-shadow: inset 0 0 0 1px rgba(232, 169, 74, 0.45); }
+.sl-card .k { font-size: 12px; font-weight: 600; color: var(--candle); }
+.sl-card .k.soft { color: var(--clay-on-night); }
+.sl-card .t { font-family: var(--display); font-size: clamp(26px, 7vw, 32px); line-height: 1.1; margin-top: 4px; }
+.sl-card .p { font-size: 17px; font-weight: 600; margin-top: 4px; }
+.sl-card .s { font-size: 14px; color: var(--on-night-muted); margin-top: 4px; }
+.sl-row { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-night); font-size: 15px; }
+.sl-row span { color: var(--on-night-muted); flex: none; font-size: 14px; }
+.sl-row strong { font-weight: 600; text-align: right; min-width: 0; display: grid; }
+.sl-row strong small { font-size: 13px; font-weight: 500; color: var(--on-night-muted); margin-top: 2px; }
+.sl-row.live strong { animation: sl-swap 0.7s var(--ease) both; }
+.sl-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; margin-top: 16px; }
+.sl-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; background: var(--candle); color: var(--night); font-size: 15px; font-weight: 600; text-decoration: none; transition: transform 0.3s var(--spring), background 0.2s; }
+.sl-btn:hover { background: #f2c27a; color: var(--night); }
+.sl-btn:active { transform: scale(0.97); }
+.sl-link { color: var(--on-night); font-size: 14px; font-weight: 600; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; opacity: 0.85; }
+.sl-link:hover { opacity: 1; color: var(--on-night); }
+.sl-proc { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.sl-follow { flex: none; font-size: 14px; font-weight: 600; color: var(--candle); }
+.sl-proc:hover .sl-follow { text-decoration: underline; }
+.sl-more {
+  align-self: center; display: grid; justify-items: center; gap: 4px; padding: 18px 12px 4px;
+  font-size: 14px; font-weight: 600; color: var(--on-night-muted); text-decoration: none;
+}
+.sl-more svg { animation: sl-nudge 2.4s var(--ease) infinite; }
+.sl-more:hover { color: var(--on-night); }
+
+/* When guests scroll into the memorial, "now" stays one tap away. */
+.now-bar {
+  position: fixed; z-index: 60; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: 10px; width: min(560px, calc(100vw - 28px)); min-height: 52px; padding: 8px 8px 8px 16px;
+  border-radius: 999px; background: rgba(21, 18, 28, 0.9); color: var(--on-night); text-decoration: none;
+  -webkit-backdrop-filter: saturate(160%) blur(16px); backdrop-filter: saturate(160%) blur(16px);
+  box-shadow: 0 12px 40px rgba(21, 18, 28, 0.3);
+  transform: translate(-50%, 140%); opacity: 0; pointer-events: none;
+  transition: transform 0.6s var(--spring), opacity 0.3s var(--ease);
+}
+.now-bar.on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; animation: sl-arrive 0.9s var(--spring) both; }
+.now-bar:hover { color: var(--on-night); }
+.nb-k { font-size: 12px; font-weight: 600; color: var(--candle); flex: none; }
+.nb-t { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-go { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: rgba(244, 241, 248, 0.12); font-size: 13px; font-weight: 600; }
+@media print { .stage-live, .now-bar { display: none; } }
+
+@keyframes sl-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sl-pulse { 0% { box-shadow: 0 0 0 0 rgba(232, 169, 74, 0.55); } 80%, 100% { box-shadow: 0 0 0 9px rgba(232, 169, 74, 0); } }
+@keyframes sl-swap { from { opacity: 0; transform: translateY(6px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes sl-nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+@keyframes sl-arrive { 0% { transform: translate(-50%, 140%); } 100% { transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .stage-live, .sl-title, .sl-card, .sl-row.live strong, .sl-glow, .sl-dot, .sl-more svg, .now-bar.on { animation: none; }
+}

@@ -154,7 +154,7 @@ test('gift form validation', () => {
   }
   const noContact = validateGift({ ...good, recipientWhatsapp: '' }, today);
   assert.equal(noContact.ok, false);
-  assert.ok(!noContact.ok && noContact.errors.recipientEmail);
+  assert.ok(!noContact.ok && noContact.errors.recipientWhatsapp);
   const past = validateGift({ ...good, funeralDate: '2026-09-20' }, today);
   assert.ok(!past.ok && past.errors.funeralDate);
   const unsure = validateGift({ ...good, funeralDate: '', funeralDateUnsure: true }, today);

@@ -53,7 +53,7 @@ export function validateGift(input: Partial<GiftInput>, today = new Date()): { o
   if (!recipientName) errors.recipientName = 'Who should receive the gift?';
   if (recipientEmail && !EMAIL.test(recipientEmail)) errors.recipientEmail = 'This email address doesn’t look right.';
   if (whatsappRaw && !recipientWhatsapp) errors.recipientWhatsapp = 'Use a number like 082 123 4567 or +27 82 123 4567.';
-  if (!recipientEmail && !whatsappRaw) errors.recipientEmail = 'Add their email, WhatsApp number, or both, so we can send the link.';
+  if (!recipientEmail && !whatsappRaw) errors.recipientWhatsapp = 'Add their WhatsApp number (or an email) so we can send the link.';
 
   if (!funeralDateUnsure) {
     if (!funeralDate) errors.funeralDate = 'Add a rough date, or tick “not sure yet”.';

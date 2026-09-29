@@ -85,10 +85,10 @@ export function GiftForm({ ready }: { ready: boolean }) {
         <p className="muted small">We’ll send them a private link to create the memorial. It’s already paid for.</p>
         <div className="grid-2">
           <div className="span-2">{field('recipientName', 'Their name', { autoComplete: 'off', autoCapitalize: 'words', placeholder: 'e.g. Lerato Mokoena' })}</div>
-          {field('recipientEmail', 'Their email', { type: 'email', autoComplete: 'off', inputMode: 'email' })}
-          {field('recipientWhatsapp', 'Their WhatsApp number', { type: 'tel', autoComplete: 'off', inputMode: 'tel', placeholder: '082 123 4567' })}
+          {field('recipientWhatsapp', 'Their WhatsApp number (recommended)', { type: 'tel', autoComplete: 'off', inputMode: 'tel', placeholder: '082 123 4567' })}
+          {field('recipientEmail', 'Their email (optional)', { type: 'email', autoComplete: 'off', inputMode: 'email' })}
           <p className="hint span-2" style={{ margin: 0 }}>
-            Add both if you can. We send the link to each.
+            We send the link on WhatsApp, and by email too if you add it.
           </p>
           <div className="span-2">
             {field('lovedOneName', 'Name of the person who passed away', { autoComplete: 'off', autoCapitalize: 'words' }, 'Optional. We’ll start the memorial with this name.')}

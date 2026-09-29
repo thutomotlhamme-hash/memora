@@ -3,7 +3,7 @@
 import { useNow } from '@/lib/hooks';
 import { useLiveData } from './LiveMemorial';
 import { liveFuneralState, liveProgrammeState } from '@/lib/live';
-import { directionsUrl, fmtDate, stopLabel, type Draft, type Stop } from '@/lib/memorial';
+import { directionsUrl, fmtDate, stopLabel, type Draft, type ProgrammePart, type Stop } from '@/lib/memorial';
 
 function StopCard({ stop, kind }: { stop: Stop; kind: 'now' | 'next' }) {
   return (
@@ -45,7 +45,9 @@ export function LivePanel(props: { journey: Draft['journey']; programme: Draft['
 
   const live = liveFuneralState(journey, now);
   if (live.phase === 'none') return null;
-  const prog = live.phase === 'at_stop' || live.phase === 'in_transit' || live.phase === 'before_start' ? liveProgrammeState(programme, now, liveKey) : null;
+  const stopNow = live.phase === 'at_stop' || live.phase === 'in_transit' ? live.currentStop : live.phase === 'before_start' ? live.nextStop : null;
+  const parts: ProgrammePart[] = stopNow?.type === 'vigil' ? ['vigil'] : ['service', 'graveside'];
+  const prog = stopNow ? liveProgrammeState(programme, now, liveKey, parts) : null;
 
   let pill = '';
   let headline = '';

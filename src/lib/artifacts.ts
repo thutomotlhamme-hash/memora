@@ -5,7 +5,7 @@
 
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
-import { dispositionLabel, displayName, fmtDate, funeralDate, lifeDates, programmeTypeLabel, stopLabel, type Draft } from './memorial';
+import { dispositionLabel, displayName, fmtDate, funeralDate, lifeDates, programmeParts, programmeTypeLabel, stopLabel, type Draft } from './memorial';
 
 const C = {
   paper: '#ffffff',
@@ -459,11 +459,19 @@ class Pdf {
   programme(draft: Draft) {
     if (draft.programme.mode !== 'formal' || !draft.programme.items.length) return;
     this.heading('Order of service');
-    draft.programme.items.forEach((item) => {
-      this.ensure(16);
-      this.text([item.time, item.title].filter(Boolean).join('   '), { size: 13, serif: true, gap: -1 });
-      const meta = [programmeTypeLabel(item.type), item.presenter, item.detail].filter(Boolean).join(' · ');
-      this.text(meta, { size: 9.5, color: [102, 101, 95], gap: 3 });
+    const groups = programmeParts(draft.programme.items);
+    const headings = groups.length > 1 || groups[0]?.part !== 'service';
+    groups.forEach((g) => {
+      if (headings) {
+        this.ensure(22);
+        this.text(g.label.toUpperCase(), { size: 9, color: [91, 62, 140], gap: 1 });
+      }
+      g.items.forEach((item) => {
+        this.ensure(16);
+        this.text([item.time, item.title].filter(Boolean).join('   '), { size: 13, serif: true, gap: -1 });
+        const meta = [programmeTypeLabel(item.type), item.presenter, item.detail].filter(Boolean).join(' · ');
+        this.text(meta, { size: 9.5, color: [107, 100, 117], gap: 3 });
+      });
     });
     this.rule();
   }
@@ -474,8 +482,8 @@ class Pdf {
       this.ensure(20);
       this.text(`${i + 1}.  ${s.time}   ${s.title}`, { size: 13, serif: true, gap: -1 });
       this.text([fmtDate(s.date), stopLabel(s.type), s.address].filter(Boolean).join(' · '), { size: 9.5, color: [102, 101, 95], gap: -1 });
-      const extra = [s.departTime && `Departs ${s.departTime}`, s.landmark && `Entrance: ${s.landmark}`, s.transport].filter(Boolean).join(' · ');
-      this.text(extra, { size: 9.5, color: [181, 85, 47], gap: 3 });
+      const extra = [s.departTime && `Until ${s.departTime}`, s.landmark && `Entrance: ${s.landmark}`, s.transport].filter(Boolean).join(' · ');
+      this.text(extra, { size: 9.5, color: [91, 62, 140], gap: 3 });
     });
     this.rule();
   }

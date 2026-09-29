@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useNow } from '@/lib/hooks';
-import { PROGRAMME_TYPE_LABELS, fmtDate, journeyOrderProblem, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammeType, type Stop } from '@/lib/memorial';
+import { PROGRAMME_PARTS, PROGRAMME_TYPE_LABELS, partLabel, partOf, sortByPart, fmtDate, journeyOrderProblem, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammePart, type ProgrammeType, type Stop } from '@/lib/memorial';
 import type { ProcessionRecord } from '@/lib/procession';
 import { ProcessionControl } from './ProcessionControl';
 import { insertItem, moveItem, shiftFrom, shiftTodaysStops, startItem, toMinutes } from '@/lib/runsheet';
@@ -28,7 +28,7 @@ type Pending = { programme?: ProgrammeItem[]; stopTimes?: Map<string, { id: stri
 type SaveState = 'saved' | 'saving' | 'offline' | 'error';
 
 const POLL_MS = 15_000;
-const blank = (): ProgrammeItem => ({ id: newId('item'), type: 'custom', time: '', title: '', presenter: '', detail: '' });
+const blank = (part: ProgrammePart = 'service'): ProgrammeItem => ({ id: newId('item'), part, type: 'custom', time: '', title: '', presenter: '', detail: '' });
 
 export function RunSheet({ token, initial }: { token: string; initial: RunSnapshot }) {
   const toast = useToast();
@@ -229,7 +229,10 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
     if (afterIndex !== null) next = insertItem(items, afterIndex, item);
     else {
       if (!items.some((i) => i.id === item.id)) return toast('That item was removed on another phone.', 'error');
+      const before = items.find((i) => i.id === item.id);
       next = items.map((i) => (i.id === item.id ? item : i));
+      // Moved to another part of the day: file it under that part.
+      if (before && partOf(before) !== partOf(item)) next = sortByPart(next);
     }
     commit({ programme: next }, { programme: next });
     setEditing(null);
@@ -390,8 +393,16 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
             const realIndex = items.findIndex((x) => x.id === item.id);
             const state = item.id === snap.liveKey ? 'now' : liveIndex >= 0 && realIndex < liveIndex ? 'done' : liveIndex >= 0 && realIndex === liveIndex + 1 ? 'next' : '';
             const isDragged = drag && items[drag.from]?.id === item.id;
+            // A heading wherever the part of the day changes: night vigil, the service, the graveside.
+            const partChanged = i === 0 ? partOf(item) !== 'service' || order.some((x) => partOf(x) !== 'service') : partOf(order[i - 1]) !== partOf(item);
             return (
-              <li key={item.id} ref={(el) => void (rows.current[i] = el)} className={`run-item ${state} ${isDragged ? 'dragging' : ''}`}>
+              <Fragment key={item.id}>
+              {partChanged && (
+                <li className="run-part-head" aria-hidden="true">
+                  {partLabel(partOf(item))}
+                </li>
+              )}
+              <li ref={(el) => void (rows.current[i] = el)} className={`run-item ${state} ${isDragged ? 'dragging' : ''}`}>
                 <button
                   type="button"
                   className="run-handle"
@@ -429,16 +440,17 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
                   <button className="icon-btn" type="button" aria-label={`Move ${item.title} down`} disabled={i === order.length - 1 || Boolean(drag)} onClick={() => reorder(i, i + 1)}>
                     ↓
                   </button>
-                  <button className="icon-btn" type="button" aria-label={`Add an item after ${item.title}`} onClick={() => setEditing({ item: blank(), afterIndex: i })}>
+                  <button className="icon-btn" type="button" aria-label={`Add an item after ${item.title}`} onClick={() => setEditing({ item: blank(partOf(item)), afterIndex: i })}>
                     +
                   </button>
                 </div>
               </li>
+              </Fragment>
             );
           })}
         </ol>
         {items.length === 0 && <div className="empty-line">No programme yet. Add the first item.</div>}
-        <button className="btn block" type="button" style={{ marginTop: 12 }} onClick={() => setEditing({ item: blank(), afterIndex: items.length - 1 })}>
+        <button className="btn block" type="button" style={{ marginTop: 12 }} onClick={() => setEditing({ item: blank(items.length ? partOf(items[items.length - 1]) : 'service'), afterIndex: items.length - 1 })}>
           + Add an item
         </button>
       </section>
@@ -543,6 +555,16 @@ function ItemEditor({
         <div className="field">
           <label htmlFor="run-title">Title</label>
           <input id="run-title" className="input" value={item.title} maxLength={200} autoFocus onChange={(e) => set('title', e.target.value)} placeholder="e.g. Tribute from the grandchildren" />
+        </div>
+        <div className="field">
+          <label htmlFor="run-part">Part of the day</label>
+          <select id="run-part" className="select" value={item.part ?? 'service'} onChange={(e) => set('part', e.target.value as ProgrammePart)}>
+            {PROGRAMME_PARTS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="grid-2">
           <div className="field">

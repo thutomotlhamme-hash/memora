@@ -2,10 +2,27 @@
 // the public memorial. Keep this file free of React, Supabase and DOM APIs so the
 // same completeness rules run everywhere (and in `npm test`).
 
-export type StopType = 'home' | 'church' | 'hall' | 'cemetery' | 'crematorium' | 'reception' | 'gathering' | 'other';
+export type StopType = 'home' | 'vigil' | 'church' | 'hall' | 'cemetery' | 'crematorium' | 'reception' | 'gathering' | 'other';
 export type DispositionType = '' | 'burial' | 'cremation' | 'private_burial_later' | 'memorial_only' | 'other';
 export type ProgrammeMode = '' | 'formal' | 'none';
-export type ProgrammeType = 'prayer' | 'scripture' | 'hymn' | 'tribute' | 'obituary' | 'eulogy' | 'song' | 'announcement' | 'custom';
+export type ProgrammeType =
+  | 'prayer'
+  | 'scripture'
+  | 'hymn'
+  | 'song'
+  | 'sermon'
+  | 'tribute'
+  | 'obituary'
+  | 'eulogy'
+  | 'viewing'
+  | 'candle'
+  | 'committal'
+  | 'wreath'
+  | 'thanks'
+  | 'announcement'
+  | 'custom';
+/** Where an item happens: the night vigil before, the main service, or at the graveside. */
+export type ProgrammePart = 'vigil' | 'service' | 'graveside';
 
 export interface Person {
   firstName: string;
@@ -37,6 +54,8 @@ export interface Stop {
 
 export interface ProgrammeItem {
   id: string;
+  /** Missing on older drafts: treated as the main service. */
+  part?: ProgrammePart;
   type: ProgrammeType;
   time: string;
   title: string;
@@ -49,7 +68,8 @@ export interface Draft {
   story: { obituary: string; familyMessage: string };
   disposition: { type: DispositionType; notes: string };
   journey: Stop[];
-  programme: { mode: ProgrammeMode; items: ProgrammeItem[] };
+  /** releaseAt: ISO time guests may first see the programme; '' = straight away. */
+  programme: { mode: ProgrammeMode; items: ProgrammeItem[]; releaseAt?: string };
 }
 
 export type CaseStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
@@ -83,6 +103,7 @@ export function emptyDraft(): Draft {
 
 export const STOP_TYPE_LABELS: Record<StopType, string> = {
   home: 'Family home',
+  vigil: 'Night vigil',
   church: 'Church / service',
   hall: 'Hall / venue',
   cemetery: 'Cemetery / burial',
@@ -104,13 +125,42 @@ export const PROGRAMME_TYPE_LABELS: Record<ProgrammeType, string> = {
   prayer: 'Prayer',
   scripture: 'Scripture',
   hymn: 'Hymn',
+  song: 'Song / choir',
+  sermon: 'Sermon / message',
   tribute: 'Speaker / Tribute',
   obituary: 'Obituary',
   eulogy: 'Eulogy',
-  song: 'Song',
+  viewing: 'Viewing / last respects',
+  candle: 'Candle lighting',
+  committal: 'Committal / lowering',
+  wreath: 'Wreaths & flowers',
+  thanks: 'Vote of thanks',
   announcement: 'Announcement',
   custom: 'Custom item',
 };
+
+export const PROGRAMME_PARTS: { id: ProgrammePart; label: string; hint: string }[] = [
+  { id: 'vigil', label: 'Night vigil', hint: 'The evening before: prayers, hymns and memories with family and friends.' },
+  { id: 'service', label: 'The service', hint: 'The main funeral or memorial service.' },
+  { id: 'graveside', label: 'At the graveside', hint: 'Committal, prayers, wreaths and the vote of thanks at the cemetery.' },
+];
+export const partOf = (item: Pick<ProgrammeItem, 'part'>): ProgrammePart => item.part ?? 'service';
+export const partLabel = (part: string) => PROGRAMME_PARTS.find((p) => p.id === part)?.label ?? 'The service';
+
+/** Items grouped vigil → service → graveside, keeping each part's own order. */
+export function programmeParts(items: ProgrammeItem[]): { part: ProgrammePart; label: string; items: ProgrammeItem[] }[] {
+  return PROGRAMME_PARTS.map((p) => ({ part: p.id, label: p.label, items: items.filter((i) => partOf(i) === p.id) })).filter((g) => g.items.length);
+}
+
+/** Put items in part order (vigil, service, graveside) without changing the order inside a part. */
+export function sortByPart(items: ProgrammeItem[]): ProgrammeItem[] {
+  return programmeParts(items).flatMap((g) => g.items);
+}
+
+/** Has the family released the programme to guests yet? */
+export function programmeReleased(programme: Pick<Draft['programme'], 'releaseAt'>, now = new Date()): boolean {
+  return !programme.releaseAt || new Date(programme.releaseAt).getTime() <= now.getTime();
+}
 
 export const stopLabel = (type: string) => STOP_TYPE_LABELS[type as StopType] ?? STOP_TYPE_LABELS.other;
 export const dispositionLabel = (type: string) => DISPOSITION_LABELS[type as Exclude<DispositionType, ''>] ?? 'Not selected';
@@ -305,6 +355,11 @@ const STOP_TYPES = Object.keys(STOP_TYPE_LABELS) as StopType[];
 const PROGRAMME_TYPES = Object.keys(PROGRAMME_TYPE_LABELS) as ProgrammeType[];
 const DISPOSITIONS: DispositionType[] = ['', 'burial', 'cremation', 'private_burial_later', 'memorial_only', 'other'];
 const MODES: ProgrammeMode[] = ['', 'formal', 'none'];
+const PARTS: ProgrammePart[] = ['vigil', 'service', 'graveside'];
+const isoTime = (v: unknown): string => {
+  const t = typeof v === 'string' && v ? new Date(v) : null;
+  return t && !Number.isNaN(t.getTime()) ? t.toISOString() : '';
+};
 
 let idCounter = 0;
 export function newId(prefix: string): string {
@@ -360,6 +415,7 @@ export function normaliseDraft(input: unknown): Draft {
         .slice(0, 60)
         .map((i: any) => ({
           id: str(i?.id, 80) || newId('item'),
+          part: pick(i?.part, PARTS, 'service'),
           type: pick(i?.type, PROGRAMME_TYPES, 'custom'),
           time: timeStr(i?.time),
           title: str(i?.title, 200),
@@ -367,6 +423,7 @@ export function normaliseDraft(input: unknown): Draft {
           detail: str(i?.detail, 1000),
         }))
         .filter((i: ProgrammeItem) => i.title.trim()),
+      releaseAt: isoTime(raw.programme?.releaseAt),
     },
   };
 }

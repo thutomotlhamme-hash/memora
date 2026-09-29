@@ -1,24 +1,48 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   MIN_STORY_LENGTH,
+  PROGRAMME_PARTS,
   PROGRAMME_TYPE_LABELS,
+  displayName,
   newId,
+  partLabel,
+  partOf,
+  sortByPart,
   programmeGate,
   programmeTypeLabel,
   type Draft,
   type ProgrammeItem,
+  type ProgrammePart,
   type ProgrammeType,
 } from '@/lib/memorial';
+import { ReleaseControl } from './ReleaseControl';
+import { RunSheetLink } from './RunSheetLink';
 import { PanelFoot, type Nav, type Update } from './shared';
 
-const blankItem = (): ProgrammeItem => ({ id: '', type: 'prayer', time: '', title: '', presenter: '', detail: '' });
+const blankItem = (part: ProgrammePart = 'service'): ProgrammeItem => ({ id: '', part, type: part === 'graveside' ? 'committal' : part === 'vigil' ? 'hymn' : 'prayer', time: '', title: '', presenter: '', detail: '' });
 
-export function StoryStep({ draft, update, nav }: { draft: Draft; update: Update; nav: Nav }) {
+const PLACEHOLDER: Record<ProgrammePart, string> = {
+  vigil: 'e.g. Opening hymn, Candle lighting, Memories from friends',
+  service: 'e.g. Opening prayer, Psalm 23, Tribute from the grandchildren',
+  graveside: 'e.g. Committal, Laying of wreaths, Vote of thanks',
+};
+
+export function StoryStep({ draft, update, nav, caseId }: { draft: Draft; update: Update; nav: Nav; caseId?: string | null }) {
   const { story, programme } = draft;
   const gate = programmeGate(draft);
-  const [form, setForm] = useState<ProgrammeItem>(blankItem);
+  const [form, setForm] = useState<ProgrammeItem>(() => blankItem());
+  const [shown, setShown] = useState<Set<ProgrammePart>>(() => new Set());
+  const formRef = useRef<HTMLDivElement>(null);
+  const startAdding = (part: ProgrammePart) => {
+    setShown((s) => new Set(s).add(part));
+    setForm(blankItem(part));
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      formRef.current?.querySelector<HTMLInputElement>('#itemTitle')?.focus({ preventScroll: true });
+    }, 60);
+  };
   const [formError, setFormError] = useState('');
   const editing = Boolean(form.id);
   const obituaryLength = story.obituary.trim().length;
@@ -30,15 +54,19 @@ export function StoryStep({ draft, update, nav }: { draft: Draft; update: Update
   const saveItem = () => {
     if (!form.title.trim()) return setFormError('Give this part of the service a title.');
     setFormError('');
-    const item = { ...form, title: form.title.trim(), id: form.id || newId('item') };
-    setItems((items) => (editing ? items.map((i) => (i.id === item.id ? item : i)) : [...items, item]));
-    setForm(blankItem());
+    const item = { ...form, part: form.part ?? 'service', title: form.title.trim(), id: form.id || newId('item') };
+    // Keep the programme in part order: vigil, then the service, then the graveside.
+    setItems((items) => sortByPart(editing ? items.map((i) => (i.id === item.id ? item : i)) : [...items, item]));
+    setForm(blankItem(item.part));
   };
+  // Moves stay inside the item's own part.
   const move = (id: string, dir: -1 | 1) =>
     setItems((items) => {
       const i = items.findIndex((x) => x.id === id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= items.length) return items;
+      if (i < 0) return items;
+      let j = i + dir;
+      while (j >= 0 && j < items.length && partOf(items[j]) !== partOf(items[i])) j += dir;
+      if (j < 0 || j >= items.length) return items;
       const next = [...items];
       [next[i], next[j]] = [next[j], next[i]];
       return next;
@@ -102,54 +130,86 @@ export function StoryStep({ draft, update, nav }: { draft: Draft; update: Update
 
         {programme.mode === 'formal' && (
           <>
-            <div className="list" style={{ marginTop: 22 }}>
-              {programme.items.length === 0 && <div className="empty-line">No items yet. Add the first part of the service below.</div>}
-              {programme.items.map((item, i) => (
-                <article key={item.id} className={`list-item ${form.id === item.id ? 'editing' : ''}`}>
-                  <span className="idx">{i + 1}</span>
-                  <div>
-                    <span className="kind">{programmeTypeLabel(item.type)}</span>
-                    <h4>
-                      {item.time && <span className="muted">{item.time} · </span>}
-                      {item.title}
-                    </h4>
-                    {(item.presenter || item.detail) && <p>{[item.presenter, item.detail].filter(Boolean).join(' · ')}</p>}
-                  </div>
-                  <div className="list-actions">
-                    <button className="icon-btn" type="button" aria-label={`Move ${item.title} up`} disabled={i === 0} onClick={() => move(item.id, -1)}>
-                      ↑
-                    </button>
-                    <button className="icon-btn" type="button" aria-label={`Move ${item.title} down`} disabled={i === programme.items.length - 1} onClick={() => move(item.id, 1)}>
-                      ↓
-                    </button>
-                    <button className="btn sm" type="button" onClick={() => setForm(item)}>
-                      Edit
-                    </button>
-                    <button
-                      className="btn sm danger"
-                      type="button"
-                      onClick={() => {
-                        setItems((items) => items.filter((x) => x.id !== item.id));
-                        if (form.id === item.id) setForm(blankItem());
-                      }}
-                    >
-                      Remove
+            {PROGRAMME_PARTS.map((part) => {
+              const partItems = programme.items.filter((i) => partOf(i) === part.id);
+              const open = partItems.length > 0 || shown.has(part.id) || part.id === 'service';
+              if (!open) {
+                return (
+                  <button key={part.id} type="button" className="part-add" onClick={() => startAdding(part.id)}>
+                    <strong>+ {part.id === 'vigil' ? 'Add a night vigil programme' : 'Add a graveside programme'}</strong>
+                    <span>{part.hint}</span>
+                  </button>
+                );
+              }
+              return (
+                <section key={part.id} className={`part-block part-${part.id}`} aria-label={part.label}>
+                  <div className="part-head">
+                    <div>
+                      <h3 className="h4">{part.label}</h3>
+                      <span className="hint">{part.hint}</span>
+                    </div>
+                    <button className="btn sm" type="button" onClick={() => startAdding(part.id)}>
+                      + Add
                     </button>
                   </div>
-                </article>
-              ))}
-            </div>
+                  <div className="list">
+                    {partItems.length === 0 && <div className="empty-line">Nothing here yet. Add the first part below.</div>}
+                    {partItems.map((item, i) => (
+                      <article key={item.id} className={`list-item ${form.id === item.id ? 'editing' : ''}`}>
+                        <span className="idx">{i + 1}</span>
+                        <div>
+                          <span className="kind">{programmeTypeLabel(item.type)}</span>
+                          <h4>
+                            {item.time && <span className="muted">{item.time} · </span>}
+                            {item.title}
+                          </h4>
+                          {(item.presenter || item.detail) && <p>{[item.presenter, item.detail].filter(Boolean).join(' · ')}</p>}
+                        </div>
+                        <div className="list-actions">
+                          <button className="icon-btn" type="button" aria-label={`Move ${item.title} up`} disabled={i === 0} onClick={() => move(item.id, -1)}>
+                            ↑
+                          </button>
+                          <button className="icon-btn" type="button" aria-label={`Move ${item.title} down`} disabled={i === partItems.length - 1} onClick={() => move(item.id, 1)}>
+                            ↓
+                          </button>
+                          <button className="btn sm" type="button" onClick={() => setForm({ ...item, part: partOf(item) })}>
+                            Edit
+                          </button>
+                          <button
+                            className="btn sm danger"
+                            type="button"
+                            onClick={() => {
+                              setItems((items) => items.filter((x) => x.id !== item.id));
+                              if (form.id === item.id) setForm(blankItem(form.part));
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
 
-            <div className="form-block">
+            <div className="form-block" ref={formRef}>
               <div className="form-block-head">
-                <h3 className="h4">{editing ? 'Edit programme item' : 'Add a programme item'}</h3>
+                <h3 className="h4">{editing ? 'Edit programme item' : `Add to ${partLabel(form.part ?? 'service').toLowerCase()}`}</h3>
                 {editing && (
-                  <button className="text-link small" type="button" onClick={() => setForm(blankItem())}>
+                  <button className="text-link small" type="button" onClick={() => setForm(blankItem(form.part))}>
                     Cancel
                   </button>
                 )}
               </div>
-              <div className="grid-2">
+              <div className="segmented" role="radiogroup" aria-label="Part of the day">
+                {PROGRAMME_PARTS.map((p) => (
+                  <button key={p.id} type="button" role="radio" aria-checked={(form.part ?? 'service') === p.id} onClick={() => setForm({ ...form, part: p.id })}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid-2" style={{ marginTop: 16 }}>
                 <div className="field">
                   <label htmlFor="itemType">Type</label>
                   <select className="select" id="itemType" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as ProgrammeType })}>
@@ -173,7 +233,7 @@ export function StoryStep({ draft, update, nav }: { draft: Draft; update: Update
                     value={form.title}
                     onChange={(e) => setForm({ ...form, title: e.target.value })}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), saveItem())}
-                    placeholder="e.g. Opening prayer, Psalm 23, Tribute from the grandchildren"
+                    placeholder={PLACEHOLDER[form.part ?? 'service']}
                   />
                 </div>
                 <div className="field">
@@ -196,6 +256,9 @@ export function StoryStep({ draft, update, nav }: { draft: Draft; update: Update
                 </button>
               </div>
             </div>
+
+            <ReleaseControl draft={draft} update={update} />
+            {caseId && <RunSheetLink caseId={caseId} name={displayName(draft.person, 'your loved one')} />}
           </>
         )}
 

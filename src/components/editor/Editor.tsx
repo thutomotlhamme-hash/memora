@@ -293,7 +293,7 @@ export function Editor(props: EditorProps) {
           )}
           {step === 'person' && <PersonStep draft={draft} update={update} onPortrait={onPortrait} portraitBusy={portraitBusy} nav={nav} />}
           {step === 'journey' && <JourneyStep draft={draft} update={update} nav={nav} />}
-          {step === 'story' && <StoryStep draft={draft} update={update} nav={nav} />}
+          {step === 'story' && <StoryStep draft={draft} update={update} nav={nav} caseId={owner?.caseId ?? null} />}
           {step === 'review' && <ReviewStep draft={draft} readiness={r} go={go} previewHref={previewHref} nav={nav} />}
           {step === 'publish' && (
             <PublishStep

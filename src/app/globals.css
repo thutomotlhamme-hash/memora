@@ -1031,6 +1031,69 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .mono-pw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheet-backdrop { animation: none; } }
 
+/* Memorial hero with depth: a jacaranda sky, falling blossoms, a floating arch and a raised name card */
+.m-hero { background: linear-gradient(180deg, #ebe3f5 0%, #f3eef8 38%, var(--paper) 78%); isolation: isolate; }
+.m-sky { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.m-sky::before { content: ''; position: absolute; left: 50%; top: 4%; width: min(900px, 140vw); aspect-ratio: 1; transform: translateX(-50%); background: radial-gradient(closest-side, rgba(201, 184, 232, 0.85), rgba(201, 184, 232, 0)); animation: bloom-breathe 9s ease-in-out infinite; }
+.m-sky::after { content: ''; position: absolute; left: 50%; top: 18%; width: min(420px, 80vw); aspect-ratio: 1; transform: translateX(-50%); background: radial-gradient(closest-side, rgba(232, 169, 74, 0.16), rgba(232, 169, 74, 0)); }
+.petal { position: absolute; top: -20px; left: calc(4% + var(--i) * 7%); width: calc(8px + (var(--i) * 3 % 7) * 1px); aspect-ratio: 1; border-radius: 60% 0 60% 0; background: linear-gradient(135deg, #b9a3e0, #8a6bc2); opacity: 0.35; animation: petal-fall calc(14s + var(--i) * 1.3s) linear calc(var(--i) * -2.1s) infinite; }
+.petal:nth-child(3n) { background: linear-gradient(135deg, #d9cbee, #a98bd9); opacity: 0.45; }
+@keyframes petal-fall {
+  0% { transform: translate3d(0, -20px, 0) rotate(0deg); }
+  50% { transform: translate3d(30px, 45vh, 0) rotate(160deg); }
+  100% { transform: translate3d(-10px, 95vh, 0) rotate(320deg); opacity: 0; }
+}
+.m-topbar, .m-hero-inner { position: relative; z-index: 1; }
+.m-hero-inner { padding-bottom: clamp(48px, 7vw, 88px); }
+.m-portrait { position: relative; box-shadow: 0 0 0 8px rgba(251, 250, 248, 0.9), 0 0 0 9px var(--bloom), 0 50px 90px -30px rgba(63, 42, 102, 0.55), 0 18px 36px -18px rgba(30, 26, 36, 0.35); margin-bottom: 0; background: #fff; }
+.m-portrait img { transition: transform 1.4s var(--ease); }
+@media (hover: hover) { .m-portrait:hover img { transform: scale(1.03); } }
+.m-hero-copy { display: grid; justify-items: center; }
+.m-name-card { position: relative; z-index: 2; margin-top: -56px; width: min(560px, 92vw); padding: 26px clamp(22px, 4vw, 40px) 24px; border-radius: 28px; background: rgba(255, 255, 255, 0.86); backdrop-filter: saturate(160%) blur(18px); -webkit-backdrop-filter: saturate(160%) blur(18px); box-shadow: 0 0 0 1px rgba(91, 62, 140, 0.08), 0 30px 60px -28px rgba(63, 42, 102, 0.45); }
+.m-name-card h1 { margin: 6px 0 8px; font-size: clamp(38px, 7vw, 68px); }
+.m-hero .row { margin-top: 26px; }
+@media (max-width: 560px) { .m-name-card { margin-top: -40px; } }
+/* Raised story cards on the lilac bands */
+.m-section .prose { position: relative; }
+#story .m-section-grid > div, #family .m-section-grid > div { background: var(--card); border-radius: var(--r-xl); padding: clamp(24px, 4vw, 44px); box-shadow: 0 0 0 1px var(--line), 0 30px 60px -40px rgba(63, 42, 102, 0.35); }
+#story { background: linear-gradient(180deg, var(--paper), var(--paper-2)); box-shadow: 0 0 0 100vmax var(--paper-2); clip-path: inset(0 -100vmax); }
+#story .prose::first-letter { font-family: var(--display); font-size: 3.2em; float: left; line-height: 0.9; padding: 6px 10px 0 0; color: var(--clay); }
+@media (prefers-reduced-motion: reduce) { .petal, .m-sky::before { animation: none; } .petal { display: none; } }
+
+/* Programme in parts: vigil, service, graveside */
+.part-block { margin-top: 22px; padding: 18px; border-radius: var(--r-lg); background: var(--paper-2); }
+.part-block.part-vigil { background: linear-gradient(180deg, #2a2335, #1f1a28); color: var(--on-night); }
+.part-block.part-vigil .hint, .part-block.part-vigil .list-item p { color: var(--on-night-muted); }
+.part-block.part-vigil .list-item { background: rgba(244, 241, 248, 0.07); }
+.part-block.part-vigil .list-item .kind { color: var(--candle); }
+.part-block.part-vigil .btn, .part-block.part-vigil .icon-btn { --btn-fg: var(--on-night); --btn-bd: rgba(244, 241, 248, 0.3); color: var(--on-night); background: transparent; border-color: rgba(244, 241, 248, 0.3); }
+.part-block.part-vigil .empty-line { background: rgba(244, 241, 248, 0.06); color: var(--on-night-muted); }
+.part-block .list-item { background: var(--card); }
+.part-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.part-head .hint { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
+.part-add { display: grid; gap: 2px; width: 100%; margin-top: 12px; padding: 16px 18px; text-align: left; border: 1px dashed var(--line-strong); border-radius: var(--r); background: transparent; transition: border-color 0.3s var(--ease), background-color 0.3s var(--ease); }
+.part-add:hover { border-color: var(--clay); background: var(--clay-soft); }
+.part-add strong { color: var(--clay); font-weight: 600; }
+.part-add span { font-size: 13.5px; color: var(--muted); }
+.segmented { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 999px; background: var(--paper-3); }
+.segmented button { border: 0; background: transparent; padding: 8px 14px; border-radius: 999px; font-size: 14px; color: var(--ink-2); transition: background-color 0.3s var(--ease), color 0.3s var(--ease); }
+.segmented button[aria-checked='true'] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(30, 26, 36, 0.08); }
+.release-block { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.programme-parts { display: grid; gap: 36px; }
+.part-title { margin: 0 0 14px; font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay); display: flex; align-items: center; gap: 12px; }
+.part-title::after { content: ''; flex: 1; height: 1px; background: var(--line-strong); }
+.programme-part.part-vigil { padding: clamp(20px, 3vw, 28px); border-radius: var(--r-xl); background: var(--night); color: var(--on-night); }
+.programme-part.part-vigil .part-title { color: var(--candle); }
+.programme-part.part-vigil .part-title::after { background: var(--line-night); }
+.programme-part.part-vigil .t-item { border-top-color: var(--line-night); }
+.programme-part.part-vigil .t-when strong, .programme-part.part-vigil h3 { color: var(--on-night); }
+.programme-part.part-vigil .t-body p, .programme-part.part-vigil .t-when { color: var(--on-night-muted); }
+.programme-part.part-vigil .kind { color: var(--candle); }
+.programme-soon { padding: 26px; border-radius: var(--r-lg); background: var(--card); box-shadow: 0 0 0 1px var(--line); }
+.programme-soon p { margin: 8px 0 0; color: var(--ink-2); }
+.run-part-head { list-style: none; margin: 14px 0 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay); }
+.run-part-head:first-child { margin-top: 0; }
+
 /* ---------------------------------------------------------------- More motion */
 
 @keyframes draw-line { from { stroke-dashoffset: 90; } to { stroke-dashoffset: 0; } }

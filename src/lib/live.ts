@@ -3,7 +3,7 @@
 // service times already stored on the memorial. The one public /m/<slug> page is
 // therefore also the funeral-day guide, without a second URL or QR.
 
-import { localDateKey, type Draft, type ProgrammeItem, type Stop } from './memorial.ts';
+import { localDateKey, partOf, type Draft, type ProgrammeItem, type ProgrammePart, type Stop } from './memorial.ts';
 
 export type LivePhase =
   | { phase: 'none' }
@@ -70,13 +70,17 @@ export function liveProgrammeState(
   programme: Draft['programme'],
   now = new Date(),
   liveKey?: string | null,
+  /** Which parts are happening today: the vigil evening, or the service day (service + graveside). */
+  parts: ProgrammePart[] = ['service', 'graveside'],
 ): { current: ProgrammeItem | null; next: ProgrammeItem | null } | null {
   if (programme.mode !== 'formal') return null;
+  const items = programme.items.filter((i) => parts.includes(partOf(i)));
   if (liveKey) {
-    const i = programme.items.findIndex((item) => item.id === liveKey);
-    if (i >= 0) return { current: programme.items[i], next: programme.items[i + 1] ?? null };
+    const i = items.findIndex((item) => item.id === liveKey);
+    if (i >= 0) return { current: items[i], next: items[i + 1] ?? null };
   }
-  const timed = programme.items.filter((i) => timeToMinutes(i.time) != null);
+  // Items carry a time of day only, so the vigil (the evening before) never counts on the service day.
+  const timed = items.filter((i) => timeToMinutes(i.time) != null);
   if (!timed.length) return null;
   const minutes = now.getHours() * 60 + now.getMinutes();
   let current: ProgrammeItem | null = null;

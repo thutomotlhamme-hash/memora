@@ -14,13 +14,19 @@ import { JourneyTimeline, ProgrammeTimeline } from './MemorialTimelines';
 export function MemorialView({ draft, path, banner, live }: { draft: Draft; path: string; banner?: React.ReactNode; live?: { slug: string; liveKey: string | null } }) {
   const p = draft.person;
   const name = displayName(p, 'In loving memory');
-  const formal = draft.programme.mode === 'formal' && draft.programme.items.length > 0;
+  // A programme the family is still finalising shows as "coming soon" until it's released.
+  const formal = draft.programme.mode === 'formal' && (draft.programme.items.length > 0 || Boolean(draft.programme.releaseAt));
   const hasJourney = draft.journey.length > 0;
 
   return (
     <div className="memorial">
       {banner}
       <section className="m-hero">
+        <div className="m-sky" aria-hidden="true">
+          {Array.from({ length: 14 }, (_, i) => (
+            <span key={i} className="petal" style={{ ['--i' as string]: i }} />
+          ))}
+        </div>
         <div className="container m-topbar">
           <Brand />
         </div>
@@ -29,9 +35,11 @@ export function MemorialView({ draft, path, banner, live }: { draft: Draft; path
             {p.portraitUrl ? <img src={p.portraitUrl} alt={`Portrait of ${name}`} /> : <span className="mono">{initials(p)}</span>}
           </div>
           <div className="m-hero-copy">
-            <span className="eyebrow">In loving memory</span>
-            <h1 className="display">{name}</h1>
-            <div className="dates">{lifeDates(p)}</div>
+            <div className="m-name-card">
+              <span className="eyebrow">In loving memory</span>
+              <h1 className="display">{name}</h1>
+              <div className="dates">{lifeDates(p)}</div>
+            </div>
             <div className="row no-print">
               {hasJourney && (
                 <a className="btn primary" href="#journey">

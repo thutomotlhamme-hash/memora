@@ -5,6 +5,7 @@ import { MEDIA_BUCKET } from '../config';
 import {
   emptyDraft,
   normaliseDraft,
+  programmeReleased,
   type CaseMeta,
   type CaseStatus,
   type Draft,
@@ -14,11 +15,11 @@ import {
 import { loadPublicProcession } from './procession';
 
 const CASE_COLUMNS =
-  'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at,live_current_key,live_started_at,run_version';
+  'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at,live_current_key,live_started_at,run_version,programme_release_at';
 const PERSON_COLUMNS = 'first_name,last_name,preferred_name,birth_date,passing_date,portrait_path';
 const STOP_COLUMNS =
   'id,stop_key,stop_type,title,event_date,event_time,departure_time,address_text,landmark,parking_notes,transport_notes,notes,latitude,longitude,sort_order';
-const ITEM_COLUMNS = 'id,item_key,item_type,start_time,title,presenter,detail,sort_order';
+const ITEM_COLUMNS = 'id,item_key,part,item_type,start_time,title,presenter,detail,sort_order';
 
 const hhmm = (v: unknown) => (v ? String(v).slice(0, 5) : '');
 
@@ -56,9 +57,11 @@ function rowsToDraft(c: Row, person: Row | null, stops: Row[], items: Row[], por
     ),
     programme: {
       mode: c.programme_mode ?? '',
+      releaseAt: c.programme_release_at ?? '',
       items: items.map(
         (i): ProgrammeItem => ({
           id: i.item_key ?? i.id,
+          part: i.part ?? 'service',
           type: i.item_type,
           time: hhmm(i.start_time),
           title: i.title,
@@ -180,6 +183,15 @@ export type PublicMemorial =
  * Public read for /m/<slug>. Uses the service role because anon has no table
  * access; only published memorials inside their public window are returned.
  */
+/**
+ * Guests don't see the programme before the family releases it: until then the
+ * items are withheld (the release time is kept so the page can say when).
+ */
+function guestView(draft: Draft): Draft {
+  if (programmeReleased(draft.programme)) return draft;
+  return { ...draft, programme: { ...draft.programme, items: [] } };
+}
+
 export async function loadPublicMemorial(admin: SupabaseClient, slug: string): Promise<PublicMemorial> {
   if (!/^[a-z0-9-]{1,80}$/.test(slug)) return { state: 'not_found' };
   const { data: c } = await admin.from('memora_cases').select(CASE_COLUMNS).eq('slug', slug).in('status', ['PUBLISHED', 'ARCHIVED']).maybeSingle();
@@ -190,7 +202,7 @@ export async function loadPublicMemorial(admin: SupabaseClient, slug: string): P
     return { state: 'archived', name: [person?.preferred_name || person?.first_name, person?.last_name].filter(Boolean).join(' ') };
   }
   const portraitUrl = await signedUrl(admin, person?.portrait_path, 6 * 3600);
-  const draft = rowsToDraft(c, person, stops, items, portraitUrl);
+  const draft = guestView(rowsToDraft(c, person, stops, items, portraitUrl));
   draft.person.portraitPath = '';
   return { state: 'ok', draft, meta: toMeta(c, true) };
 }
@@ -210,7 +222,7 @@ export async function loadLiveSnapshot(admin: SupabaseClient, slug: string) {
   const { data: c } = await admin.from('memora_cases').select(CASE_COLUMNS).eq('slug', slug).eq('status', 'PUBLISHED').maybeSingle();
   if (!c || (c.archive_at && new Date(c.archive_at).getTime() <= Date.now())) return null;
   const [{ person, stops, items }, procession] = await Promise.all([loadChildren(admin, c.id), loadPublicProcession(admin, c.id)]);
-  const draft = rowsToDraft(c, person, stops, items);
+  const draft = guestView(rowsToDraft(c, person, stops, items));
   return { journey: draft.journey, programme: draft.programme, liveKey: (c.live_current_key as string | null) ?? null, updatedAt: c.updated_at as string, procession };
 }
 

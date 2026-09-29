@@ -76,3 +76,22 @@ The person running the programme on the day is **not** an admin and doesn't need
 | The wrong phone is sharing, or the coordinator changed cars | Tap **Continue from this phone** on the phone in the lead car. |
 | Someone doesn't want their location shown | **Pause** hides it immediately. **End sharing** erases it. |
 | Sharing was forgotten | It ends by itself on arrival or 6 hours after it started, and the position is erased. |
+
+## Accounts: cellphone number and password
+
+Families sign up with their **cellphone number and a password**. Nothing is ever sent to the phone, and there's no email to wait for. The number is how Memora recognises them on any device. Email sign-up is still there for people who prefer it; it sends a confirmation link.
+
+Families don't have to sign up first. They build as a guest, and when they want to keep the memorial they tap **Save it**, type their number and password, and land back on the same step with everything moved into their account.
+
+| Situation | What to do |
+| --- | --- |
+| "I forgot my password" | They tap **Forgot your password?** and enter their number, which brings them to you on WhatsApp or the contact form. **Check it's really them** (ask for the name on their memorial, or the funeral date). Then Admin → Team → **Help someone log in** → their number → **Set temporary password** → **Send on WhatsApp**. They change it under Account. |
+| "It says my number already has an account" | They signed up before. They tap **I already have an account**. If they don't remember the password, use Help someone log in. |
+| "Someone else registered my number" | Rare. Check who it is (look at the memorials on that account in Admin → Memorials), then help the real owner log in with a temporary password. |
+| They typed the wrong number | They log in with the number they actually typed; it's their login. If they can't remember it, find their memorial in Admin → Memorials: the account's number shows next to it. |
+
+### Adding a teammate (changed)
+1. Admin → Team → **Copy sign-up message** and send it to them on WhatsApp. They create their own Memora account first (cellphone or email).
+2. They send you the number or email they used. Add it under **Add someone**.
+
+Only existing accounts can be added. Nobody can sign up with a teammate's details afterwards and inherit their access.

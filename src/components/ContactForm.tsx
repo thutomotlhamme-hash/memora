@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 const TOPICS = [
   ['help', 'Help with a memorial'],
+  ['account', 'Logging in or my password'],
   ['gift', 'A gift'],
   ['payment', 'A payment or refund'],
   ['privacy', 'Privacy or removing content'],
@@ -12,7 +13,7 @@ const TOPICS = [
 ] as const;
 
 /** Sends to Netlify Forms (see public/__forms.html); the team gets an email alert per message. */
-export function ContactForm() {
+export function ContactForm({ defaults = {} }: { defaults?: { topic?: string; message?: string; whatsapp?: string } }) {
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
 
@@ -68,7 +69,7 @@ export function ContactForm() {
         </div>
         <div className="field">
           <label htmlFor="c-whatsapp">WhatsApp number</label>
-          <input className="input" id="c-whatsapp" name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" placeholder="082 123 4567" />
+          <input className="input" id="c-whatsapp" name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" placeholder="082 123 4567" defaultValue={defaults.whatsapp} />
         </div>
         <div className="field">
           <label htmlFor="c-email">Email</label>
@@ -76,7 +77,7 @@ export function ContactForm() {
         </div>
         <div className="field span-2">
           <label htmlFor="c-topic">What is it about?</label>
-          <select className="select" id="c-topic" name="topic" defaultValue="help">
+          <select className="select" id="c-topic" name="topic" defaultValue={TOPICS.some(([v]) => v === defaults.topic) ? defaults.topic : 'help'}>
             {TOPICS.map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
@@ -86,7 +87,7 @@ export function ContactForm() {
         </div>
         <div className="field span-2">
           <label htmlFor="c-message">Message</label>
-          <textarea className="textarea short" id="c-message" name="message" required maxLength={3000} />
+          <textarea className="textarea short" id="c-message" name="message" required maxLength={3000} defaultValue={defaults.message} />
         </div>
       </div>
       {error && (

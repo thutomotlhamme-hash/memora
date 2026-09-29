@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <h2>What we collect</h2>
       <ul>
         <li>
-          <strong>Your account:</strong> your name, email address and password (stored only as a secure hash by our authentication provider).
+          <strong>Your account:</strong> your name (optional), the cellphone number or email address you log in with, and your password (stored only as a secure hash by our authentication provider). We never send codes or messages to your number; it is how we recognise you, and how our team can help if you forget your password.
         </li>
         <li>
           <strong>Memorial content you add:</strong> the name, dates and portrait of the person who passed away, their life story, a family message, the

@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (!body?.action) return fail('Missing action.', 400);
   try {
     const result = await performAdminAction(admin, access.user, access.role, body);
-    return result.ok ? json({ message: result.message }) : fail(result.error, result.status);
+    return result.ok ? json({ message: result.message, ...(result.data ?? {}) }) : fail(result.error, result.status);
   } catch (err) {
     console.error('Admin action failed', body.action, err);
     return fail('Something went wrong. Refresh and check whether it was applied.', 500);

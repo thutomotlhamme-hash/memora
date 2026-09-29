@@ -72,7 +72,7 @@ export function AddTeamMember() {
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
-        const out = await run({ action: 'team.add', email });
+        const out = await run({ action: 'team.add', who: email });
         setBusy(false);
         toast(out.message, out.ok ? 'info' : 'error');
         if (out.ok) {
@@ -81,10 +81,61 @@ export function AddTeamMember() {
         }
       }}
     >
-      <input className="input" type="email" required placeholder="their@email.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email to add" />
+      <input className="input" required placeholder="Their cellphone number or email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Cellphone number or email of their Memora account" />
       <button className="btn primary" type="submit" disabled={busy}>
         {busy ? 'Adding…' : 'Add'}
       </button>
     </form>
+  );
+}
+
+/**
+ * Someone forgot their password (phone accounts can't reset by email). After
+ * checking it's really them on WhatsApp, set a temporary password and send it.
+ */
+export function HelpLogin() {
+  const toast = useToast();
+  const [who, setWho] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ password: string; who: string; whatsapp: string; text: string } | null>(null);
+  return (
+    <div className="stack" style={{ ['--stack' as string]: '12px' }}>
+      <form
+        className="row"
+        style={{ flexWrap: 'nowrap' }}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!window.confirm(`Set a temporary password for ${who}? Only do this after checking on WhatsApp that it’s really them.`)) return;
+          setBusy(true);
+          setResult(null);
+          const res = await fetch('/api/admin/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account.resetPassword', who }) });
+          const out = await res.json().catch(() => ({}));
+          setBusy(false);
+          if (!res.ok) return toast(out?.error || 'That didn’t work.', 'error');
+          setResult({ password: out.password, who: out.who, whatsapp: out.whatsapp, text: out.text });
+          toast(out.message);
+        }}
+      >
+        <input className="input" required placeholder="Their cellphone number or email" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Account to help" />
+        <button className="btn primary" type="submit" disabled={busy || !who.trim()}>
+          {busy ? 'Setting…' : 'Set temporary password'}
+        </button>
+      </form>
+      {result && (
+        <div className="note ok" role="status">
+          <span>
+            <strong>{result.who}</strong> can now log in with <strong className="mono-pw">{result.password}</strong>. Send it only to them.
+            <span className="row" style={{ marginTop: 10 }}>
+              {result.whatsapp && (
+                <a className="btn sm primary" href={`https://wa.me/${result.whatsapp}?text=${encodeURIComponent(result.text)}`} target="_blank" rel="noopener noreferrer">
+                  Send on WhatsApp
+                </a>
+              )}
+              <CopyButton text={result.text} label="Copy message" />
+            </span>
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

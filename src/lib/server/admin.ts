@@ -7,6 +7,7 @@ import { localDateKey } from '../memorial';
 import { normaliseWhatsApp } from '../phone';
 import { PRODUCT } from '../plans';
 import type { AdminRole } from './admin-auth';
+import { accountLabel, isPhoneLogin, loginAddress } from '../account-id';
 import { ownerEmails } from './admin-auth';
 import { confirmGiftWithYoco, markGiftContacted } from './gifts';
 import { confirmOrderWithYoco, yocoSecret } from './yoco';
@@ -146,11 +147,27 @@ export async function loadOverview(admin: SupabaseClient, now = new Date()): Pro
 // Actions
 // ---------------------------------------------------------------------------
 
-export type AdminActionInput = { action: string; id?: string; email?: string; reason?: string; whatsapp?: string; name?: string };
-type Result = { ok: true; message: string } | { ok: false; error: string; status: number };
+export type AdminActionInput = { action: string; id?: string; email?: string; who?: string; reason?: string; whatsapp?: string; name?: string };
+type Result = { ok: true; message: string; data?: Record<string, string> } | { ok: false; error: string; status: number };
 
 const uuidOk = (id?: string): id is string => Boolean(id && /^[0-9a-f-]{36}$/i.test(id));
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** Finds an account by the cellphone number or email people sign in with. */
+async function findAccount(admin: SupabaseClient, who: string): Promise<{ id: string; email: string } | null> {
+  const login = loginAddress(who);
+  if (!login) return null;
+  const { data } = await admin.rpc('memora_find_account', { p_email: login.email });
+  const row = Array.isArray(data) ? data[0] : data;
+  return row?.id ? { id: String(row.id), email: String(row.email) } : null;
+}
+
+/** Easy to read out on the phone and to type: e.g. "Jacaranda-4821". */
+function temporaryPassword(): string {
+  const words = ['Jacaranda', 'Candle', 'Bloom', 'Petal', 'Lantern', 'Harvest', 'Morning', 'Willow'];
+  const bytes = crypto.getRandomValues(new Uint32Array(2));
+  return `${words[bytes[0] % words.length]}-${String(1000 + (bytes[1] % 9000))}`;
+}
 
 async function log(admin: SupabaseClient, actorId: string, action: string, caseId: string | null, metadata: Record<string, unknown>) {
   await admin.from('memora_activity_log').insert({ case_id: caseId, actor_user_id: actorId, action: `ADMIN_${action}`, metadata });
@@ -232,18 +249,48 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
       return { ok: true, message: 'Restored. The public link works again.' };
     }
 
+    // ---- Helping someone log in ----
+    case 'account.resetPassword': {
+      const account = await findAccount(admin, input.who ?? '');
+      if (!account) return { ok: false, error: 'No account uses that cellphone number or email.', status: 404 };
+      if (ownerEmails().includes(account.email.toLowerCase()) && role !== 'owner') {
+        return { ok: false, error: 'Only an owner can reset an owner’s password.', status: 403 };
+      }
+      const password = temporaryPassword();
+      const { error } = await admin.auth.admin.updateUserById(account.id, { password });
+      if (error) return { ok: false, error: 'Could not set a temporary password.', status: 500 };
+      await log(admin, actor.id, 'PASSWORD_RESET', null, { account: accountLabel(account.email) });
+      const who = accountLabel(account.email);
+      return {
+        ok: true,
+        message: `Temporary password set for ${who}.`,
+        data: {
+          password,
+          who,
+          whatsapp: isPhoneLogin(account.email) ? account.email.split('@')[0] : '',
+          text: `Hi, it’s Memora. Your temporary password is ${password}\nLog in at ${siteUrl()}/account/login with ${who}, then choose a new password under Account.`,
+        },
+      };
+    }
+
     // ---- Team (owners only) ----
     case 'team.add':
     case 'team.remove': {
       if (role !== 'owner') return { ok: false, error: 'Only owners can change the team.', status: 403 };
-      const email = (input.email ?? '').trim().toLowerCase();
-      if (!EMAIL.test(email)) return { ok: false, error: 'Enter a valid email address.', status: 400 };
+      let email = (input.email ?? input.who ?? '').trim().toLowerCase();
+      if (input.action === 'team.add') {
+        // Only existing accounts can be added, so nobody can sign up with a
+        // teammate's details after the fact and inherit their access.
+        const account = await findAccount(admin, email);
+        if (!account) return { ok: false, error: 'No account uses that number or email yet. Ask them to create their Memora account first, then add them.', status: 404 };
+        email = account.email.toLowerCase();
+      } else if (!EMAIL.test(email)) return { ok: false, error: 'Enter a valid email address.', status: 400 };
       if (ownerEmails().includes(email)) return { ok: false, error: 'That person is already an owner (set in Netlify).', status: 409 };
       if (input.action === 'team.add') {
         const { error } = await admin.from('memora_admins').insert({ email, added_by: actor.email });
         if (error) return { ok: false, error: error.code === '23505' ? 'Already on the team.' : 'Could not add them.', status: 409 };
-        await log(admin, actor.id, 'TEAM_ADDED', null, { email });
-        return { ok: true, message: `Added. Send them the invite link.` };
+        await log(admin, actor.id, 'TEAM_ADDED', null, { email: accountLabel(email) });
+        return { ok: true, message: `Added ${accountLabel(email)}. The Admin link now shows for them.` };
       }
       await admin.from('memora_admins').delete().eq('email', email);
       await log(admin, actor.id, 'TEAM_REMOVED', null, { email });
@@ -254,5 +301,10 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
 }
 
 export function teamInviteText(email: string): string {
-  return `You've been added to the Memora team. Sign up (or log in) with ${email} — it must be this exact email — then confirm it from your inbox:\n${siteUrl()}/account/register?next=/admin\n\nAfter that, the Admin link appears at the top of the site.`;
+  return `You're on the Memora team. Log in with ${accountLabel(email)} at ${siteUrl()}/account/login?next=/admin and the Admin link appears at the top of the site.`;
+}
+
+/** What to send someone before adding them: create an account, then share the number. */
+export function teamJoinText(): string {
+  return `I'd like to add you to the Memora team. First create your account here with your cellphone number and a password:\n${siteUrl()}/account/register?next=/admin\n\nThen send me the number you used, and I'll add you.`;
 }

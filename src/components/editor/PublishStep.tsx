@@ -10,6 +10,7 @@ import { displayName, fmtDate, slugify, type CaseMeta, type Draft, type Readines
 import { paymentsOn } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 import { RunSheetLink } from './RunSheetLink';
+import { SaveInline } from './SaveSheet';
 import { PanelFoot, type Nav, type StepId } from './shared';
 
 type Owner = { caseId: string; paymentsReady: boolean };
@@ -46,20 +47,9 @@ export function PublishStep({
   if (!owner || !meta) {
     return (
       <div className="panel">
-        {head('Create an account to publish.', 'You’ve built the memorial as a guest. To publish it, share it and download the keepsakes, keep it safe in a free account.')}
-        <div className="card tint">
-          <p style={{ margin: 0 }}>
-            When you create an account or log in, Memora offers to move this draft (photo included) into your account. Until then it
-            stays only in this browser.
-          </p>
-          <div className="row" style={{ marginTop: 18 }}>
-            <Link className="btn primary" href="/account/register?next=/memorials">
-              Create account
-            </Link>
-            <Link className="btn" href="/account/login?next=/memorials">
-              I have an account
-            </Link>
-          </div>
+        {head('One step to go: save it.', 'Your cellphone number and a password keep the memorial safe and let you publish it. You’ll land right back here.')}
+        <div className="card tint save-card">
+          <SaveInline step="publish" cta="Save and publish" />
         </div>
         <PanelFoot nav={nav} />
       </div>

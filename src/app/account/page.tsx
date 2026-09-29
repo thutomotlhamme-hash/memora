@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SignOutButton } from '@/components/SignOutButton';
 import { SiteHeader } from '@/components/SiteHeader';
+import { accountLabel, isPhoneLogin } from '@/lib/account-id';
 import { getSessionUser } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,12 @@ export default async function AccountPage() {
           <h1 className="h1">{user.name ? `Hello, ${user.name.split(' ')[0]}.` : 'Your account.'}</h1>
           <div className="card flat" style={{ padding: 0, border: 0, marginTop: 20 }}>
             <div className="kv">
-              <span>Email</span>
-              <strong>{user.email}</strong>
+              <span>{isPhoneLogin(user.email) ? 'Cellphone' : 'Email'}</span>
+              <strong>{accountLabel(user.email)}</strong>
+            </div>
+            <div className="kv">
+              <span>Logging in</span>
+              <span>Use this {isPhoneLogin(user.email) ? 'number' : 'email'} and your password on any phone or computer.</span>
             </div>
             <div className="kv">
               <span>Privacy</span>

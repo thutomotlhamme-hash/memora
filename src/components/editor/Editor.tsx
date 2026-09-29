@@ -15,6 +15,7 @@ import { PersonStep } from './PersonStep';
 import { PublishStep } from './PublishStep';
 import { ReviewStep } from './ReviewStep';
 import { StoryStep } from './StoryStep';
+import { SaveSheet } from './SaveSheet';
 import { STEPS, type StepId } from './shared';
 
 export type EditorProps =
@@ -50,6 +51,7 @@ export function Editor(props: EditorProps) {
   const [step, setStep] = useState<StepId>(initialStep);
   const dirty = useRef(false);
   const topRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
 
   const update = useCallback((fn: (d: Draft) => Draft) => {
     dirty.current = true;
@@ -217,10 +219,14 @@ export function Editor(props: EditorProps) {
             </div>
           </div>
           {!owner && (
-            <p className="guest-note">
-              <strong>Guest draft</strong> · saved only on this device.{' '}
-              <Link href="/account/register?next=/memorials">Create a free account</Link> to keep it safe and publish.
-            </p>
+            <div className="guest-save">
+              <p className="guest-note">
+                <strong>Saved on this device only.</strong> Save it to your cellphone number so you can come back from any phone.
+              </p>
+              <button className="btn primary sm" type="button" onClick={() => setSaving(true)}>
+                Save it
+              </button>
+            </div>
           )}
           {owner?.gift && (
             <div className="note" style={{ fontSize: 14 }}>
@@ -304,6 +310,7 @@ export function Editor(props: EditorProps) {
           )}
         </section>
       </div>
+      {saving && <SaveSheet step={step} onClose={() => setSaving(false)} />}
     </>
   );
 }

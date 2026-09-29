@@ -3,7 +3,9 @@ import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
 
 export const metadata = { title: 'Contact us', description: 'Questions about a memorial, a gift or a payment? Send us a message.' };
 
-export default function ContactPage() {
+export default async function ContactPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = await searchParams;
+  const one = (v: string | string[] | undefined) => (typeof v === 'string' ? v.slice(0, 500) : undefined);
   return (
     <>
       <SiteHeader />
@@ -18,7 +20,7 @@ export default function ContactPage() {
             within a day.
           </p>
         </section>
-        <ContactForm />
+        <ContactForm defaults={{ topic: one(q.topic), message: one(q.message), whatsapp: one(q.whatsapp) }} />
       </main>
       <SiteFooter />
     </>

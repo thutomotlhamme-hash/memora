@@ -5,18 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHydrated } from '@/lib/hooks';
 import { clearGuestDraft, loadGuestDraft } from '@/lib/guest';
 import { displayName, hasMeaningfulDraft, type Draft } from '@/lib/memorial';
+import { createMemorial } from '@/lib/memorials-client';
 import { useToast } from './Toast';
-
-async function createMemorial(draft?: Draft): Promise<string> {
-  const res = await fetch('/api/memorials', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(draft ? { draft } : {}),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body?.id) throw new Error(body?.error || 'Could not create the memorial.');
-  return body.id as string;
-}
 
 export function NewMemorialButton({ autoStart = false }: { autoStart?: boolean }) {
   const router = useRouter();

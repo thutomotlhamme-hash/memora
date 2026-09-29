@@ -1002,6 +1002,35 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
   .v-arch-name { font-size: 23px; }
 }
 
+/* Quick account: cellphone + password, inside the editor or on its own page */
+.quick-account { display: grid; gap: 16px; margin-top: 22px; }
+.auth-card .quick-account { margin-top: 26px; }
+.pw-wrap { position: relative; }
+.pw-wrap .input { padding-right: 76px; }
+.pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--paper-2); color: var(--clay-ink); font-size: 13px; font-weight: 600; }
+.pw-toggle:hover { background: var(--clay-soft); }
+.hint.ok { color: var(--clay); font-weight: 500; }
+.hint.ok::before { content: '✓ '; }
+.quick-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
+.quick-links .text-link { font-size: 14px; }
+.auth-card .divider { margin-top: 22px; }
+.auth-card > .btn.block { margin-top: 14px; }
+.auth-card > .tiny { margin-top: 10px !important; }
+.auth-card > .consent { margin-top: 14px; }
+.guest-save { display: grid; gap: 10px; padding: 16px; border-radius: var(--r); background: var(--card); }
+.guest-save .btn { justify-self: start; }
+.save-card { background: var(--paper-2); }
+.save-card .quick-account { margin-top: 0; }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: end center; padding: 12px; background: rgba(30, 26, 36, 0.42); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fade-in 0.3s var(--ease) both; }
+.sheet { position: relative; width: min(520px, 100%); max-height: calc(100dvh - 24px); overflow: auto; padding: clamp(24px, 4vw, 36px); border-radius: var(--r-xl); background: var(--card); box-shadow: var(--shadow-lg); animation: sheet-up 0.6s var(--ease) both; }
+.sheet-close { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--paper-2); font-size: 22px; line-height: 1; color: var(--ink-2); }
+@media (min-width: 700px) { .sheet-backdrop { place-items: center; } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes sheet-up { from { opacity: 0; transform: translate3d(0, 40px, 0); } }
+.sheet .consent, .save-card .consent { margin-top: 14px; }
+.mono-pw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em; }
+@media (prefers-reduced-motion: reduce) { .sheet, .sheet-backdrop { animation: none; } }
+
 /* ---------------------------------------------------------------- More motion */
 
 @keyframes draw-line { from { stroke-dashoffset: 90; } to { stroke-dashoffset: 0; } }

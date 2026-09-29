@@ -16,7 +16,7 @@ import { loadPublicProcession } from './procession';
 import { refreshPublicPages } from './public-cache';
 
 const CASE_COLUMNS =
-  'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at,live_current_key,live_started_at,run_version,programme_release_at';
+  'id,status,slug,disposition_type,disposition_notes,programme_mode,obituary,family_message,published_at,archive_at,updated_at,live_current_key,live_started_at,run_version,programme_release_at,prayers';
 const PERSON_COLUMNS = 'first_name,last_name,preferred_name,birth_date,passing_date,portrait_path';
 const STOP_COLUMNS =
   'id,stop_key,stop_type,title,event_date,event_time,departure_time,address_text,landmark,parking_notes,transport_notes,notes,latitude,longitude,sort_order';
@@ -71,6 +71,7 @@ function rowsToDraft(c: Row, person: Row | null, stops: Row[], items: Row[], por
         }),
       ),
     },
+    prayers: c.prayers ?? undefined,
   });
 }
 
@@ -225,7 +226,7 @@ export async function loadLiveSnapshot(admin: SupabaseClient, slug: string) {
   if (!c || (c.archive_at && new Date(c.archive_at).getTime() <= Date.now())) return null;
   const [{ person, stops, items }, procession] = await Promise.all([loadChildren(admin, c.id), loadPublicProcession(admin, c.id)]);
   const draft = guestView(rowsToDraft(c, person, stops, items));
-  return { journey: draft.journey, programme: draft.programme, liveKey: (c.live_current_key as string | null) ?? null, updatedAt: c.updated_at as string, procession };
+  return { journey: draft.journey, programme: draft.programme, prayers: draft.prayers, liveKey: (c.live_current_key as string | null) ?? null, updatedAt: c.updated_at as string, procession };
 }
 
 export { emptyDraft };

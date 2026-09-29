@@ -1289,3 +1289,56 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .programme-part.part-vigil .part-when { color: var(--on-night); }
 .part-head .part-when { display: block; font-size: 15px; font-family: var(--sans); font-weight: 600; margin-top: 4px; }
 .part-block.part-vigil .part-when { color: var(--candle); }
+
+/* ---------------------------------------------------------------- Prayers during the week (editor) */
+.pw-basics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 720px) { .pw-basics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pw-where { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; }
+@media (max-width: 560px) { .pw-where { grid-template-columns: 1fr; } }
+.pw-same { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.chip { min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--card); color: var(--ink-2); font-size: 14px; transition: background 0.2s var(--ease), border-color 0.2s var(--ease); }
+.chip:hover { border-color: var(--clay); }
+.chip.on { background: var(--mist); border-color: var(--clay); color: var(--clay-ink); font-weight: 600; }
+.pw-evenings { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pw-evening { border-radius: 18px; background: var(--card); box-shadow: 0 0 0 1px var(--line); transition: box-shadow 0.25s var(--ease); }
+.pw-evening.open { box-shadow: 0 0 0 1.5px var(--clay), 0 18px 40px -26px rgba(63, 42, 102, 0.4); }
+.pw-row { display: flex; align-items: stretch; gap: 4px; }
+.pw-date { flex: none; width: 64px; display: grid; justify-items: center; align-content: center; gap: 0; padding: 10px 0; border: 0; border-radius: 18px 0 0 18px; background: var(--mist); color: var(--clay-ink); }
+.pw-date span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.pw-date strong { font-family: var(--display); font-weight: 420; font-size: 24px; line-height: 1.1; }
+.pw-summary { flex: 1; min-width: 0; display: grid; gap: 2px; align-content: center; text-align: left; padding: 12px 14px; border: 0; background: transparent; color: var(--ink); border-radius: 0 18px 18px 0; }
+.pw-summary strong { font-size: 16px; }
+.pw-summary span { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-evening.off .pw-date { background: var(--paper-3); color: var(--faint); text-decoration: line-through; }
+.pw-evening.off .pw-summary strong { color: var(--muted); }
+.pw-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 4px 16px 16px; animation: panel-in 0.4s var(--ease) both; }
+@media (max-width: 560px) { .pw-details { grid-template-columns: 1fr; } }
+.pw-vigil { display: grid; gap: 2px; margin-top: 12px; padding: 16px 18px; border-radius: 18px; background: linear-gradient(180deg, #2a2335, #1f1a28); color: var(--on-night); }
+.pw-vigil .eyebrow { color: var(--candle); }
+.pw-vigil strong { font-family: var(--display); font-weight: 420; font-size: 20px; }
+.pw-vigil .hint { color: var(--on-night-muted); }
+.prayer-start strong { color: var(--clay-ink); }
+
+/* ---------------------------------------------------------------- Prayers during the week (memorial) */
+.pw-where-line { margin: 10px 0 14px; color: var(--muted); font-size: 16px; }
+.pw-list { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 10px; }
+.pw-card { display: flex; gap: 16px; align-items: flex-start; padding: 16px; border-radius: 22px; background: var(--card); box-shadow: 0 0 0 1px var(--line); transition: opacity 0.3s var(--ease); }
+.pw-card-date { flex: none; width: 60px; display: grid; justify-items: center; padding: 8px 0; border-radius: 16px; background: var(--mist); color: var(--clay-ink); }
+.pw-card-date span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.pw-card-date strong { font-family: var(--display); font-weight: 420; font-size: 24px; line-height: 1.1; }
+.pw-card-body { min-width: 0; display: grid; gap: 2px; }
+.pw-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pw-time { font-size: 13px; font-weight: 600; color: var(--clay); }
+.pw-card h3 { margin: 2px 0 0; font-family: var(--display); font-weight: 420; font-size: 21px; line-height: 1.2; }
+.pw-word { margin: 2px 0 0; font-size: 15px; color: var(--ink-2); }
+.pw-word em { font-family: var(--display); font-style: italic; }
+.pw-lead { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.pw-held { font-size: 12px; color: var(--faint); }
+.pw-card.held { opacity: 0.55; }
+.pw-card.next { box-shadow: 0 0 0 1.5px var(--candle), 0 20px 44px -28px rgba(63, 42, 102, 0.45); }
+.pw-card.vigil { background: linear-gradient(180deg, #2a2335, #1f1a28); color: var(--on-night); box-shadow: none; }
+.pw-card.vigil .pw-card-date { background: rgba(244, 241, 248, 0.1); color: var(--on-night); }
+.pw-card.vigil .pw-word, .pw-card.vigil .pw-time { color: var(--candle); }
+.pw-card.vigil.next { box-shadow: 0 0 0 1.5px var(--candle); }
+.pw-card.service .pw-card-date { background: var(--clay); color: #fff; }
+.pw-notes { margin: 14px 0 0; font-size: 14px; color: var(--muted); }

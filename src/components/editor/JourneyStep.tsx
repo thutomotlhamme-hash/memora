@@ -18,6 +18,7 @@ import {
   type StopType,
 } from '@/lib/memorial';
 import { PlaceSearch } from './PlaceSearch';
+import { PrayerWeekEditor } from './PrayerWeekEditor';
 import { PanelFoot, type Nav, type Update } from './shared';
 
 const MapPicker = dynamic(() => import('./MapPicker').then((m) => m.MapPicker), {
@@ -224,7 +225,9 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
               <div className="field">
                 <label htmlFor="stopType">Type of stop</label>
                 <select id="stopType" className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as StopType })}>
-                  {Object.entries(STOP_TYPE_LABELS).map(([v, l]) => (
+                  {Object.entries(STOP_TYPE_LABELS)
+                    .filter(([v]) => v !== 'prayers')
+                    .map(([v, l]) => (
                     <option key={v} value={v}>
                       {l}
                     </option>
@@ -328,6 +331,8 @@ export function JourneyStep({ draft, update, nav }: { draft: Draft; update: Upda
           </div>
         )}
       </section>
+
+      <PrayerWeekEditor draft={draft} update={update} />
 
       <div className={`note ${gate.ready ? 'ok' : 'warn'}`} style={{ marginTop: 24 }}>
         <span>

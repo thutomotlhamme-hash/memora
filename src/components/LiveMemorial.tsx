@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { localDateKey, type Draft } from '@/lib/memorial';
+import { localDateKey, withPrayers, type Draft } from '@/lib/memorial';
 import type { PublicProcession } from '@/lib/procession';
 
 // Guests' pages follow the coordinator. The coordinator starts items, finishes the
@@ -9,7 +9,13 @@ import type { PublicProcession } from '@/lib/procession';
 // picks it up within seconds, without reloading, and again the moment the phone
 // comes back to the page.
 
-export type LiveData = { journey: Draft['journey']; programme: Draft['programme']; liveKey: string | null; procession?: PublicProcession | null };
+export type LiveData = {
+  journey: Draft['journey'];
+  programme: Draft['programme'];
+  liveKey: string | null;
+  procession?: PublicProcession | null;
+  prayers?: Draft['prayers'];
+};
 
 const LiveContext = createContext<LiveData | null>(null);
 /** How often guests' pages check in: closely while something is on, gently the rest of the time. */
@@ -20,7 +26,7 @@ const QUIET_POLL_MS = 60_000;
 function pollEvery(d: LiveData): number {
   if (d.procession?.state === 'moving' || (d.liveKey && !d.liveKey.startsWith('ended:'))) return RUNNING_POLL_MS;
   const today = localDateKey();
-  return d.liveKey || d.procession || d.journey.some((s) => s.date === today) ? DAY_POLL_MS : QUIET_POLL_MS;
+  return d.liveKey || d.procession || withPrayers(d.journey, d.prayers).some((s) => s.date === today) ? DAY_POLL_MS : QUIET_POLL_MS;
 }
 
 export function LiveProvider({ slug, initial, children }: { slug: string; initial: LiveData; children: React.ReactNode }) {
@@ -38,7 +44,7 @@ export function LiveProvider({ slug, initial, children }: { slug: string; initia
         if (!res.ok) return;
         const body = (await res.json()) as LiveData;
         if (stopped || !Array.isArray(body.journey) || !body.programme) return;
-        current = { journey: body.journey, programme: body.programme, liveKey: body.liveKey ?? null, procession: body.procession ?? null };
+        current = { journey: body.journey, programme: body.programme, liveKey: body.liveKey ?? null, procession: body.procession ?? null, prayers: body.prayers ?? current.prayers };
         setData(current);
       } catch {
         // Offline for a moment: keep showing what we have.

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNow } from '@/lib/hooks';
-import { directionsUrl, fmtDate, stopLabel, type Draft, type Stop } from '@/lib/memorial';
+import { directionsUrl, fmtDate, prayerEveningFor, stopLabel, withPrayers, type Draft, type PrayerEvening, type Stop } from '@/lib/memorial';
 import { distanceM, etaRange, formatEta } from '@/lib/procession';
 import { stageView, type StageView } from '@/lib/stage';
 import { BrandMark } from './Brand';
@@ -34,7 +34,9 @@ export function LiveStage({
   portraitUrl,
   dates,
   initials,
+  prayers,
 }: {
+  prayers?: Draft['prayers'];
   journey: Draft['journey'];
   programme: Draft['programme'];
   name: string;
@@ -48,10 +50,12 @@ export function LiveStage({
     programme,
     liveKey: null,
     procession: null,
+    prayers,
   });
-  const view = now ? stageView(data.journey, data.programme, data.liveKey, now) : null;
+  const week = data.prayers ?? prayers;
+  const view = now ? stageView(withPrayers(data.journey, week), data.programme, data.liveKey, now) : null;
   if (!now || !view) return null;
-  return <Stage view={view} data={data} now={now} name={name} portraitUrl={portraitUrl} dates={dates} initials={initials} />;
+  return <Stage view={view} data={data} now={now} name={name} portraitUrl={portraitUrl} dates={dates} initials={initials} evening={view.focus ? prayerEveningFor(week, view.focus.id) : null} />;
 }
 
 function Stage({
@@ -62,7 +66,9 @@ function Stage({
   portraitUrl,
   dates,
   initials,
+  evening,
 }: {
+  evening: PrayerEvening | null;
   view: StageView;
   data: LiveData;
   now: Date;
@@ -82,7 +88,7 @@ function Stage({
   }, []);
 
   const { mode, vigil, focus, programme: prog, after } = view;
-  const tonight = vigil ? 'Tonight' : 'Today';
+  const tonight = vigil || focus?.type === 'prayers' ? 'Tonight' : 'Today';
 
   const kicker =
     mode === 'before'
@@ -182,6 +188,28 @@ function Stage({
                 {cardSub && <div className="s">{cardSub}</div>}
               </>
             )}
+            {evening && (evening.word || evening.scripture || evening.leader) && (
+              <div className="sl-evening">
+                {evening.word && (
+                  <div className="sl-row">
+                    <span>Word of the day</span>
+                    <strong>{evening.word}</strong>
+                  </div>
+                )}
+                {evening.scripture && (
+                  <div className="sl-row">
+                    <span>Scripture</span>
+                    <strong>{evening.scripture}</strong>
+                  </div>
+                )}
+                {evening.leader && (
+                  <div className="sl-row">
+                    <span>Led by</span>
+                    <strong>{evening.leader}</strong>
+                  </div>
+                )}
+              </div>
+            )}
             {focus && prog?.current && (
               <div className="sl-row live" key={prog.current.id}>
                 <span>{prog.where}</span>
@@ -228,7 +256,15 @@ function Stage({
 
           {after && (
             <article className="sl-next">
-              <span>{mode === 'vigil_ended' ? `Tomorrow · ${fmtDate(after.date)} · ${after.time}` : mode === 'after' ? `Later · ${after.time}` : `Next · ${after.time}`}</span>
+              <span>
+                {mode === 'vigil_ended'
+                  ? `Tomorrow · ${fmtDate(after.date)} · ${after.time}`
+                  : mode === 'after'
+                    ? `Later · ${after.time}`
+                    : after.date !== focus?.date
+                      ? `Up next · ${weekday(new Date(`${after.date}T12:00:00`))} · ${after.time}`
+                      : `Next · ${after.time}`}
+              </span>
               <strong>{place(after)}</strong>
               {(mode === 'vigil_ended' || mode === 'after') && hasPin(after) && <Directions stop={after} light />}
             </article>

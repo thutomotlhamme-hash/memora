@@ -4,7 +4,7 @@ import { useNow } from '@/lib/hooks';
 import { useLiveData } from './LiveMemorial';
 import { liveFuneralState, liveProgrammeState } from '@/lib/live';
 import { stageView } from '@/lib/stage';
-import { directionsUrl, fmtDate, stopLabel, type Draft, type ProgrammePart, type Stop } from '@/lib/memorial';
+import { directionsUrl, fmtDate, stopLabel, withPrayers, type Draft, type ProgrammePart, type Stop } from '@/lib/memorial';
 
 function StopCard({ stop, kind }: { stop: Stop; kind: 'now' | 'next' }) {
   return (
@@ -39,9 +39,11 @@ function StopCard({ stop, kind }: { stop: Stop; kind: 'now' | 'next' }) {
  * Funeral-day guide. Rendered only after mount (it depends on the guest's own
  * clock and time zone) and refreshed every minute while the page is open.
  */
-export function LivePanel(props: { journey: Draft['journey']; programme: Draft['programme'] }) {
+export function LivePanel(props: { journey: Draft['journey']; programme: Draft['programme']; prayers?: Draft['prayers'] }) {
   const now = useNow();
-  const { journey, programme, liveKey } = useLiveData({ ...props, liveKey: null });
+  const data = useLiveData({ ...props, liveKey: null });
+  const { programme, liveKey } = data;
+  const journey = withPrayers(data.journey, data.prayers ?? props.prayers);
   if (!now) return null;
 
   const live = liveFuneralState(journey, now);

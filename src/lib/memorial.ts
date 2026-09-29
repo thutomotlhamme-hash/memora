@@ -2,7 +2,7 @@
 // the public memorial. Keep this file free of React, Supabase and DOM APIs so the
 // same completeness rules run everywhere (and in `npm test`).
 
-export type StopType = 'home' | 'vigil' | 'church' | 'hall' | 'cemetery' | 'crematorium' | 'reception' | 'aftertears' | 'gathering' | 'other';
+export type StopType = 'home' | 'vigil' | 'church' | 'hall' | 'cemetery' | 'crematorium' | 'reception' | 'aftertears' | 'gathering' | 'prayers' | 'other';
 export type DispositionType = '' | 'burial' | 'cremation' | 'private_burial_later' | 'memorial_only' | 'other';
 export type ProgrammeMode = '' | 'formal' | 'none';
 export type ProgrammeType =
@@ -64,8 +64,40 @@ export interface ProgrammeItem {
   detail: string;
 }
 
+/** One evening of prayer at the family home in the week before the funeral. */
+export interface PrayerEvening {
+  date: string;
+  /** Off: no prayers that evening (the day stays listed so the family can switch it back on). */
+  on: boolean;
+  /** Blank = the week's usual time. */
+  time: string;
+  endTime: string;
+  /** The title of the evening's service, e.g. "Prayer of comfort". */
+  title: string;
+  /** The word of the day: the theme the evening is built around. */
+  word: string;
+  scripture: string;
+  /** The church, pastor or person leading. */
+  leader: string;
+}
+
+/** Prayers during the week: where, the usual time, and each evening's details. */
+export interface PrayerWeek {
+  enabled: boolean;
+  place: string;
+  address: string;
+  landmark: string;
+  lat: number;
+  lng: number;
+  time: string;
+  endTime: string;
+  notes: string;
+  evenings: PrayerEvening[];
+}
+
 export interface Draft {
   person: Person;
+  prayers: PrayerWeek;
   story: { obituary: string; familyMessage: string };
   disposition: { type: DispositionType; notes: string };
   journey: Stop[];
@@ -95,7 +127,12 @@ export function emptyDraft(): Draft {
     disposition: { type: '', notes: '' },
     journey: [],
     programme: { mode: '', items: [] },
+    prayers: emptyPrayers(),
   };
+}
+
+export function emptyPrayers(): PrayerWeek {
+  return { enabled: false, place: '', address: '', landmark: '', lat: NaN, lng: NaN, time: '18:00', endTime: '', notes: '', evenings: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +148,7 @@ export const STOP_TYPE_LABELS: Record<StopType, string> = {
   crematorium: 'Crematorium',
   reception: 'Refreshments / reception',
   aftertears: 'After-tears',
+  prayers: 'Prayer service',
   gathering: 'Gathering point',
   other: 'Custom stop',
 };
@@ -505,7 +543,99 @@ export function normaliseDraft(input: unknown): Draft {
         .filter((i: ProgrammeItem) => i.title.trim()),
       releaseAt: isoTime(raw.programme?.releaseAt),
     },
+    prayers: normalisePrayers(raw.prayers),
   };
+}
+
+function normalisePrayers(input: unknown): PrayerWeek {
+  const p = (input && typeof input === 'object' ? input : {}) as Record<string, any>;
+  const base = emptyPrayers();
+  const num = (v: unknown) => (v === '' || v == null || !Number.isFinite(Number(v)) ? NaN : Number(v));
+  const lat = num(p.lat);
+  const lng = num(p.lng);
+  const seen = new Set<string>();
+  return {
+    enabled: p.enabled === true,
+    place: str(p.place, 200),
+    address: str(p.address, 500),
+    landmark: str(p.landmark, 300),
+    lat: Math.abs(lat) <= 90 ? lat : NaN,
+    lng: Math.abs(lng) <= 180 ? lng : NaN,
+    time: timeStr(p.time) || base.time,
+    endTime: timeStr(p.endTime),
+    notes: str(p.notes, 1000),
+    evenings: (Array.isArray(p.evenings) ? p.evenings : [])
+      .slice(0, 21)
+      .map((e: any) => ({
+        date: dateStr(e?.date),
+        on: e?.on !== false,
+        time: timeStr(e?.time),
+        endTime: timeStr(e?.endTime),
+        title: str(e?.title, 200),
+        word: str(e?.word, 300),
+        scripture: str(e?.scripture, 200),
+        leader: str(e?.leader, 200),
+      }))
+      .filter((e: PrayerEvening) => e.date && !seen.has(e.date) && seen.add(e.date))
+      .sort((a: PrayerEvening, b: PrayerEvening) => a.date.localeCompare(b.date)),
+  };
+}
+
+/** Every date from `from` to `to`, inclusive (at most three weeks). */
+export function datesBetween(from: string, to: string): string[] {
+  if (!from || !to || to < from) return [];
+  const out: string[] = [];
+  const d = new Date(`${from}T12:00:00`);
+  while (out.length < 21) {
+    const key = localDateKey(d);
+    if (key > to) break;
+    out.push(key);
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+/** Rebuild the evenings for a new date range, keeping what was already filled in for each date. */
+export function prayerEvenings(existing: PrayerEvening[], from: string, to: string): PrayerEvening[] {
+  const byDate = new Map(existing.map((e) => [e.date, e]));
+  return datesBetween(from, to).map(
+    (date) => byDate.get(date) ?? { date, on: true, time: '', endTime: '', title: '', word: '', scripture: '', leader: '' },
+  );
+}
+
+/** The evenings that are on, as journey-like stops, so the live view and "up next" treat them like any gathering. */
+export function prayerStops(week: PrayerWeek | undefined): Stop[] {
+  if (!week?.enabled) return [];
+  return week.evenings
+    .filter((e) => e.on && e.date)
+    .map((e) => ({
+      id: `prayer-${e.date}`,
+      type: 'prayers' as const,
+      title: e.title || 'Evening prayers',
+      date: e.date,
+      time: e.time || week.time || '18:00',
+      departTime: e.endTime || week.endTime,
+      address: week.address || week.place,
+      landmark: week.landmark,
+      parking: '',
+      transport: '',
+      notes: week.notes,
+      lat: week.lat,
+      lng: week.lng,
+    }));
+}
+
+/** The prayer evening behind a stop from prayerStops(). */
+export function prayerEveningFor(week: PrayerWeek | undefined, stopId: string): PrayerEvening | null {
+  if (!week || !stopId.startsWith('prayer-')) return null;
+  return week.evenings.find((e) => `prayer-${e.date}` === stopId) ?? null;
+}
+
+/** The journey with the prayer evenings folded in, in date and time order. */
+export function withPrayers(journey: Stop[], week: PrayerWeek | undefined): Stop[] {
+  const prayers = prayerStops(week);
+  if (!prayers.length) return journey;
+  return [...prayers, ...journey].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 }
 
 // ---------------------------------------------------------------------------

@@ -126,7 +126,8 @@ export function stageView(journey: Stop[], programme: Draft['programme'], liveKe
       vigil,
       focus,
       programme: live.phase === 'at_stop' ? programmeAt(programme, liveKey, focus, now) : null,
-      after: live.phase === 'in_transit' ? null : live.phase === 'at_stop' ? live.nextStop : sameDayAfter(journey, focus),
+      // What's next: later today, else the next day's first gathering (tomorrow's prayers, the vigil, the funeral).
+      after: live.phase === 'in_transit' ? null : ((live.phase === 'at_stop' ? live.nextStop : sameDayAfter(journey, focus)) ?? firstAfterDay(journey, focus.date)),
     };
   }
 

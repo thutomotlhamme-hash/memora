@@ -301,6 +301,21 @@ const gathering = (s: Stop) => GATHERING[s.type] ?? stopLabel(s.type);
 /** Leave out a label that only repeats the stop's own title. */
 const unlessTitle = (label: string, s: Stop) => (label.toLowerCase() === s.title.trim().toLowerCase() ? '' : label);
 
+/** "Mon 28 Sep" */
+const shortDay = (date: string) => {
+  const d = new Date(`${date}T12:00:00`);
+  return `${d.toLocaleDateString('en-ZA', { weekday: 'short' })} ${d.getDate()} ${d.toLocaleDateString('en-ZA', { month: 'short' })}`;
+};
+
+/** "Mon 28 Sep – Thu 1 Oct · 18:00 · Family home", or '' with no prayer week. */
+function prayerRange(draft: Draft): string {
+  const w = draft.prayers;
+  const on = w?.enabled ? w.evenings.filter((e) => e.on) : [];
+  if (!on.length) return '';
+  const span = on.length === 1 ? shortDay(on[0].date) : `${shortDay(on[0].date)} – ${shortDay(on[on.length - 1].date)}`;
+  return [span, w.time, w.place].filter(Boolean).join(' · ');
+}
+
 const shortDate = (date: string) => {
   const d = new Date(`${date}T12:00:00`);
   return Number.isNaN(d.getTime()) ? fmtDate(date) : `${d.toLocaleDateString('en-ZA', { weekday: 'long' })} ${d.getDate()} ${d.toLocaleDateString('en-ZA', { month: 'long' })}`;
@@ -370,37 +385,42 @@ export async function announcementCard({ draft, url, slug }: ArtifactInput) {
   let y = wrap(ctx, `The family sadly announces the passing of their beloved ${draft.person.preferredName || draft.person.firstName || 'loved one'}.`, W / 2, 820, 820, 48, 3);
 
   // The details people act on: where and when.
-  const stops = keyStops(draft);
-  y += 34;
-  const rowH = 74;
-  const boxH = stops.length ? stops.length * rowH + 40 : 96;
+  // What people act on: where and when. Prayers during the week come first.
+  const rows: { label: string; line: string }[] = [];
+  const prayer = prayerRange(draft);
+  if (prayer) rows.push({ label: 'EVENING PRAYERS', line: prayer });
+  for (const s of keyStops(draft).slice(0, 4 - rows.length)) {
+    rows.push({ label: gathering(s).toUpperCase(), line: [shortDate(s.date), s.time, unlessTitle(s.title, { ...s, title: gathering(s) })].filter(Boolean).join(' · ') });
+  }
+  y += rows.length > 3 ? 16 : 34;
+  const rowH = rows.length > 3 ? 70 : 74;
+  const boxH = rows.length ? rows.length * rowH + 40 : 96;
   ctx.fillStyle = C.night2;
   ctx.beginPath();
   ctx.roundRect(110, y, 860, boxH, 28);
   ctx.fill();
   ctx.textAlign = 'left';
-  if (!stops.length) {
+  if (!rows.length) {
     ctx.fillStyle = C.onNightMuted;
     ctx.font = `400 26px ${SANS}`;
     ctx.fillText('Funeral details to follow.', 150, y + 58);
   }
-  stops.forEach((s, i) => {
+  rows.forEach((r, i) => {
     const ry = y + 26 + i * rowH;
     ctx.fillStyle = C.candle;
     ctx.font = `600 17px ${SANS}`;
-    spaced(ctx, gathering(s).toUpperCase(), 150, ry + 22, 2);
+    spaced(ctx, r.label, 150, ry + 20, 2);
     ctx.fillStyle = C.onNight;
     ctx.font = `400 25px ${SANS}`;
-    const line = [shortDate(s.date), s.time, unlessTitle(s.title, { ...s, title: gathering(s) })].filter(Boolean).join(' · ');
-    ctx.fillText(lines(ctx, line, 780, 1)[0] ?? '', 150, ry + 56);
+    ctx.fillText(lines(ctx, r.line, 780, 1)[0] ?? '', 150, ry + 52);
   });
   ctx.textAlign = 'center';
   ctx.fillStyle = C.onNightMuted;
   ctx.font = `400 20px ${SANS}`;
-  ctx.fillText('Details, directions and live updates', W / 2, H - 92);
+  ctx.fillText('Details, directions and live updates', W / 2, H - 78);
   ctx.fillStyle = C.onNight;
   ctx.font = `600 24px ${SANS}`;
-  ctx.fillText(bare(url), W / 2, H - 56);
+  ctx.fillText(bare(url), W / 2, H - 44);
   await download(c, file(slug, 'announcement', 'png'));
 }
 
@@ -926,6 +946,48 @@ class Pdf {
     this.y += 4;
   }
 
+  /** Prayers during the week: one line per evening, with its title, word of the day and scripture. */
+  prayers(draft: Draft) {
+    const w = draft.prayers;
+    const on = w?.enabled ? w.evenings.filter((e) => e.on) : [];
+    if (!on.length) return;
+    const d = this.doc;
+    this.section('Prayers during the week', 'Pray with the family');
+    this.face('sans', 10, P.dusk);
+    const where = [`Each evening at ${w.time}${w.endTime ? `–${w.endTime}` : ''}`, w.place, w.address !== w.place ? w.address : ''].filter(Boolean).join(' · ');
+    for (const l of this.split(where, PAGE_W - MARGIN * 2)) {
+      d.text(l, MARGIN, this.y);
+      this.y += this.lh(10);
+    }
+    this.y += 4;
+    const textX = MARGIN + 27;
+    const textW = PAGE_W - MARGIN - textX;
+    for (const e of on) {
+      const extra = [e.word && `“${e.word}”`, e.scripture, e.leader && `Led by ${e.leader}`].filter(Boolean).join(' · ');
+      this.face('sans', 9.5);
+      const extraLines = extra ? this.split(extra, textW) : [];
+      const h = 6 + extraLines.length * this.lh(9.5) + 5;
+      this.ensure(h);
+      const top = this.y;
+      this.face('sansBold', 7.5, P.clay);
+      d.text(shortDay(e.date).toUpperCase(), MARGIN, top + 0.5, { charSpace: 0.4 });
+      this.face('serif', 12, P.clay);
+      d.text(e.time || w.time, MARGIN, top + 5.5);
+      this.face('serif', 13);
+      d.text(e.title || 'Evening prayers', textX, top + 1.5);
+      this.y = top + 6.5;
+      if (extraLines.length) {
+        this.face('italic', 9.5, P.dusk);
+        for (const l of extraLines) {
+          d.text(l, textX, this.y);
+          this.y += this.lh(9.5);
+        }
+      }
+      this.y = top + h;
+    }
+    this.y += 4;
+  }
+
   async journey(draft: Draft, url: string) {
     if (!draft.journey.length) return;
     const d = this.doc;
@@ -1052,6 +1114,7 @@ export async function programmePdf({ draft, url, slug }: ArtifactInput) {
   const pdf = await new Pdf(displayName(draft.person), 'MEMORA').init();
   await pdf.cover(draft, 'Order of service', serviceLine(draft));
   pdf.newPage();
+  pdf.prayers(draft);
   pdf.programme(draft);
   if (draft.journey.length) {
     if (draft.programme.items.length) pdf.ensure(80);
@@ -1071,6 +1134,7 @@ export async function keepsakePdf({ draft, url, slug }: ArtifactInput) {
     pdf.prose(draft.story.obituary, { size: 12, dropCap: true });
     pdf.newPage();
   }
+  pdf.prayers(draft);
   pdf.programme(draft);
   if (draft.journey.length) {
     if (draft.programme.items.length) pdf.ensure(80);

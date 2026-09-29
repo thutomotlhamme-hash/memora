@@ -5,6 +5,7 @@ import { LivePanel } from './LivePanel';
 import { LiveProvider } from './LiveMemorial';
 import { LiveStage } from './LiveStage';
 import { MemorialShare } from './MemorialShare';
+import { PrayerWeekSection } from './PrayerWeekSection';
 import { ProcessionCard } from './ProcessionCard';
 import { JourneyTimeline, ProgrammeTimeline } from './MemorialTimelines';
 
@@ -23,7 +24,7 @@ export function MemorialView({ draft, path, banner, live }: { draft: Draft; path
     <div className="memorial">
       {banner}
       {live ? (
-        <LiveProvider slug={live.slug} initial={{ journey: draft.journey, programme: draft.programme, liveKey: live.liveKey }}>
+        <LiveProvider slug={live.slug} initial={{ journey: draft.journey, programme: draft.programme, liveKey: live.liveKey, prayers: draft.prayers }}>
           <MemorialPage draft={draft} path={path} name={name} formal={formal} hasJourney={hasJourney} />
         </LiveProvider>
       ) : (
@@ -46,7 +47,7 @@ function MemorialPage({ draft, path, name, formal, hasJourney }: BodyProps) {
   const p = draft.person;
   return (
     <>
-      <LiveStage journey={draft.journey} programme={draft.programme} name={displayName(p, '')} portraitUrl={p.portraitUrl} dates={lifeDates(p)} initials={initials(p)} />
+      <LiveStage journey={draft.journey} programme={draft.programme} prayers={draft.prayers} name={displayName(p, '')} portraitUrl={p.portraitUrl} dates={lifeDates(p)} initials={initials(p)} />
       <section className="m-hero">
         <div className="m-sky" aria-hidden="true">
           {Array.from({ length: 14 }, (_, i) => (
@@ -83,6 +84,7 @@ function MemorialPage({ draft, path, name, formal, hasJourney }: BodyProps) {
       <nav className="m-nav no-print" aria-label="Memorial sections">
         <div className="container">
           <a href="#story">Story</a>
+          {draft.prayers?.enabled && draft.prayers.evenings.some((e) => e.on) && <a href="#prayers">Prayers</a>}
           {formal && <a href="#programme">Programme</a>}
           {hasJourney && <a href="#journey">Funeral journey</a>}
           {draft.story.familyMessage && <a href="#family">From the family</a>}
@@ -101,7 +103,7 @@ function MemorialBody({ draft, path, name, formal, hasJourney }: BodyProps) {
   return (
     <>
       <ProcessionCard journey={draft.journey} />
-      <LivePanel journey={draft.journey} programme={draft.programme} />
+      <LivePanel journey={draft.journey} programme={draft.programme} prayers={draft.prayers} />
 
       <section className="m-section reveal" id="story">
         <div className="m-section-grid">
@@ -128,6 +130,8 @@ function MemorialBody({ draft, path, name, formal, hasJourney }: BodyProps) {
           </div>
         </section>
       )}
+
+      <PrayerWeekSection draft={draft} />
 
       {hasJourney && (
         <section className="m-section reveal" id="journey">

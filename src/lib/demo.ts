@@ -7,6 +7,7 @@ import { emptyDraft, localDateKey, type Draft } from './memorial.ts';
 export function demoDraft(now = new Date()): Draft {
   const today = localDateKey(now);
   const eve = localDateKey(new Date(now.getTime() - 86_400_000));
+  const daysAgo = (n: number) => localDateKey(new Date(now.getTime() - n * 86_400_000));
   return {
     ...emptyDraft(),
     person: {
@@ -25,6 +26,23 @@ export function demoDraft(now = new Date()): Draft {
         'Thank you for standing with our family, for every message, prayer and act of kindness. We invite you to remember Naledi with us and to carry forward the love she gave so freely.',
     },
     disposition: { type: 'burial', notes: '' },
+    prayers: {
+      enabled: true,
+      place: 'Family home',
+      address: '14 Jacaranda Street, Arcadia',
+      landmark: 'Garden marquee',
+      lat: -25.7412,
+      lng: 28.2156,
+      time: '18:00',
+      endTime: '19:30',
+      notes: 'All are welcome. Tea is served after each evening.',
+      evenings: [
+        { date: daysAgo(5), on: true, time: '', endTime: '', title: 'A service of comfort', word: 'Comfort', scripture: 'Matthew 5:4', leader: 'Pastor Mokoena' },
+        { date: daysAgo(4), on: true, time: '', endTime: '', title: 'The Lord is my shepherd', word: 'Trust', scripture: 'Psalm 23', leader: 'Women’s Prayer League' },
+        { date: daysAgo(3), on: true, time: '', endTime: '', title: 'A house with many rooms', word: 'Hope', scripture: 'John 14:1–3', leader: 'Rev. Dube, St John’s' },
+        { date: daysAgo(2), on: true, time: '18:30', endTime: '', title: 'Nothing can separate us', word: 'Love', scripture: 'Romans 8:38–39', leader: 'Family and friends' },
+      ],
+    },
     journey: [
       { id: 'd0', type: 'vigil', title: 'Night vigil', date: eve, time: '19:00', departTime: '22:00', address: 'Family home · Garden marquee', landmark: 'Garden marquee', parking: 'Street parking', transport: '', notes: 'Candles are provided at the gate.', lat: -25.7412, lng: 28.2156 },
       { id: 'd1', type: 'church', title: 'Celebration service', date: today, time: '10:00', departTime: '11:45', address: 'Family church · Main entrance', landmark: 'Main entrance', parking: 'Parking behind the church hall', transport: 'Vehicles follow the hearse to the cemetery.', notes: 'Please arrive 20 minutes before the service.', lat: -25.7479, lng: 28.2293 },

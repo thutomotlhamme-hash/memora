@@ -123,7 +123,7 @@ function MemorialBody({ draft, path, name, formal, hasJourney }: BodyProps) {
             </header>
             <div>
               <h2 className="h2">The programme.</h2>
-              <ProgrammeTimeline programme={draft.programme} />
+              <ProgrammeTimeline programme={draft.programme} journey={draft.journey} />
             </div>
           </div>
         </section>

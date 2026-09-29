@@ -2,10 +2,11 @@
 // the public memorial. Keep this file free of React, Supabase and DOM APIs so the
 // same completeness rules run everywhere (and in `npm test`).
 
-export type StopType = 'home' | 'vigil' | 'church' | 'hall' | 'cemetery' | 'crematorium' | 'reception' | 'gathering' | 'other';
+export type StopType = 'home' | 'vigil' | 'church' | 'hall' | 'cemetery' | 'crematorium' | 'reception' | 'aftertears' | 'gathering' | 'other';
 export type DispositionType = '' | 'burial' | 'cremation' | 'private_burial_later' | 'memorial_only' | 'other';
 export type ProgrammeMode = '' | 'formal' | 'none';
 export type ProgrammeType =
+  | 'arrival'
   | 'prayer'
   | 'scripture'
   | 'hymn'
@@ -108,7 +109,8 @@ export const STOP_TYPE_LABELS: Record<StopType, string> = {
   hall: 'Hall / venue',
   cemetery: 'Cemetery / burial',
   crematorium: 'Crematorium',
-  reception: 'Reception / gathering',
+  reception: 'Refreshments / reception',
+  aftertears: 'After-tears',
   gathering: 'Gathering point',
   other: 'Custom stop',
 };
@@ -122,6 +124,7 @@ export const DISPOSITION_LABELS: Record<Exclude<DispositionType, ''>, string> = 
 };
 
 export const PROGRAMME_TYPE_LABELS: Record<ProgrammeType, string> = {
+  arrival: 'Arrival of the deceased',
   prayer: 'Prayer',
   scripture: 'Scripture',
   hymn: 'Hymn',
@@ -155,6 +158,83 @@ export function programmeParts(items: ProgrammeItem[]): { part: ProgrammePart; l
 /** Put items in part order (vigil, service, graveside) without changing the order inside a part. */
 export function sortByPart(items: ProgrammeItem[]): ProgrammeItem[] {
   return programmeParts(items).flatMap((g) => g.items);
+}
+
+export type VigilKind = 'prayer' | 'night';
+
+export const VIGIL_TEMPLATES: { id: VigilKind; label: string; hint: string }[] = [
+  { id: 'prayer', label: 'A short prayer evening', hint: 'The arrival, a prayer and a hymn. About an hour.' },
+  { id: 'night', label: 'A whole-night vigil', hint: 'The arrival, then prayers, hymns and memories through the night.' },
+];
+
+function addMinutes(hhmm: string, minutes: number): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
+  const base = m ? Number(m[1]) * 60 + Number(m[2]) : 18 * 60;
+  const t = Math.min(base + minutes, 23 * 60 + 59);
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+
+/**
+ * A light night-vigil programme to start from. It opens with the deceased
+ * arriving home; the scripture reading is optional.
+ */
+export function vigilTemplate(kind: VigilKind, opts: { arrival?: string; name?: string; scripture?: boolean } = {}): ProgrammeItem[] {
+  const at = opts.arrival && /^\d{1,2}:\d{2}/.test(opts.arrival) ? opts.arrival.slice(0, 5) : '18:00';
+  const who = opts.name?.trim() || 'our loved one';
+  const item = (offset: number, type: ProgrammeType, title: string, detail = ''): ProgrammeItem => ({
+    id: newId('item'),
+    part: 'vigil',
+    type,
+    time: addMinutes(at, offset),
+    title,
+    presenter: '',
+    detail,
+  });
+  const arrival = item(0, 'arrival', `${who} arrives home`, 'Family and friends gather to welcome them');
+  const items =
+    kind === 'prayer'
+      ? [arrival, item(30, 'prayer', 'Opening prayer'), opts.scripture ? item(40, 'scripture', 'Scripture reading') : null, item(50, 'hymn', 'Hymn'), item(60, 'prayer', 'Closing prayer and blessing')]
+      : [
+          arrival,
+          item(60, 'hymn', 'Opening hymn and prayer'),
+          opts.scripture ? item(80, 'scripture', 'Scripture reading') : null,
+          item(100, 'tribute', 'Memories and tributes'),
+          item(180, 'prayer', 'Prayers and hymns through the night', 'Until the morning'),
+        ];
+  return items.filter((i): i is ProgrammeItem => i !== null);
+}
+
+const PART_STOPS: Record<ProgrammePart, StopType[]> = {
+  vigil: ['vigil'],
+  service: ['church', 'hall', 'other', 'home'],
+  graveside: ['cemetery', 'crematorium'],
+};
+
+/**
+ * When and where each part of the programme begins: the night vigil, the service,
+ * the graveside. Guests need this most: the date and the start time, not only the
+ * running order. Taken from the journey stop for that part, else the first timed item.
+ */
+export function partStart(journey: Stop[], items: ProgrammeItem[], part: ProgrammePart): { date: string; time: string; place: string } | null {
+  const dated = [...journey].filter((s) => s.date).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  const stop = dated.find((s) => PART_STOPS[part].includes(s.type));
+  const firstTimed = items.find((i) => partOf(i) === part && i.time)?.time ?? '';
+  if (stop) return { date: stop.date, time: (stop.time || firstTimed).slice(0, 5), place: stop.title };
+  const funeralDay = dated.find((s) => s.type !== 'vigil')?.date ?? '';
+  if (!funeralDay && !firstTimed) return null;
+  // No vigil stop: the vigil is the evening before the funeral.
+  const date = part === 'vigil' && funeralDay ? localDateKey(new Date(new Date(`${funeralDay}T12:00:00`).getTime() - 86_400_000)) : funeralDay;
+  return { date, time: firstTimed.slice(0, 5), place: '' };
+}
+
+/** "Friday 2 October · from 18:00 · Family home" */
+export function partStartLabel(start: { date: string; time: string; place: string } | null, part?: ProgrammePart): string {
+  if (!start) return '';
+  const d = start.date ? new Date(`${start.date}T12:00:00`) : null;
+  const day = d && !Number.isNaN(d.getTime()) ? `${d.toLocaleDateString('en-ZA', { weekday: 'long' })} ${d.getDate()} ${d.toLocaleDateString('en-ZA', { month: 'long' })}` : '';
+  // "Night vigil · … · Night vigil" says it twice: leave out a place named after the part.
+  const place = part && start.place.trim().toLowerCase() === partLabel(part).toLowerCase() ? '' : start.place;
+  return [day, start.time ? `from ${start.time}` : '', place].filter(Boolean).join(' · ');
 }
 
 /** Has the family released the programme to guests yet? */

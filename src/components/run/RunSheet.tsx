@@ -3,9 +3,10 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { useNow } from '@/lib/hooks';
-import { PROGRAMME_PARTS, PROGRAMME_TYPE_LABELS, partLabel, partOf, sortByPart, fmtDate, journeyOrderProblem, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammePart, type ProgrammeType, type Stop } from '@/lib/memorial';
+import { PROGRAMME_PARTS, PROGRAMME_TYPE_LABELS, partLabel, partOf, partStart, partStartLabel, sortByPart, fmtDate, journeyOrderProblem, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammePart, type ProgrammeType, type Stop } from '@/lib/memorial';
 import type { ProcessionRecord } from '@/lib/procession';
 import { ProcessionControl } from './ProcessionControl';
+import { FUNERAL_ENDED, dayOfPart, endedDay, endedKey, type RunDay } from '@/lib/live';
 import { insertItem, moveItem, shiftFrom, shiftTodaysStops, startItem, toMinutes } from '@/lib/runsheet';
 
 // The funeral-day coordinator's console. Every change is shown at once, saved in
@@ -38,6 +39,7 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   const [revoked, setRevoked] = useState(false);
   const [moveStops, setMoveStops] = useState(true);
   const [shiftOnStart, setShiftOnStart] = useState(true);
+  const [chosenDay, setChosenDay] = useState<RunDay | null>(null);
   const [editing, setEditing] = useState<{ item: ProgrammeItem; afterIndex: number | null } | null>(null);
 
   // ---- Saving ---------------------------------------------------------------
@@ -162,11 +164,17 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   // ---- Actions --------------------------------------------------------------
   const items = snap.programme;
   const liveIndex = snap.liveKey ? items.findIndex((i) => i.id === snap.liveKey) : -1;
-  const nextItem = items[liveIndex + 1] ?? null;
-  // Tonight's vigil, or today's service: the first item to start is the first of today's part.
+  // The night vigil and the funeral day run on their own: start, move through, finish.
   const todays = snap.journey.filter((st) => st.date === localDateKey());
   const vigilNight = todays.some((st) => st.type === 'vigil') && !todays.some((st) => st.type !== 'vigil');
-  const firstItem = items.find((i) => (partOf(i) === 'vigil') === vigilNight) ?? items[0] ?? null;
+  const hasVigil = items.some((i) => partOf(i) === 'vigil');
+  const runDay: RunDay = liveIndex >= 0 ? dayOfPart(partOf(items[liveIndex])) : (chosenDay ?? (hasVigil && vigilNight ? 'vigil' : 'day'));
+  const inDay = (i: ProgrammeItem) => dayOfPart(partOf(i)) === runDay;
+  const firstItem = items.find(inDay) ?? null;
+  const nextItem = liveIndex >= 0 ? (items.slice(liveIndex + 1).find(inDay) ?? null) : null;
+  const dayDone = endedDay(snap.liveKey) === runDay;
+  const funeralDone = snap.liveKey === FUNERAL_ENDED;
+  const dayName = runDay === 'vigil' ? 'the vigil' : 'the service';
   const today = now ? localDateKey(now) : '';
   const todaysStops = snap.journey.filter((s) => s.date === today);
 
@@ -195,14 +203,21 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   };
 
   const finish = () => {
-    commit({ liveKey: null }, { liveKey: null });
-    toast('The programme is marked as finished.');
+    const key = endedKey(runDay);
+    commit({ liveKey: key }, { liveKey: key });
+    toast(runDay === 'vigil' ? 'The vigil is finished. Guests now see a thank-you and tomorrow’s details.' : 'The service is finished. Guests keep seeing the rest of the day’s journey.');
+  };
+
+  const endFuneral = () => {
+    if (!window.confirm('End the funeral? Guests will see a thank-you and where the refreshments and after-tears are.')) return;
+    commit({ liveKey: FUNERAL_ENDED }, { liveKey: FUNERAL_ENDED });
   };
 
   const late = (minutes: number) => {
     // Everything not yet started moves: after the live item, or from the next timed item.
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    const from = liveIndex >= 0 ? liveIndex + 1 : items.findIndex((i) => (toMinutes(i.time) ?? -1) >= nowMin);
+    const from =
+      liveIndex >= 0 ? items.findIndex((i, n) => n > liveIndex && inDay(i)) : items.findIndex((i) => inDay(i) && (toMinutes(i.time) ?? -1) >= nowMin);
     const hasProgramme = from >= 0 && from < items.length;
     const next = hasProgramme ? shiftFrom(items, from, minutes) : items;
     const stops = stopShift(minutes);
@@ -320,23 +335,52 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
         </div>
       )}
 
-      <section className="run-now" aria-live="polite">
+      {funeralDone ? (
+        <section className="run-now run-thanks" aria-live="polite">
+          <div className="k">The funeral has ended</div>
+          <div className="t">Thank you. You carried the family through today.</div>
+          <p className="run-note">
+            Guests now see a thank-you, with directions to the refreshments{snap.journey.some((st) => st.type === 'aftertears') ? ' and, later, the after-tears' : ''}. Rest
+            well.
+          </p>
+          <div className="row" style={{ marginTop: 14 }}>
+            <button className="btn on-night" type="button" onClick={() => commit({ liveKey: null }, { liveKey: null })}>
+              Undo: the funeral isn’t over
+            </button>
+          </div>
+        </section>
+      ) : (
+      <section className={`run-now${runDay === 'vigil' ? ' vigil' : ''}`} aria-live="polite">
+        {hasVigil && liveIndex < 0 && (
+          <div className="segmented on-night" role="group" aria-label="What are you running?">
+            {(['vigil', 'day'] as const).map((d) => (
+              <button key={d} type="button" aria-pressed={runDay === d} onClick={() => setChosenDay(d)}>
+                {d === 'vigil' ? 'Night vigil' : 'Funeral day'}
+              </button>
+            ))}
+          </div>
+        )}
         {liveIndex >= 0 ? (
           <>
-            <div className="k">Happening now</div>
+            <div className="k">{runDay === 'vigil' ? 'Night vigil · happening now' : `${partLabel(partOf(items[liveIndex]))} · happening now`}</div>
             <div className="t">{items[liveIndex].title}</div>
             {items[liveIndex].presenter && <div className="p">{items[liveIndex].presenter}</div>}
           </>
+        ) : dayDone ? (
+          <>
+            <div className="k">Finished</div>
+            <div className="t">{runDay === 'vigil' ? 'The night vigil has ended. Thank you.' : 'The service has ended.'}</div>
+          </>
         ) : (
           <>
-            <div className="k">Not started yet</div>
-            <div className="t">Tap Start when the first item begins.</div>
+            <div className="k">{runDay === 'vigil' ? 'Night vigil · not started' : 'Not started yet'}</div>
+            <div className="t">{firstItem ? `Tap Start when ${dayName} begins.` : runDay === 'vigil' ? 'The vigil has no programme yet. Add items below.' : 'Add the first item below.'}</div>
           </>
         )}
         <div className="row" style={{ marginTop: 14 }}>
           {liveIndex < 0 && firstItem && (
             <button className="btn on-night primary" type="button" onClick={() => start(firstItem.id)}>
-              Start: {firstItem.title}
+              {dayDone ? 'Start again' : 'Start'}: {firstItem.title}
             </button>
           )}
           {liveIndex >= 0 && nextItem && (
@@ -346,12 +390,18 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
           )}
           {liveIndex >= 0 && (
             <button className="btn on-night" type="button" onClick={finish}>
-              {nextItem ? 'End programme' : 'Finish'}
+              {runDay === 'vigil' ? 'Finish the vigil' : 'Finish the service'}
+            </button>
+          )}
+          {runDay === 'day' && (liveIndex >= 0 || dayDone) && (
+            <button className="btn on-night candle" type="button" onClick={endFuneral}>
+              End the funeral
             </button>
           )}
         </div>
         {snap.status === 'PUBLISHED' && <p className="run-note">Guests with the memorial open see this full-screen within about 15 seconds.</p>}
       </section>
+      )}
 
       <ProcessionControl
         token={token}
@@ -405,6 +455,7 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
               {partChanged && (
                 <li className="run-part-head" aria-hidden="true">
                   {partLabel(partOf(item))}
+                  {partStartLabel(partStart(snap.journey, items, partOf(item)), partOf(item)) && <span> · {partStartLabel(partStart(snap.journey, items, partOf(item)), partOf(item))}</span>}
                 </li>
               )}
               <li ref={(el) => void (rows.current[i] = el)} className={`run-item ${state} ${isDragged ? 'dragging' : ''}`}>

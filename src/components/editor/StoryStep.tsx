@@ -9,6 +9,8 @@ import {
   newId,
   partLabel,
   partOf,
+  partStart,
+  partStartLabel,
   sortByPart,
   programmeGate,
   programmeTypeLabel,
@@ -19,6 +21,7 @@ import {
 } from '@/lib/memorial';
 import { ReleaseControl } from './ReleaseControl';
 import { RunSheetLink } from './RunSheetLink';
+import { VigilTemplate } from './VigilTemplate';
 import { PanelFoot, type Nav, type Update } from './shared';
 
 const blankItem = (part: ProgrammePart = 'service'): ProgrammeItem => ({ id: '', part, type: part === 'graveside' ? 'committal' : part === 'vigil' ? 'hymn' : 'prayer', time: '', title: '', presenter: '', detail: '' });
@@ -135,7 +138,12 @@ export function StoryStep({ draft, update, nav, caseId }: { draft: Draft; update
               const open = partItems.length > 0 || shown.has(part.id) || part.id === 'service';
               if (!open) {
                 return (
-                  <button key={part.id} type="button" className="part-add" onClick={() => startAdding(part.id)}>
+                  <button
+                    key={part.id}
+                    type="button"
+                    className="part-add"
+                    onClick={() => (part.id === 'vigil' ? setShown((sh) => new Set(sh).add('vigil')) : startAdding(part.id))}
+                  >
                     <strong>+ {part.id === 'vigil' ? 'Add a night vigil programme' : 'Add a graveside programme'}</strong>
                     <span>{part.hint}</span>
                   </button>
@@ -146,14 +154,27 @@ export function StoryStep({ draft, update, nav, caseId }: { draft: Draft; update
                   <div className="part-head">
                     <div>
                       <h3 className="h4">{part.label}</h3>
-                      <span className="hint">{part.hint}</span>
+                      {partStartLabel(partStart(draft.journey, programme.items, part.id), part.id) ? (
+                        <span className="part-when">{partStartLabel(partStart(draft.journey, programme.items, part.id), part.id)}</span>
+                      ) : (
+                        <span className="hint">{part.hint}</span>
+                      )}
                     </div>
                     <button className="btn sm" type="button" onClick={() => startAdding(part.id)}>
                       + Add
                     </button>
                   </div>
                   <div className="list">
-                    {partItems.length === 0 && <div className="empty-line">Nothing here yet. Add the first part below.</div>}
+                    {partItems.length === 0 &&
+                      (part.id === 'vigil' ? (
+                        <VigilTemplate
+                          draft={draft}
+                          name={displayName(draft.person, 'your loved one')}
+                          onUse={(vigil) => setItems((items) => sortByPart([...items.filter((i) => partOf(i) !== 'vigil'), ...vigil]))}
+                        />
+                      ) : (
+                        <div className="empty-line">Nothing here yet. Add the first part below.</div>
+                      ))}
                     {partItems.map((item, i) => (
                       <article key={item.id} className={`list-item ${form.id === item.id ? 'editing' : ''}`}>
                         <span className="idx">{i + 1}</span>

@@ -1,7 +1,7 @@
 // Funeral-day run-sheet logic. Pure functions so the console, the server and the
 // tests all agree on how times move when the day doesn't go to plan.
 
-import type { ProgrammeItem, Stop } from './memorial.ts';
+import { partOf, type ProgrammeItem, type Stop } from './memorial.ts';
 
 const DEFAULT_MINUTES = 10;
 
@@ -66,9 +66,16 @@ export function moveItem(items: ProgrammeItem[], from: number, to: number): Prog
 }
 
 /** Push every timed item from `fromIndex` on by `minutes` (negative = earlier). */
+/** The vigil is one evening and the service another day: a delay in one never moves the other. */
+const sameRun = (a: ProgrammeItem, b: ProgrammeItem) => (partOf(a) === 'vigil') === (partOf(b) === 'vigil');
+
 export function shiftFrom(items: ProgrammeItem[], fromIndex: number, minutes: number): ProgrammeItem[] {
-  return items.map((item, i) => (i >= fromIndex && item.time ? { ...item, time: addMinutes(item.time, minutes) } : item));
+  const pivot = items[fromIndex];
+  return items.map((item, i) => (i >= fromIndex && item.time && pivot && sameRun(item, pivot) ? { ...item, time: addMinutes(item.time, minutes) } : item));
 }
+
+/** Starting more than this early or late doesn't move the rest of the programme. */
+export const MAX_SHIFT_MINUTES = 180;
 
 /**
  * The coordinator taps "Start" on an item. It becomes the live item and its time
@@ -81,7 +88,12 @@ export function startItem(items: ProgrammeItem[], key: string, now: Date, shiftU
   const planned = toMinutes(items[index].time);
   const delay = planned == null ? 0 : nowMin - planned;
   let next = items.map((item, i) => (i === index ? { ...item, time: fromMinutes(nowMin) } : item));
-  if (shiftUpcoming && delay !== 0) next = shiftFrom(next, index + 1, delay);
+  // Hours away from the plan (a test run, or a wrong clock): start it, but don't move the rest.
+  if (Math.abs(delay) > MAX_SHIFT_MINUTES) return { items: next, delay: 0 };
+  if (shiftUpcoming && delay !== 0) {
+    const after = next.findIndex((item, i) => i > index && sameRun(item, items[index]));
+    if (after >= 0) next = shiftFrom(next, after, delay);
+  }
   return { items: next, delay };
 }
 

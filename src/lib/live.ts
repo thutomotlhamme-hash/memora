@@ -20,7 +20,7 @@ export function timeToMinutes(value: string | null | undefined): number | null {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
-/** With no end time, the day's last gathering (a reception) is taken to last this long. A night vigil runs until midnight. */
+/** With no end time, the day's last gathering (a reception) is taken to last this long. A night vigil or an after-tears runs until midnight. */
 export const LAST_STOP_HOURS = 3;
 
 function daysBetween(fromKey: string, toKey: string): number {
@@ -61,12 +61,25 @@ export function liveFuneralState(journey: Stop[], now = new Date()): LivePhase {
   const depart = timeToMinutes(currentStop.departTime);
   if (!nextStop) {
     // The last gathering of the day is still happening until it ends.
-    const ends = depart ?? (currentStop.type === 'vigil' ? 24 * 60 : (timeToMinutes(currentStop.time) ?? 0) + LAST_STOP_HOURS * 60);
+    const ends = depart ?? (currentStop.type === 'vigil' || currentStop.type === 'aftertears' ? 24 * 60 : (timeToMinutes(currentStop.time) ?? 0) + LAST_STOP_HOURS * 60);
     return minutes < ends ? { phase: 'at_stop', currentStop, nextStop: null } : { phase: 'concluded_today', currentStop };
   }
   if (depart != null && depart <= minutes) return { phase: 'in_transit', currentStop, nextStop };
   return { phase: 'at_stop', currentStop, nextStop };
 }
+
+/**
+ * The vigil and the funeral day each run on their own: the coordinator starts
+ * and finishes one, then the other. Finishing leaves this marker as the live key.
+ */
+export type RunDay = 'vigil' | 'day';
+export const endedKey = (day: RunDay) => `ended:${day}`;
+/** The coordinator ended the whole funeral: guests are pointed to the refreshments and the after-tears. */
+export const FUNERAL_ENDED = 'ended:funeral';
+export function endedDay(liveKey: string | null | undefined): RunDay | null {
+  return liveKey === 'ended:vigil' ? 'vigil' : liveKey === 'ended:day' || liveKey === FUNERAL_ENDED ? 'day' : null;
+}
+export const dayOfPart = (part: ProgrammePart): RunDay => (part === 'vigil' ? 'vigil' : 'day');
 
 /**
  * What's happening in the service. When the funeral-day coordinator has marked
@@ -82,6 +95,8 @@ export function liveProgrammeState(
 ): { current: ProgrammeItem | null; next: ProgrammeItem | null } | null {
   if (programme.mode !== 'formal') return null;
   const items = programme.items.filter((i) => parts.includes(partOf(i)));
+  const ended = endedDay(liveKey);
+  if (ended && parts.some((p) => dayOfPart(p) === ended)) return null;
   if (liveKey) {
     const i = items.findIndex((item) => item.id === liveKey);
     if (i >= 0) return { current: items[i], next: items[i + 1] ?? null };

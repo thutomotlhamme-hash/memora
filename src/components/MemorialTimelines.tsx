@@ -1,6 +1,6 @@
 'use client';
 
-import { directionsUrl, fmtDate, programmeParts, programmeTypeLabel, routeUrl, stopLabel, type Draft } from '@/lib/memorial';
+import { directionsUrl, fmtDate, partStart, partStartLabel, programmeParts, programmeTypeLabel, routeUrl, stopLabel, type Draft } from '@/lib/memorial';
 import { useLiveData } from './LiveMemorial';
 
 /** When the family has chosen to share the programme later: "Saturday 3 October at 06:00". */
@@ -17,8 +17,9 @@ export function releaseLabel(iso: string): string {
  * On the day it follows the coordinator's running order and marks what's
  * happening now. Before the family releases it, guests see when it will appear.
  */
-export function ProgrammeTimeline({ programme }: { programme: Draft['programme'] }) {
-  const live = useLiveData({ journey: [], programme, liveKey: null });
+export function ProgrammeTimeline({ programme, journey = [] }: { programme: Draft['programme']; journey?: Draft['journey'] }) {
+  const live = useLiveData({ journey, programme, liveKey: null });
+  const stops = live.journey.length ? live.journey : journey;
   const items = live.programme.items.length ? live.programme.items : programme.items;
   if (!items.length) {
     const when = programme.releaseAt ? releaseLabel(programme.releaseAt) : '';
@@ -30,14 +31,20 @@ export function ProgrammeTimeline({ programme }: { programme: Draft['programme']
     );
   }
   const groups = programmeParts(items);
-  const showHeadings = groups.length > 1 || groups[0]?.part !== 'service';
+  const starts = new Map(groups.map((g) => [g.part, partStartLabel(partStart(stops, items, g.part), g.part)]));
+  const showHeadings = groups.length > 1 || groups[0]?.part !== 'service' || Boolean(starts.get(groups[0]?.part));
   // Running number across parts, for items without a time.
   const number = new Map(groups.flatMap((g) => g.items).map((it, i) => [it.id, i + 1]));
   return (
     <div className="programme-parts">
       {groups.map((g) => (
         <section key={g.part} className={`programme-part part-${g.part}`}>
-          {showHeadings && <h3 className="part-title">{g.label}</h3>}
+          {showHeadings && (
+            <header className="part-title-wrap">
+              <h3 className="part-title">{g.label}</h3>
+              {starts.get(g.part) && <p className="part-when">{starts.get(g.part)}</p>}
+            </header>
+          )}
           <div className="timeline">
             {g.items.map((item) => {
               const now = live.liveKey === item.id;

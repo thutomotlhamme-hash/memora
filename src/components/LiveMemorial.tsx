@@ -4,29 +4,35 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { localDateKey, type Draft } from '@/lib/memorial';
 import type { PublicProcession } from '@/lib/procession';
 
-// Guests' pages on the funeral day. The coordinator reshuffles the programme,
-// starts items and pushes times back on /run/<token>; guests with the memorial
-// open see it within half a minute, without reloading.
+// Guests' pages follow the coordinator. The coordinator starts items, finishes the
+// vigil or the funeral and pushes times back on /run/<token>; every open memorial
+// picks it up within seconds, without reloading, and again the moment the phone
+// comes back to the page.
 
 export type LiveData = { journey: Draft['journey']; programme: Draft['programme']; liveKey: string | null; procession?: PublicProcession | null };
 
 const LiveContext = createContext<LiveData | null>(null);
-const POLL_MS = 25_000;
-/** While the procession is on the road, or the coordinator is running the programme, follow closely. */
-const MOVING_POLL_MS = 12_000;
-const RUNNING_POLL_MS = 15_000;
+/** How often guests' pages check in: closely while something is on, gently the rest of the time. */
+const RUNNING_POLL_MS = 6_000;
+const DAY_POLL_MS = 15_000;
+const QUIET_POLL_MS = 60_000;
+
+function pollEvery(d: LiveData): number {
+  if (d.procession?.state === 'moving' || (d.liveKey && !d.liveKey.startsWith('ended:'))) return RUNNING_POLL_MS;
+  const today = localDateKey();
+  return d.liveKey || d.procession || d.journey.some((s) => s.date === today) ? DAY_POLL_MS : QUIET_POLL_MS;
+}
 
 export function LiveProvider({ slug, initial, children }: { slug: string; initial: LiveData; children: React.ReactNode }) {
   const [data, setData] = useState<LiveData>(initial);
 
   useEffect(() => {
     let stopped = false;
-    const shouldPoll = (d: LiveData) => Boolean(d.liveKey || d.procession) || d.journey.some((s) => s.date === localDateKey());
     let current = initial;
     let timer: ReturnType<typeof setTimeout>;
 
     const tick = async () => {
-      if (stopped || document.hidden || !shouldPoll(current)) return;
+      if (stopped || document.hidden) return;
       try {
         const res = await fetch(`/api/live/${encodeURIComponent(slug)}`, { cache: 'no-store' });
         if (!res.ok) return;
@@ -40,7 +46,7 @@ export function LiveProvider({ slug, initial, children }: { slug: string; initia
     };
     const loop = async () => {
       await tick();
-      if (!stopped) timer = setTimeout(() => void loop(), current.procession?.state === 'moving' ? MOVING_POLL_MS : current.liveKey ? RUNNING_POLL_MS : POLL_MS);
+      if (!stopped) timer = setTimeout(() => void loop(), pollEvery(current));
     };
     void loop();
     const onVisible = () => {

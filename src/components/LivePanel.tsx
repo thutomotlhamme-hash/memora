@@ -3,7 +3,7 @@
 import { useNow } from '@/lib/hooks';
 import { useLiveData } from './LiveMemorial';
 import { liveFuneralState, liveProgrammeState } from '@/lib/live';
-import { stageMoment } from './LiveStage';
+import { stageView } from '@/lib/stage';
 import { directionsUrl, fmtDate, stopLabel, type Draft, type ProgrammePart, type Stop } from '@/lib/memorial';
 
 function StopCard({ stop, kind }: { stop: Stop; kind: 'now' | 'next' }) {
@@ -46,7 +46,7 @@ export function LivePanel(props: { journey: Draft['journey']; programme: Draft['
 
   const live = liveFuneralState(journey, now);
   // While a gathering is on, the full-screen stage at the top of the page shows it.
-  if (live.phase === 'none' || stageMoment(live)) return null;
+  if (live.phase === 'none' || stageView(journey, programme, liveKey, now)) return null;
   const stopNow = live.phase === 'at_stop' || live.phase === 'in_transit' ? live.currentStop : live.phase === 'before_start' ? live.nextStop : null;
   const parts: ProgrammePart[] = stopNow?.type === 'vigil' ? ['vigil'] : ['service', 'graveside'];
   const prog = stopNow ? liveProgrammeState(programme, now, liveKey, parts) : null;

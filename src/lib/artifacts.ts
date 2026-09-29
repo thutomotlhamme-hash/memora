@@ -5,7 +5,7 @@
 
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
-import { dispositionLabel, displayName, fmtDate, funeralDate, lifeDates, programmeParts, programmeTypeLabel, stopLabel, type Draft } from './memorial';
+import { dispositionLabel, displayName, fmtDate, funeralDate, lifeDates, partStart, partStartLabel, programmeParts, programmeTypeLabel, stopLabel, type Draft } from './memorial';
 
 const C = {
   paper: '#ffffff',
@@ -460,11 +460,13 @@ class Pdf {
     if (draft.programme.mode !== 'formal' || !draft.programme.items.length) return;
     this.heading('Order of service');
     const groups = programmeParts(draft.programme.items);
-    const headings = groups.length > 1 || groups[0]?.part !== 'service';
+    const headings = groups.length > 1 || groups[0]?.part !== 'service' || Boolean(partStart(draft.journey, draft.programme.items, 'service'));
     groups.forEach((g) => {
       if (headings) {
         this.ensure(22);
         this.text(g.label.toUpperCase(), { size: 9, color: [91, 62, 140], gap: 1 });
+        const when = partStartLabel(partStart(draft.journey, draft.programme.items, g.part), g.part);
+        if (when) this.text(when, { size: 11, serif: true, gap: 2 });
       }
       g.items.forEach((item) => {
         this.ensure(16);

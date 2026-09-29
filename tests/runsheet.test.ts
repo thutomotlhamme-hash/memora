@@ -68,3 +68,23 @@ test('only today’s later stops move with the programme', () => {
     { id: 'cemetery', time: '12:45', departTime: '' },
   ]);
 });
+
+test('a start hours away from the plan does not drag everything to midnight', () => {
+  const items = [
+    { id: 'a', type: 'prayer' as const, time: '10:00', title: 'A', presenter: '', detail: '' },
+    { id: 'b', type: 'hymn' as const, time: '10:20', title: 'B', presenter: '', detail: '' },
+  ];
+  const { items: next, delay } = startItem(items, 'a', new Date('2026-09-01T23:55:00'), true);
+  assert.equal(delay, 0);
+  assert.equal(next[1].time, '10:20');
+});
+
+test('a late vigil never moves the funeral service', () => {
+  const items = [
+    { id: 'v1', part: 'vigil' as const, type: 'arrival' as const, time: '18:00', title: 'Arrives', presenter: '', detail: '' },
+    { id: 'v2', part: 'vigil' as const, type: 'prayer' as const, time: '18:30', title: 'Prayer', presenter: '', detail: '' },
+    { id: 's1', type: 'prayer' as const, time: '10:00', title: 'Opening prayer', presenter: '', detail: '' },
+  ];
+  const { items: next } = startItem(items, 'v1', new Date('2026-09-01T18:20:00'), true);
+  assert.deepEqual(next.map((i) => i.time), ['18:20', '18:50', '10:00']);
+});

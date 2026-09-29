@@ -1,4 +1,4 @@
-import { siteUrl } from '@/lib/config';
+import { paymentsOn, siteUrl } from '@/lib/config';
 import { CURRENCY, PRODUCT } from '@/lib/plans';
 import { readiness } from '@/lib/memorial';
 import { getAdminSupabase } from '@/lib/supabase/admin';
@@ -18,6 +18,7 @@ export async function POST(request: Request, { params }: Ctx) {
   if (auth instanceof Response) return auth;
   const { supabase, user } = auth;
 
+  if (!paymentsOn) return fail('Publishing is free during our launch, so there’s nothing to pay.', 409);
   const admin = getAdminSupabase();
   if (!admin) return fail('Payments are not configured on this deployment yet.', 503);
 

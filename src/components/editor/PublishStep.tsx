@@ -7,6 +7,7 @@ import { useOrigin } from '@/lib/hooks';
 import { CopyField, QrImage, ShareButtons } from '@/components/Share';
 import { useToast } from '@/components/Toast';
 import { displayName, fmtDate, slugify, type CaseMeta, type Draft, type Readiness } from '@/lib/memorial';
+import { paymentsOn } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 import { RunSheetLink } from './RunSheetLink';
 import { PanelFoot, type Nav, type StepId } from './shared';
@@ -116,13 +117,15 @@ function Checkout({
   const paymentParam = useSearchParams().get('payment');
   const returning = paymentParam === 'return';
   const [pollDone, setPollDone] = useState(false);
-  const confirming = returning && !meta.paid && !pollDone;
+  const confirming = paymentsOn && returning && !meta.paid && !pollDone;
+  // Launch mode: publishing is free, so the checkout never shows.
+  const canPublish = meta.paid || !paymentsOn;
   const [error, setError] = useState('');
   const polled = useRef(false);
 
   // Returning from Yoco: ask the server to check with Yoco directly.
   useEffect(() => {
-    if (polled.current || meta.paid || !returning) return;
+    if (!paymentsOn || polled.current || meta.paid || !returning) return;
     polled.current = true;
     let attempts = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -192,11 +195,13 @@ function Checkout({
 
   return (
     <div className="panel">
-      {meta.paid
+      {!paymentsOn
+        ? head('Ready to publish.', 'Publishing is free during our launch. It creates the permanent link and QR code, and unlocks every download.')
+        : meta.paid
         ? head('Ready to publish.', 'Payment is confirmed. Publishing creates the permanent link and QR code, and unlocks every download.')
         : head('One payment, then publish.', 'The memorial is complete. Pay once to publish it for a full year, share it, and download every card and keepsake.')}
 
-      {!meta.paid ? (
+      {!canPublish ? (
         <div className="checkout">
           <div>
             <span className="eyebrow">{PRODUCT.name} · public for a year</span>
@@ -213,18 +218,18 @@ function Checkout({
       ) : (
         <div className="note ok">
           <span>
-            <strong>Payment confirmed.</strong> Publishing is a single step. You can still edit details afterwards, and the live
+            <strong>{meta.paid ? 'Payment confirmed.' : 'Free while we launch.'}</strong> Publishing is a single step. You can still edit details afterwards, and the live
             page updates.
           </span>
         </div>
       )}
 
-      {!owner.paymentsReady && !meta.paid && (
+      {paymentsOn && !owner.paymentsReady && !meta.paid && (
         <div className="note warn" style={{ marginTop: 16 }}>
           <span>Checkout isn’t switched on for this deployment yet. Everything else is ready to go.</span>
         </div>
       )}
-      {!meta.paid && (paymentParam === 'cancelled' || paymentParam === 'failed') && !error && (
+      {!canPublish && (paymentParam === 'cancelled' || paymentParam === 'failed') && !error && (
         <div className={`note ${paymentParam === 'failed' ? 'error' : ''}`} style={{ marginTop: 16 }} role="status">
           <span>
             {paymentParam === 'failed'
@@ -244,7 +249,7 @@ function Checkout({
         </div>
       )}
 
-      {meta.paid && (
+      {canPublish && (
         <div className="row" style={{ marginTop: 24 }}>
           <button className="btn accent lg" type="button" onClick={publish} disabled={Boolean(busy)}>
             {busy === 'publish' ? 'Publishing…' : 'Publish memorial'}

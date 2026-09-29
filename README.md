@@ -80,6 +80,9 @@ Without Supabase variables, the guest editor and `/m/preview` still work, which 
 
 ## Pricing
 
+**Launch mode (the default):** payments are off. Publishing is free, "Give a memorial" is hidden, and the site says "Free while we launch". To start charging, set `NEXT_PUBLIC_MEMORA_PAYMENTS=on` in Netlify (once Yoco or another provider is set up) and redeploy. Memorials published for free stay published.
+
+
 One product, **Memora Complete: R899 once-off per memorial** (set in `src/lib/plans.ts`). Building and previewing are free; paying publishes the memorial for **one year**, long enough to update it for the tombstone unveiling. It includes every feature and every download.
 
 How the price was set (South African market, 2026):

@@ -1,5 +1,6 @@
 import { ContactLink, LegalPage } from '@/components/LegalPage';
 import { contact } from '@/lib/config';
+import { paymentsOn } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 
 export const metadata = { title: 'Terms of use', description: 'The terms for using Memora, buying a memorial and giving one as a gift.' };
@@ -14,7 +15,11 @@ export default function TermsPage() {
 
       <h2>The service</h2>
       <p>
-        You can build and preview a memorial for free. Publishing requires a one-off payment of {PRICE_LABEL} for {PRODUCT.name}. A published memorial stays
+        You can build and preview a memorial for free.{' '}
+        {paymentsOn
+          ? `Publishing requires a one-off payment of ${PRICE_LABEL} for ${PRODUCT.name}.`
+          : `During our launch, publishing is free. We will announce the price (${PRICE_LABEL} once-off) before we start charging, and memorials published for free stay free.`}{' '}
+        A published memorial stays
         public for one year from the day it is published, and it includes Live Funeral Mode, the QR code and all downloads. There is no subscription.
       </p>
 

@@ -14,6 +14,13 @@ export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
 
+/**
+ * Payments switch. Off (the default) = launch mode: publishing is free and
+ * "Give a memorial" is hidden. Set NEXT_PUBLIC_MEMORA_PAYMENTS=on in Netlify and
+ * redeploy to charge for publishing and sell gifts again.
+ */
+export const paymentsOn = process.env.NEXT_PUBLIC_MEMORA_PAYMENTS === 'on';
+
 /** Public contact details shown in the footer, privacy policy and terms. */
 export const contact = {
   /** Optional public email. Without it, the site points people to the /contact form. */

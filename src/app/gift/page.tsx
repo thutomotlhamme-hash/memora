@@ -1,5 +1,8 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { GiftForm } from '@/components/GiftForm';
+import { StatusScreen } from '@/components/MemorialView';
+import { paymentsOn } from '@/lib/config';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 
@@ -11,6 +14,20 @@ export const metadata = {
 };
 
 export default function GiftPage() {
+  if (!paymentsOn) {
+    return (
+      <StatusScreen
+        eyebrow="Give a memorial"
+        title="Gifting opens soon."
+        body="During our launch, publishing a memorial is free, so there’s nothing to pay for yet. You can create one for the family, or send them Memora so they can start their own."
+        action={
+          <Link className="btn primary" href="/create">
+            Create a memorial
+          </Link>
+        }
+      />
+    );
+  }
   const ready =
     Boolean(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) &&
     Boolean(process.env.MEMORA_LINK_SECRET) &&

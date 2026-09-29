@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { isSupabaseConfigured } from '@/lib/config';
+import { isSupabaseConfigured, paymentsOn } from '@/lib/config';
 import { roleForEmail } from '@/lib/server/admin-auth';
 import { getSessionUser } from '@/lib/supabase/server';
 import { Brand } from './Brand';
@@ -16,9 +16,11 @@ export async function SiteHeader({ hideCreate = false }: { hideCreate?: boolean 
           <Link className="btn ghost hide-sm" href="/m/preview">
             See an example
           </Link>
-          <Link className="btn ghost hide-sm" href="/gift">
-            Give a memorial
-          </Link>
+          {paymentsOn && (
+            <Link className="btn ghost hide-sm" href="/gift">
+              Give a memorial
+            </Link>
+          )}
           {user ? (
             <>
               {isTeam && (
@@ -57,7 +59,7 @@ export function SiteFooter() {
       <div className="container bar">
         <span>Memora · Remember beautifully</span>
         <nav className="row" aria-label="Footer" style={{ gap: 18 }}>
-          <Link href="/gift">Give a memorial</Link>
+          {paymentsOn && <Link href="/gift">Give a memorial</Link>}
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
           <Link href="/contact">Contact us</Link>

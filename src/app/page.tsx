@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
+import { paymentsOn } from '@/lib/config';
 import { PRICE_LABEL, PRODUCT } from '@/lib/plans';
 
 export default function Home() {
@@ -112,23 +113,25 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="section alt" id="gift">
-          <div className="container cta-band">
-            <div>
-              <span className="eyebrow">Give a memorial</span>
-              <h2 className="h2" style={{ marginTop: 12 }}>
-                Take one thing off a grieving family’s plate.
-              </h2>
-              <p className="lede" style={{ marginTop: 14 }}>
-                Pay for the memorial on their behalf and send them a private link on WhatsApp. Our team helps them get it ready before the
-                funeral.
-              </p>
+        {paymentsOn && (
+          <section className="section alt" id="gift">
+            <div className="container cta-band">
+              <div>
+                <span className="eyebrow">Give a memorial</span>
+                <h2 className="h2" style={{ marginTop: 12 }}>
+                  Take one thing off a grieving family’s plate.
+                </h2>
+                <p className="lede" style={{ marginTop: 14 }}>
+                  Pay for the memorial on their behalf and send them a private link on WhatsApp. Our team helps them get it ready before the
+                  funeral.
+                </p>
+              </div>
+              <Link className="btn primary lg" href="/gift">
+                Give a memorial
+              </Link>
             </div>
-            <Link className="btn primary lg" href="/gift">
-              Give a memorial
-            </Link>
-          </div>
-        </section>
+          </section>
+        )}
 
         <section className="section" id="pricing">
           <div className="container">
@@ -136,17 +139,18 @@ export default function Home() {
               <div>
                 <span className="eyebrow">Pricing</span>
                 <h2 className="h2" style={{ marginTop: 12 }}>
-                  Start free. Pay once, when you publish.
+                  {paymentsOn ? 'Start free. Pay once, when you publish.' : 'Free while we launch.'}
                 </h2>
                 <p className="lede" style={{ marginTop: 16 }}>
-                  Build and preview the whole memorial without paying. When the family is ready, one payment publishes it for a full year, long
-                  enough to update it for the tombstone unveiling. No subscriptions.
+                  {paymentsOn
+                    ? 'Build and preview the whole memorial without paying. When the family is ready, one payment publishes it for a full year, long enough to update it for the tombstone unveiling. No subscriptions.'
+                    : 'Every feature is free while we launch: build, publish and share the memorial, and download every card and keepsake. It stays public for a full year, long enough to update it for the tombstone unveiling.'}
                 </p>
               </div>
               <article className="plan-card featured">
                 <strong className="plan-name">{PRODUCT.name}</strong>
-                <span className="plan-price">{PRICE_LABEL}</span>
-                <span className="plan-duration">Once-off, per memorial</span>
+                <span className="plan-price">{paymentsOn ? PRICE_LABEL : 'Free'}</span>
+                <span className="plan-duration">{paymentsOn ? 'Once-off, per memorial' : `During our launch (usually ${PRICE_LABEL})`}</span>
                 <ul className="plan-features">
                   {PRODUCT.features.map((f) => (
                     <li key={f}>{f}</li>
@@ -155,9 +159,11 @@ export default function Home() {
                 <Link className="btn primary block" href="/create">
                   Start free
                 </Link>
-                <span className="tiny muted" style={{ marginTop: 10 }}>
-                  Card payments handled securely by Yoco.
-                </span>
+                {paymentsOn && (
+                  <span className="tiny muted" style={{ marginTop: 10 }}>
+                    Card payments handled securely by Yoco.
+                  </span>
+                )}
               </article>
             </div>
           </div>

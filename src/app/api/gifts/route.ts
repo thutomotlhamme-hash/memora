@@ -1,3 +1,4 @@
+import { paymentsOn } from '@/lib/config';
 import { validateGift } from '@/lib/gift';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { getSessionUser } from '@/lib/supabase/server';
@@ -9,6 +10,7 @@ import { yocoSecret } from '@/lib/server/yoco';
 /** Buy a memorial as a gift. No account needed; the price comes from the server. */
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return fail('Cross-site request refused.', 403);
+  if (!paymentsOn) return fail('Gifting opens soon. For now, anyone can create and publish a memorial for free.', 503);
   const admin = getAdminSupabase();
   const simulate = process.env.MEMORA_SIMULATE_PAYMENTS === 'true' && process.env.NODE_ENV !== 'production';
   if (!admin || !linkSecret() || (!yocoSecret() && !simulate)) return fail('Gifting isn’t switched on yet. Please try again soon.', 503);

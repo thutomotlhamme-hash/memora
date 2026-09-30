@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) return fail('Choose a logo to upload.', 400);
   const ext = TYPES[file.type];
   if (!ext) return fail('Use a PNG, JPG or WebP logo.', 400);
-  if (file.size > 1024 * 1024) return fail('The logo must be under 1 MB.', 400);
+  if (file.size > 5 * 1024 * 1024) return fail('The logo must be under 5 MB.', 400);
   const path = `${orgId}/logo-${crypto.randomUUID()}.${ext}`;
   const { error } = await admin.storage.from('memora-brand').upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, upsert: false });
   if (error) return fail('Could not upload the logo. Please try again.', 500);

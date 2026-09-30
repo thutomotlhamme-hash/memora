@@ -35,7 +35,7 @@ const addDays = (iso: string, n: number) => {
 type Row = Record<string, any>;
 
 /** The funeral home's workspace: loads what this person may see, then hands it to the Studio. */
-export default async function ProDashboard({ searchParams }: { searchParams: Promise<{ home?: string; tab?: string; welcome?: string; branch?: string; as?: string }> }) {
+export default async function ProDashboard({ searchParams }: { searchParams: Promise<{ home?: string; tab?: string; welcome?: string; branch?: string; as?: string; view?: string; month?: string }> }) {
   const access = await getAccess();
   const admin = getAdminSupabase();
   if (!admin) return <StatusScreen eyebrow="Memora Pro" title="Not switched on yet." body="The site owner needs to finish setup." />;
@@ -168,6 +168,8 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
       families={families.filter((f) => inView(f.branchId))}
       user={{ id: access.user.id, firstName: (access.user.name || '').split(/\s+/)[0] || '' }}
       tab={tab}
+      view={sp.view === 'month' ? 'month' : 'list'}
+      month={/^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? '') ? sp.month! : today.slice(0, 7)}
       today={today}
       welcome={Boolean(sp.welcome)}
     />

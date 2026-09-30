@@ -60,6 +60,10 @@ export interface StudioData {
   families: Invite[];
   user: { id: string; firstName: string };
   tab: StudioTab;
+  /** Funerals as a list, or on a month calendar. */
+  view: 'list' | 'month';
+  /** The calendar's month, YYYY-MM. */
+  month: string;
   today: string;
   welcome: boolean;
 }
@@ -231,7 +235,7 @@ export function Studio(d: StudioData) {
           {tab === 'families' && <Families />}
           {tab === 'print' && <Print />}
           {tab === 'team' && <Team />}
-          {tab === 'branding' && <BrandingEditor orgId={org.id} name={org.name} logoUrl={org.logoUrl} colour={org.brandColour} />}
+          {tab === 'branding' && <BrandingEditor orgId={org.id} name={org.name} logoUrl={org.logoUrl} colour={org.brandColour} sample={d.funerals.find((f) => f.stage !== 'past')?.name} />}
           {tab === 'billing' && <Billing />}
           {tab === 'roles' && <Roles />}
         </div>
@@ -553,6 +557,23 @@ export function Studio(d: StudioData) {
       ['past', 'Done', 'The memorials stay up for the family.'],
     ];
     const list = persona === 'arranger' ? [...d.funerals].sort((a, b) => Number(b.own) - Number(a.own)) : d.funerals;
+    const switcher = (
+      <div className="bx-seg st-viewseg" role="tablist" aria-label="Show funerals as">
+        <Link role="tab" aria-selected={d.view === 'list'} href={href('funerals')}>
+          List
+        </Link>
+        <Link role="tab" aria-selected={d.view === 'month'} href={href('funerals', `&view=month&month=${d.month}`)}>
+          Month
+        </Link>
+      </div>
+    );
+    if (d.view === 'month')
+      return (
+        <>
+          {switcher}
+          <Month />
+        </>
+      );
     if (!list.length)
       return (
         <div className="st-blank">
@@ -563,6 +584,7 @@ export function Studio(d: StudioData) {
       );
     return (
       <>
+        {switcher}
         {groups.map(([stage, title, sub]) => {
           const rows = list.filter((f) => f.stage === stage);
           if (!rows.length) return null;
@@ -583,6 +605,132 @@ export function Studio(d: StudioData) {
           );
         })}
       </>
+    );
+  }
+
+  function Month() {
+    const [y, m] = d.month.split('-').map(Number);
+    const first = new Date(Date.UTC(y, m - 1, 1));
+    const daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const lead = (first.getUTCDay() + 6) % 7; // weeks start on Monday
+    const iso = (n: number) => {
+      const t = new Date(Date.UTC(y, m - 1, n));
+      return t.toISOString().slice(0, 10);
+    };
+    const cells = Array.from({ length: Math.ceil((lead + daysIn) / 7) * 7 }, (_, i) => iso(i - lead + 1));
+    const shift = (n: number) => {
+      const t = new Date(Date.UTC(y, m - 1 + n, 1));
+      return t.toISOString().slice(0, 7);
+    };
+    const on = (date: string) => d.funerals.filter((f) => f.funeralDate === date).sort((a, b) => a.time.localeCompare(b.time));
+    const inMonth = d.funerals.filter((f) => f.funeralDate?.startsWith(d.month));
+    const perDay = new Map<string, number>();
+    for (const f of inMonth) perDay.set(f.funeralDate!, (perDay.get(f.funeralDate!) ?? 0) + 1);
+    const busiest = [...perDay.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    const saturdays = inMonth.filter((f) => day(f.funeralDate!).getUTCDay() === 6).length;
+    const busyDays = perDay.size;
+    const heat = (n: number) => (n === 0 ? '' : n === 1 ? 'h1' : n === 2 ? 'h2' : 'h3');
+    const agenda = cells.filter((c) => c.startsWith(d.month) && perDay.has(c));
+    return (
+      <section className="cal" aria-label={`Funerals in ${fmt(`${d.month}-15`, { month: 'long', year: 'numeric' })}`}>
+        <header className="cal-head">
+          <div className="cal-nav">
+            <Link className="cal-arrow" href={href('funerals', `&view=month&month=${shift(-1)}`)} aria-label="Previous month">
+              <I.IconBack size={18} />
+            </Link>
+            <h2>{fmt(`${d.month}-15`, { month: 'long', year: 'numeric' })}</h2>
+            <Link className="cal-arrow" href={href('funerals', `&view=month&month=${shift(1)}`)} aria-label="Next month">
+              <I.IconChevron size={18} />
+            </Link>
+            {d.month !== d.today.slice(0, 7) && (
+              <Link className="st-link cal-today" href={href('funerals', `&view=month&month=${d.today.slice(0, 7)}`)}>
+                This month
+              </Link>
+            )}
+          </div>
+          <div className="cal-legend" aria-hidden="true">
+            <span>Quiet</span>
+            <i className="h1" />
+            <i className="h2" />
+            <i className="h3" />
+            <span>Busy</span>
+          </div>
+        </header>
+
+        <div className="cal-stats">
+          <div>
+            <b>{inMonth.length}</b>
+            <span>funeral{inMonth.length === 1 ? '' : 's'} this month</span>
+          </div>
+          <div>
+            <b>{busyDays}</b>
+            <span>day{busyDays === 1 ? '' : 's'} with a funeral</span>
+          </div>
+          <div>
+            <b>{busiest ? fmt(busiest[0], { weekday: 'short', day: 'numeric' }) : '—'}</b>
+            <span>{busiest ? `busiest day · ${busiest[1]} funeral${busiest[1] === 1 ? '' : 's'}` : 'no funerals yet'}</span>
+          </div>
+          <div>
+            <b>{inMonth.length ? `${Math.round((saturdays / inMonth.length) * 100)}%` : '—'}</b>
+            <span>on Saturdays</span>
+          </div>
+        </div>
+
+        <div className="cal-grid" role="grid">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w) => (
+            <div key={w} className="cal-dow" role="columnheader">
+              {w}
+            </div>
+          ))}
+          {cells.map((c) => {
+            const items = on(c);
+            const outside = !c.startsWith(d.month);
+            return (
+              <div
+                key={c}
+                role="gridcell"
+                className={`cal-day ${heat(outside ? 0 : items.length)}${outside ? ' out' : ''}${c === d.today ? ' today' : ''}${c < d.today ? ' past' : ''}`}
+              >
+                <span className="cal-num">{Number(c.slice(8))}</span>
+                {!outside && (
+                  <div className="cal-items">
+                    {items.slice(0, 3).map((f) => (
+                      <Link key={f.id} href={f.own || edit(f.branchId) ? `/memorials/${f.id}` : f.slug ? `/m/${f.slug}` : href('funerals')} className={`cal-item ${f.status === 'DRAFT' ? 'draft' : ''}`} title={`${f.time} ${f.name}${f.venue ? ` · ${f.venue}` : ''}`}>
+                        {f.time && <b>{f.time}</b>}
+                        <span>{f.name}</span>
+                      </Link>
+                    ))}
+                    {items.length > 3 && <span className="cal-more">+{items.length - 3} more</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <ol className="cal-agenda" aria-label="This month, day by day">
+          {agenda.length === 0 && <li className="st-empty">No funerals this month.</li>}
+          {agenda.map((c) => (
+            <li key={c}>
+              <span className={`st-date${c === d.today ? ' now' : ''}`}>
+                <span>{fmt(c, { month: 'short' })}</span>
+                <b>{fmt(c, { day: 'numeric' })}</b>
+                <span>{fmt(c, { weekday: 'short' })}</span>
+              </span>
+              <div>
+                {on(c).map((f) => (
+                  <Link key={f.id} href={f.own || edit(f.branchId) ? `/memorials/${f.id}` : f.slug ? `/m/${f.slug}` : href('funerals')} className="cal-agenda-item">
+                    <strong>{f.name}</strong>
+                    <small>
+                      {[f.time, f.venue, f.status === 'DRAFT' ? 'Draft' : ''].filter(Boolean).join(' · ')}
+                    </small>
+                  </Link>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
     );
   }
 

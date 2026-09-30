@@ -592,7 +592,8 @@ export async function keepsakeCard({ draft, slug }: ArtifactInput) {
 }
 
 /** 4 × 5 in QR card at 300 dpi (1200 × 1500) for entrances, tables and programmes. */
-export async function qrCard({ draft, url, slug, brand }: ArtifactInput) {
+/** The QR card, drawn but not downloaded: the Branding preview shows exactly this. */
+export async function drawQrCard({ draft, url, brand }: Omit<ArtifactInput, 'slug'>): Promise<HTMLCanvasElement> {
   await ensureFonts();
   const W = 1200;
   const H = 1500;
@@ -637,18 +638,39 @@ export async function qrCard({ draft, url, slug, brand }: ArtifactInput) {
   ctx.font = `600 20px ${SANS}`;
   spaced(ctx, 'MEMORIAL', W / 2, py + 290, 5);
 
+  // The foot: what the code opens, then the funeral home that arranged it.
+  const withLogo = Boolean(brand?.logo);
+  const foot = brand ? (withLogo ? 1290 : 1340) : 1352;
   ctx.fillStyle = C.ink;
   ctx.font = `italic 400 34px ${DISPLAY}`;
-  ctx.fillText('Their story, the programme and directions', W / 2, 1352);
+  ctx.fillText('Their story, the programme and directions', W / 2, foot);
   ctx.fillStyle = C.dusk;
   ctx.font = `400 26px ${SANS}`;
-  ctx.fillText(bare(url), W / 2, 1404);
+  ctx.fillText(bare(url), W / 2, foot + 50);
   if (brand) {
-    ctx.fillStyle = brand.colour ?? C.clay;
+    const ink = brand.colour ?? C.clay;
+    let y = foot + 122;
+    if (brand.logo) {
+      const logo = await loadImage(brand.logo.data);
+      if (logo) {
+        const s2 = Math.min(280 / brand.logo.w, 56 / brand.logo.h);
+        const w = brand.logo.w * s2;
+        const h = brand.logo.h * s2;
+        const top = foot + 78;
+        ctx.drawImage(logo, W / 2 - w / 2, top + (56 - h) / 2, w, h);
+        y = top + 56 + 38;
+      }
+    }
+    ctx.fillStyle = ink;
     ctx.font = `600 19px ${SANS}`;
-    spaced(ctx, `ARRANGED WITH CARE BY ${brand.name.toUpperCase()}`, W / 2, 1462, 3);
+    spaced(ctx, `ARRANGED WITH CARE BY ${brand.name.toUpperCase()}`, W / 2, y, 3);
   }
-  await download(c, file(slug, 'qr-card', 'png'));
+  return c;
+}
+
+export async function qrCard(input: ArtifactInput) {
+  const c = await drawQrCard(input);
+  await download(c, file(input.slug, 'qr-card', 'png'));
 }
 
 // ---------------------------------------------------------------------------

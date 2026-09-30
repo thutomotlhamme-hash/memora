@@ -148,3 +148,72 @@ export function stageView(journey: Stop[], programme: Draft['programme'], liveKe
   }
   return null;
 }
+
+export type JourneyProgress = {
+  /** Stops the day has already moved past. */
+  past: Set<string>;
+  /** The stop where people are gathered now. */
+  now: string | null;
+  /** On the road between two stops: how far along (0–1), when it can be told. */
+  moving: { from: string; to: string; progress: number | null } | null;
+};
+
+type RoadPosition = { state: string; toStopId: string | null; lat?: number; lng?: number } | null | undefined;
+
+const pinned = (s: Stop) => Number.isFinite(s.lat) && Number.isFinite(s.lng) && !(s.lat === 0 && s.lng === 0);
+function metres(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Where the day is along the funeral journey, for the timeline on the memorial:
+ * the same moment the live view shows. A shared procession wins (from the stop
+ * it left to the stop it's heading to, filled by distance); otherwise the clock
+ * and the stop times decide.
+ */
+export function journeyProgress(journey: Stop[], now: Date, procession?: RoadPosition): JourneyProgress {
+  const order = [...journey].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  const today = localDateKey(now);
+  const past = new Set(order.filter((s) => s.date < today).map((s) => s.id));
+
+  if (procession && procession.state !== 'paused' && procession.toStopId) {
+    const to = order.findIndex((s) => s.id === procession.toStopId);
+    if (to > 0) {
+      const from = order[to - 1];
+      const dest = order[to];
+      order.slice(0, to).forEach((s) => past.add(s.id));
+      let progress: number | null = null;
+      if (procession.state === 'moving' && typeof procession.lat === 'number' && typeof procession.lng === 'number' && pinned(from) && pinned(dest)) {
+        const total = metres(from, dest);
+        const left = metres({ lat: procession.lat, lng: procession.lng }, dest);
+        progress = total > 50 ? Math.max(0.04, Math.min(0.97, 1 - left / total)) : null;
+      } else if (procession.state === 'waiting') progress = 0.02;
+      return { past, now: null, moving: { from: from.id, to: dest.id, progress } };
+    }
+  }
+
+  const live = liveFuneralState(journey, now);
+  const before = (stop: Stop) => order.slice(0, order.findIndex((s) => s.id === stop.id)).forEach((s) => past.add(s.id));
+  if (live.phase === 'at_stop') {
+    before(live.currentStop);
+    return { past, now: live.currentStop.id, moving: null };
+  }
+  if (live.phase === 'in_transit') {
+    before(live.nextStop);
+    const leave = timeToMinutes(live.currentStop.departTime);
+    const arrive = timeToMinutes(live.nextStop.time);
+    const at = now.getHours() * 60 + now.getMinutes();
+    const progress = leave != null && arrive != null && arrive > leave ? Math.max(0.04, Math.min(0.97, (at - leave) / (arrive - leave))) : null;
+    return { past, now: null, moving: { from: live.currentStop.id, to: live.nextStop.id, progress } };
+  }
+  if (live.phase === 'concluded_today') {
+    before(live.currentStop);
+    past.add(live.currentStop.id);
+  }
+  if (live.phase === 'concluded') order.forEach((s) => past.add(s.id));
+  return { past, now: null, moving: null };
+}

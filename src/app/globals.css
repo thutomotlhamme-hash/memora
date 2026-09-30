@@ -2022,3 +2022,31 @@ body:has(.sl-map) .proc-card { display: none; }
 .run-undo { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 60; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; padding: 10px 10px 10px 18px; border-radius: 999px; background: var(--night); color: var(--on-night); font-size: 14.5px; box-shadow: 0 18px 40px -16px rgba(21, 18, 28, 0.6); animation: st-in 0.25s var(--ease-out) both; max-width: calc(100vw - 32px); }
 .run-undo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run-undo button { flex: none; min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--candle); color: var(--night); font: inherit; font-weight: 600; cursor: pointer; }
+
+/* ------------------------------------------------ Journey timeline on the day
+   The same moment as the live view: stops behind are filled, the stop on now
+   glows, and the procession fills the line to the next stop as it nears it. */
+.timeline.journey.live .t-item::after { background: color-mix(in srgb, var(--bloom) 45%, transparent); }
+.timeline.journey.live .t-item.seg-done::after { background: var(--clay); }
+.timeline.journey.live .t-item::before { background: var(--card); box-shadow: inset 0 0 0 3px var(--bloom); }
+.timeline.journey.live .t-item.is-past::before { background: var(--clay); box-shadow: inset 0 0 0 4px var(--clay); }
+.timeline.journey.live .t-item.is-past .t-body > :not(.t-live-road), .timeline.journey.live .t-item.is-past .t-when { opacity: 0.62; }
+.timeline.journey.live .t-item.is-now::before, .timeline.journey.live .t-item.is-next::before { background: var(--candle); box-shadow: inset 0 0 0 4px var(--clay); animation: v-pulse 2s infinite; }
+.timeline.journey.live .t-item.is-next::before { background: var(--card); box-shadow: inset 0 0 0 4px var(--candle); }
+.t-now { display: inline-flex; align-items: center; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--night); color: var(--candle); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; vertical-align: 4px; }
+/* On the road: the filled part of the line runs to where the procession is, with a moving light. */
+.timeline.journey.live .t-item.seg-moving::after {
+  background:
+    linear-gradient(var(--clay), var(--clay)) top / 100% calc(var(--p, 0.5) * 100%) no-repeat,
+    repeating-linear-gradient(180deg, color-mix(in srgb, var(--clay) 55%, transparent) 0 6px, transparent 6px 12px);
+  background-size: 100% calc(var(--p, 0.5) * 100%), 100% 24px;
+  animation: road-flow 0.9s linear infinite;
+  transition: background-size 1.2s var(--ease);
+}
+@keyframes road-flow { to { background-position: top, 0 12px; } }
+.t-road { position: absolute; left: 14px; top: calc(22px + (100% - 16px) * var(--p, 0.5)); z-index: 2; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--candle); box-shadow: 0 0 0 4px rgba(232, 169, 74, 0.25); animation: v-pulse 1.6s infinite; transition: top 1.2s var(--ease); }
+.t-body .t-live-road { display: inline-flex; align-items: center; gap: 8px; margin: 14px 0 0; padding: 8px 14px; border-radius: 999px; background: var(--night); color: var(--on-night); font-size: 14px; }
+.t-body .t-live-road .sl-dot { flex: none; }
+@media (prefers-reduced-motion: reduce) {
+  .timeline.journey.live .t-item.seg-moving::after, .t-road, .timeline.journey.live .t-item.is-now::before, .timeline.journey.live .t-item.is-next::before { animation: none; }
+}

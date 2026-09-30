@@ -75,3 +75,31 @@ test('each part of the programme shows its date and start time', async () => {
   assert.deepEqual(partStart(noVigilStop, programme.items, 'vigil'), { date: '2026-10-02', time: '18:00', place: '' });
   assert.match(partStartLabel(partStart(journey, programme.items, 'service')), /3 October · from 09:00 · church/);
 });
+
+test('the journey timeline follows the day: past, now, and the road between', async () => {
+  const { journeyProgress } = await import('../src/lib/stage.ts');
+  const day = '2026-10-03';
+  const s = (id: string, type: string, time: string, departTime: string, lat: number, lng: number) =>
+    ({ id, type, title: id, date: day, time, departTime, address: '', landmark: '', parking: '', transport: '', notes: '', lat, lng }) as never;
+  const journey = [s('church', 'church', '08:00', '10:30', -26.0, 28.0), s('grave', 'cemetery', '11:00', '12:00', -26.1, 28.0), s('home', 'reception', '13:00', '', -26.2, 28.0)];
+  const at = (hhmm: string) => new Date(`${day}T${hhmm}:00`);
+
+  const service = journeyProgress(journey, at('09:00'));
+  assert.equal(service.now, 'church');
+  assert.equal(service.moving, null);
+
+  const road = journeyProgress(journey, at('10:45'));
+  assert.deepEqual(road.moving?.from, 'church');
+  assert.equal(road.moving?.to, 'grave');
+  assert.ok(road.past.has('church'));
+  assert.ok(Math.abs((road.moving?.progress ?? 0) - 0.5) < 0.05, 'halfway by the clock');
+
+  // A shared procession wins, and fills the line by distance.
+  const shared = journeyProgress(journey, at('10:00'), { state: 'moving', toStopId: 'grave', lat: -26.075, lng: 28.0 });
+  assert.equal(shared.now, null);
+  assert.equal(shared.moving?.to, 'grave');
+  assert.ok(Math.abs((shared.moving?.progress ?? 0) - 0.75) < 0.05, 'three quarters of the way');
+
+  const done = journeyProgress(journey, at('23:30'));
+  assert.ok(done.past.has('home') || done.now === 'home');
+});

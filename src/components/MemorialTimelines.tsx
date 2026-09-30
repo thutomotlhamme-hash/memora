@@ -1,6 +1,9 @@
 'use client';
 
 import { directionsUrl, fmtDate, partStart, partStartLabel, programmeParts, programmeTypeLabel, routeUrl, stopLabel, type Draft } from '@/lib/memorial';
+import { useNow } from '@/lib/hooks';
+import { distanceM, etaRange, formatEta } from '@/lib/procession';
+import { journeyProgress } from '@/lib/stage';
 import { useLiveData } from './LiveMemorial';
 
 /** When the family has chosen to share the programme later: "Saturday 3 October at 06:00". */
@@ -74,14 +77,32 @@ export function ProgrammeTimeline({ programme, journey = [] }: { programme: Draf
 export function JourneyTimeline({ journey: initial }: { journey: Draft['journey'] }) {
   const live = useLiveData({ journey: initial, programme: { mode: '', items: [] }, liveKey: null });
   const journey = live.journey.length ? live.journey : initial;
+  // On the day the line follows what the live view shows: where people are now,
+  // what's behind, and the procession filling the line as it nears the next stop.
+  const now = useNow();
+  const day = now ? journeyProgress(journey, now, live.procession) : null;
+  const on = Boolean(day && (day.now || day.moving || day.past.size));
+  const road = day?.moving ?? null;
+  const p = live.procession;
+  const roadTo = road ? journey.find((st) => st.id === road.to) : undefined;
+  const eta =
+    p?.state === 'moving' && roadTo && Number.isFinite(roadTo.lat) ? formatEta(etaRange(distanceM({ lat: p.lat, lng: p.lng }, { lat: roadTo.lat, lng: roadTo.lng }))) : '';
   return (
-    <div className="timeline journey">
+    <div className={`timeline journey${on ? ' live' : ''}`}>
       {journey.map((s, i) => {
         const next = journey[i + 1];
+        const state = !day ? '' : day.now === s.id ? ' is-now' : day.past.has(s.id) ? ' is-past' : road?.to === s.id ? ' is-next' : '';
+        const seg = !day || !next ? '' : road?.from === s.id && road.to === next.id ? ' seg-moving' : day.past.has(next.id) || day.now === next.id || (day.past.has(s.id) && road?.to === next.id) ? ' seg-done' : '';
         return (
-          <article className="t-item" key={s.id}>
+          <article
+            className={`t-item${state}${seg}`}
+            key={s.id}
+            style={seg === ' seg-moving' ? ({ ['--p' as string]: String(road?.progress ?? 0.5) } as React.CSSProperties) : undefined}
+          >
+            {seg === ' seg-moving' && <span className="t-road" aria-hidden="true" />}
             <div className="t-when">
               <strong>{s.time}</strong>
+              {state === ' is-now' && <span className="t-now">Now</span>}
               {fmtDate(s.date)}
               {s.departTime && <div>until {s.departTime}</div>}
             </div>
@@ -104,6 +125,13 @@ export function JourneyTimeline({ journey: initial }: { journey: Draft['journey'
                   Waze
                 </a>
               </div>
+              {seg === ' seg-moving' && next && (
+                <p className="t-live-road" role="status">
+                  <span className="sl-dot" aria-hidden="true" />
+                  {p && p.state !== 'paused' ? 'The procession is on its way' : 'On the way'} to {next.title}
+                  {eta ? ` · ${eta.toLowerCase()}` : ''}
+                </p>
+              )}
               {next && (
                 <a className="t-next no-print" target="_blank" rel="noopener noreferrer" href={routeUrl(s, next)}>
                   Route to {next.title} →

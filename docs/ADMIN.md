@@ -108,8 +108,11 @@ and can't, is on Command centre → Access, and in `src/lib/rbac.ts`.
 
 - **Memora team roles:** Administrator, Operations, Support, Finance, Auditor.
   Groups ready to use: Memora Administrators, Operations, Support, Finance.
-- **Funeral home roles:** Owner, Manager, Director, Arrangements staff,
-  Viewer. They only ever apply inside that funeral home.
+- **Funeral home roles:** Owner (the whole home), Branch manager and
+  Arranger (one branch). They only ever apply inside that funeral home, and
+  branch roles only inside their branch. Owners add and remove branches and
+  appoint managers; a manager appoints arrangers in their own branch.
+  Arrangers sit with families and can prepare, publish and run the day.
 - The owners in `MEMORA_ADMIN_PHONES` (or `MEMORA_ADMIN_EMAILS`) are always administrators. People on
   the earlier Team list keep Operations access until moved into a group.
 - No one can give a role with more than they have. Only administrators make
@@ -151,3 +154,6 @@ below R999.
 
 Every change (homes, plans, groups, people, invoices, take-downs) is written
 to the Audit log tab.
+
+**Demo data:** see `docs/DEMO.md` for two demo funeral homes with branches,
+staff, memorials in every state, links and invoices, and how to remove them.

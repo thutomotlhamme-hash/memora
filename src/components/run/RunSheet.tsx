@@ -183,6 +183,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   const runDay: RunDay = liveIndex >= 0 ? dayOfPart(partOf(items[liveIndex])) : (chosenDay ?? (hasVigil && vigilNight ? 'vigil' : 'day'));
   const inDay = (i: ProgrammeItem) => dayOfPart(partOf(i)) === runDay;
   const firstItem = items.find(inDay) ?? null;
+  const dayItems = items.filter(inDay);
+  const dayPos = liveIndex >= 0 ? dayItems.indexOf(items[liveIndex]) : -1;
   const nextItem = liveIndex >= 0 ? (items.slice(liveIndex + 1).find(inDay) ?? null) : null;
   const dayDone = endedDay(snap.liveKey) === runDay;
   const funeralDone = snap.liveKey === FUNERAL_ENDED;
@@ -367,6 +369,15 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
 
   // ---- Drag and drop (pointer events: works with a finger or a mouse) -------
   const rows = useRef<(HTMLElement | null)[]>([]);
+  // Side by side on a wide screen: when the live item moves, bring it into view
+  // in the programme, unless someone is busy editing.
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (!snap.liveKey || editing || !window.matchMedia('(min-width: 1024px)').matches) return;
+    const row = listRef.current?.querySelector<HTMLElement>('.run-item.now');
+    const r = row?.getBoundingClientRect();
+    if (row && r && (r.top < 90 || r.bottom > window.innerHeight - 40)) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [snap.liveKey, editing]);
   const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
   const onHandleDown = (e: React.PointerEvent, index: number) => {
     e.preventDefault();
@@ -429,6 +440,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
         </div>
       )}
 
+      <div className="run-grid">
+      <div className="run-side">
       {funeralDone ? (
         <section className="run-now run-thanks" aria-live="polite">
           <div className="k">The funeral has ended</div>
@@ -459,6 +472,24 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
             <div className="k">{runDay === 'vigil' ? 'Night vigil · happening now' : `${partLabel(partOf(items[liveIndex]))} · happening now`}</div>
             <div className="t">{items[liveIndex].title}</div>
             {items[liveIndex].presenter && <div className="p">{items[liveIndex].presenter}</div>}
+            {dayItems.length > 1 && (
+              <div className="run-progress">
+                <div className="run-progress-bar" aria-hidden="true">
+                  <span style={{ width: `${((dayPos + 1) / dayItems.length) * 100}%` }} />
+                </div>
+                <span>
+                  {dayPos + 1} of {dayItems.length}
+                </span>
+              </div>
+            )}
+            {nextItem && !lastBeforeLeaving && (
+              <div className="run-upnext">
+                <span>Up next</span>
+                {nextItem.time && <b>{nextItem.time}</b>}
+                {nextItem.title}
+                {nextItem.presenter && <em> · {nextItem.presenter}</em>}
+              </div>
+            )}
           </>
         ) : dayDone && sharing && runDay === 'day' ? (
           <>
@@ -575,13 +606,15 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
           </label>
         </div>
       </section>
+      </div>
 
+      <div className="run-main">
       <section>
         <div className="run-section-head">
           <h2 className="h3">Programme</h2>
           <span className="tiny muted">Drag ⠿ to reorder. Times follow the new order.</span>
         </div>
-        <ol className="run-list">
+        <ol className="run-list" ref={listRef}>
           {order.map((item, i) => {
             const realIndex = items.findIndex((x) => x.id === item.id);
             const state = item.id === snap.liveKey ? 'now' : doneSet.has(item.id) ? 'done' : liveIndex >= 0 && realIndex === liveIndex + 1 ? 'next' : '';
@@ -683,6 +716,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
       {todaysStops.length === 0 && snap.journey.length > 0 && (
         <p className="tiny muted">The funeral journey starts {fmtDate(snap.journey[0].date)}. Stop times you can adjust will appear here on the day.</p>
       )}
+      </div>
+      </div>
 
       {editing && (
         <ItemEditor

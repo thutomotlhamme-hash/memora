@@ -865,6 +865,22 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .run-now .t { font-family: var(--display); font-weight: 420; font-size: clamp(24px, 5vw, 32px); line-height: 1.15; margin-top: 6px; }
 .run-now .run-note { margin: 12px 0 0; font-size: 13px; color: var(--on-night-muted); }
 .run-now .p { color: var(--on-night-muted); margin-top: 4px; }
+.run-grid, .run-side, .run-main { display: grid; gap: 22px; align-content: start; min-width: 0; }
+.run-progress { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 12.5px; color: var(--on-night-muted); font-variant-numeric: tabular-nums; }
+.run-progress-bar { flex: 1; height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.run-progress-bar span { display: block; height: 100%; border-radius: inherit; background: var(--clay-on-night); transition: width 0.5s var(--ease); }
+.run-upnext { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 15px; }
+.run-upnext span { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--on-night-muted); }
+.run-upnext b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.run-upnext em { font-style: normal; color: var(--on-night-muted); }
+@media (min-width: 1024px) {
+  .run-shell { width: min(1280px, 100% - 64px); }
+  .run-grid { grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .run-side { position: sticky; top: 18px; max-height: calc(100dvh - 36px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: 4px; }
+  .run-now .t { font-size: 34px; }
+  .run-main .run-section-head { position: sticky; top: 0; z-index: 3; background: var(--paper); padding: 10px 0; margin: -10px 0 2px; }
+  .run-main .run-item.now { scroll-margin: 120px; }
+}
 .run-late { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); }
 .check-row.small { min-height: 32px; font-size: 14px; color: var(--ink-2); align-self: auto; }
 .run-section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }

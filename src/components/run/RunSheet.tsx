@@ -24,9 +24,11 @@ export type RunSnapshot = {
   liveKey: string | null;
   updatedAt: string;
   procession?: ProcessionRecord | null;
+  /** Items that actually ran. */
+  done?: string[];
 };
 
-type Pending = { programme?: ProgrammeItem[]; stopTimes?: Map<string, { id: string; time: string; departTime: string }>; liveKey?: string | null };
+type Pending = { programme?: ProgrammeItem[]; stopTimes?: Map<string, { id: string; time: string; departTime: string }>; liveKey?: string | null; done?: string[] };
 type SaveState = 'saved' | 'saving' | 'offline' | 'error';
 
 const POLL_MS = 15_000;
@@ -68,6 +70,7 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
               ...(p.programme ? { programme: p.programme } : {}),
               ...(p.stopTimes ? { stopTimes: [...p.stopTimes.values()] } : {}),
               ...(p.liveKey !== undefined ? { liveKey: p.liveKey } : {}),
+              ...(p.done !== undefined ? { done: p.done } : {}),
             }),
           });
         } catch {
@@ -108,7 +111,7 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
 
   /** Apply a change on screen immediately and queue it for saving. */
   const commit = useCallback(
-    (next: Partial<Pick<RunSnapshot, 'programme' | 'journey' | 'liveKey'>>, change: Pending) => {
+    (next: Partial<Pick<RunSnapshot, 'programme' | 'journey' | 'liveKey' | 'done'>>, change: Pending) => {
       setSnap((s) => ({ ...s, ...next }));
       pending.current = merge(pending.current, change);
       void flush();
@@ -164,6 +167,14 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
 
   // ---- Actions --------------------------------------------------------------
   const items = snap.programme;
+  // Done means it actually ran: the coordinator moved on from it. Never just "above the live item".
+  const doneSet = new Set(snap.done ?? []);
+  const withDone = (add: (string | null | undefined)[], drop: (string | null | undefined)[] = []) => {
+    const next = new Set(doneSet);
+    add.forEach((k) => k && !k.startsWith('ended:') && next.add(k));
+    drop.forEach((k) => k && next.delete(k));
+    return [...next];
+  };
   const liveIndex = snap.liveKey ? items.findIndex((i) => i.id === snap.liveKey) : -1;
   // The night vigil and the funeral day run on their own: start, move through, finish.
   const todays = snap.journey.filter((st) => st.date === localDateKey());
@@ -216,7 +227,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   const start = (key: string) => {
     const { items: next, delay } = startItem(items, key, new Date(), shiftOnStart);
     const stops = shiftOnStart ? stopShift(delay) : {};
-    commit({ programme: next, liveKey: key, ...(stops.journey ? { journey: stops.journey } : {}) }, { programme: next, liveKey: key, stopTimes: stops.stopTimes });
+    const done = withDone([snap.liveKey !== key ? snap.liveKey : null], [key]);
+    commit({ programme: next, liveKey: key, done, ...(stops.journey ? { journey: stops.journey } : {}) }, { programme: next, liveKey: key, done, stopTimes: stops.stopTimes });
     const title = items.find((i) => i.id === key)?.title ?? 'Item';
     if (shiftOnStart && delay > 0) toast(`${title} started ${delay} min late. Everything after it moved ${delay} min later.`);
     else if (shiftOnStart && delay < 0) toast(`${title} started ${-delay} min early. Everything after it moved earlier.`);
@@ -225,7 +237,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
 
   const finish = () => {
     const key = endedKey(runDay);
-    commit({ liveKey: key }, { liveKey: key });
+    const done = withDone([snap.liveKey]);
+    commit({ liveKey: key, done }, { liveKey: key, done });
     toast(runDay === 'vigil' ? 'The vigil is finished. Guests now see a thank-you and tomorrow’s details.' : 'The service is finished. Guests keep seeing the rest of the day’s journey.');
   };
 
@@ -236,7 +249,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
       start(nextItem.id);
     } else {
       const key = endedKey('day');
-      commit({ liveKey: key }, { liveKey: key });
+      const done = withDone([snap.liveKey]);
+      commit({ liveKey: key, done }, { liveKey: key, done });
     }
     procRef.current?.startTo(leaveTo.id);
     toast(`Leaving for ${leaveTo.title}. Guests’ screens are switching to the procession map.`);
@@ -249,7 +263,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
 
   const endFuneral = () => {
     if (!window.confirm('End the funeral? Guests will see a thank-you and where the refreshments and after-tears are.')) return;
-    commit({ liveKey: FUNERAL_ENDED }, { liveKey: FUNERAL_ENDED });
+    const done = withDone([snap.liveKey]);
+    commit({ liveKey: FUNERAL_ENDED, done }, { liveKey: FUNERAL_ENDED, done });
   };
 
   const late = (minutes: number) => {
@@ -267,8 +282,15 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
 
   const reorder = (from: number, to: number) => {
     if (from === to) return;
+    const moved = items[from];
     const next = moveItem(items, from, to);
-    commit({ programme: next }, { programme: next });
+    // Moved further down, or to after the item on now: it hasn't happened yet.
+    const liveAt = snap.liveKey ? next.findIndex((i) => i.id === snap.liveKey) : -1;
+    const drop = next.filter((i, n) => doneSet.has(i.id) && ((i.id === moved.id && to > from) || (liveAt >= 0 && n > liveAt))).map((i) => i.id);
+    if (drop.length) {
+      const done = withDone([], drop);
+      commit({ programme: next, done }, { programme: next, done });
+    } else commit({ programme: next }, { programme: next });
   };
 
   // Deleting is one tap; a short Undo replaces the "are you sure?".
@@ -562,7 +584,7 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
         <ol className="run-list">
           {order.map((item, i) => {
             const realIndex = items.findIndex((x) => x.id === item.id);
-            const state = item.id === snap.liveKey ? 'now' : liveIndex >= 0 && realIndex < liveIndex ? 'done' : liveIndex >= 0 && realIndex === liveIndex + 1 ? 'next' : '';
+            const state = item.id === snap.liveKey ? 'now' : doneSet.has(item.id) ? 'done' : liveIndex >= 0 && realIndex === liveIndex + 1 ? 'next' : '';
             const isDragged = drag && items[drag.from]?.id === item.id;
             // A heading wherever the part of the day changes: night vigil, the service, the graveside.
             const partChanged = i === 0 ? partOf(item) !== 'service' || order.some((x) => partOf(x) !== 'service') : partOf(order[i - 1]) !== partOf(item);
@@ -684,6 +706,7 @@ function merge(older: Pending | null, newer: Pending | null): Pending | null {
     programme: newer.programme ?? older.programme,
     stopTimes,
     liveKey: newer.liveKey !== undefined ? newer.liveKey : older.liveKey,
+    done: newer.done ?? older.done,
   };
 }
 

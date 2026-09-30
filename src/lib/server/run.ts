@@ -48,10 +48,16 @@ export interface RunSnapshot {
   liveKey: string | null;
   updatedAt: string;
   procession: ProcessionRecord | null;
+  /** Programme items that actually ran today. */
+  done: string[];
 }
 
 export async function loadRunSnapshot(admin: SupabaseClient, caseId: string): Promise<RunSnapshot | null> {
-  const [loaded, procession] = await Promise.all([loadCaseById(admin, caseId), loadProcession(admin, caseId)]);
+  const [loaded, procession, { data: ran }] = await Promise.all([
+    loadCaseById(admin, caseId),
+    loadProcession(admin, caseId),
+    admin.from('memora_cases').select('run_done').eq('id', caseId).maybeSingle(),
+  ]);
   if (!loaded) return null;
   return {
     name: displayName(loaded.draft.person, 'the memorial'),
@@ -62,6 +68,7 @@ export async function loadRunSnapshot(admin: SupabaseClient, caseId: string): Pr
     liveKey: loaded.meta.liveKey ?? null,
     updatedAt: loaded.meta.updatedAt ?? '',
     procession,
+    done: ((ran?.run_done as string[] | null) ?? []).filter((k) => loaded.draft.programme.items.some((i) => i.id === k)),
   };
 }
 
@@ -70,6 +77,7 @@ export type RunUpdate = {
   programme?: unknown[];
   stopTimes?: { id: string; time: string; departTime?: string }[];
   liveKey?: string | null;
+  done?: unknown[];
 };
 
 /** Applies coordinator changes atomically. Returns 'stale' if someone else saved first. */
@@ -91,6 +99,10 @@ export async function applyRunUpdate(admin: SupabaseClient, caseId: string, u: R
     p_live_key: setLive ? (u.liveKey ? String(u.liveKey).slice(0, 80) : null) : null,
   });
   if (!error) {
+    if (Array.isArray(u.done)) {
+      const done = [...new Set(u.done.filter((k): k is string => typeof k === 'string').map((k) => k.slice(0, 80)))].slice(0, 200);
+      await admin.from('memora_cases').update({ run_done: done }).eq('id', caseId);
+    }
     refreshPublicPages();
     return 'ok';
   }

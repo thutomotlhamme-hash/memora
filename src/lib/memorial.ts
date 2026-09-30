@@ -118,6 +118,8 @@ export interface CaseMeta {
   /** Programme item the funeral-day coordinator marked as happening now. */
   liveKey?: string | null;
   liveStartedAt?: string | null;
+  /** The funeral home this memorial belongs to: it publishes (and pays), not the family. */
+  home?: { name: string; canPublish: boolean; phone: string } | null;
 }
 
 export function emptyDraft(): Draft {

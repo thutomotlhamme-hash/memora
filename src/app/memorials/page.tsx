@@ -21,7 +21,7 @@ export default async function MemorialsPage({ searchParams }: { searchParams: Pr
   const supabase = await getServerSupabase();
   const user = await getSessionUser(supabase);
   if (!supabase || !user) redirect('/account/login?next=/memorials');
-  const [cases, { new: wantsNew }] = await Promise.all([listOwnedCases(supabase), searchParams]);
+  const [cases, { new: wantsNew }] = await Promise.all([listOwnedCases(supabase, user.id), searchParams]);
 
   return (
     <>

@@ -5,6 +5,7 @@ import { accountLabel, loginAddress } from '../account-id';
 import { slugify } from '../memorial';
 import { PRO_ONBOARDING_MINOR, PRO_PLANS, isProPlan, periodOf, proInvoice, type ProPlan } from '../plans';
 import { ALL_ROLES, ROLES, can, canGrantRole, isRole, type Permission, type Principal, type Role } from '../rbac';
+import { createInvite, revokeInvite } from './invites';
 import { refreshPublicPages } from './public-cache';
 
 type Row = Record<string, any>;
@@ -182,7 +183,7 @@ export async function loadAudit(admin: SupabaseClient, limit = 150): Promise<{ a
 // Writing
 // ---------------------------------------------------------------------------
 
-async function log(admin: SupabaseClient, actorId: string, action: string, metadata: Record<string, unknown>, caseId: string | null = null) {
+export async function log(admin: SupabaseClient, actorId: string, action: string, metadata: Record<string, unknown>, caseId: string | null = null) {
   await admin.from('memora_activity_log').insert({ case_id: caseId, actor_user_id: actorId, action: `ADMIN_${action}`, metadata });
 }
 
@@ -212,6 +213,46 @@ export const ORG_GROUPS: { name: string; roles: Role[]; description: string }[] 
   { name: 'Arrangements', roles: ['org_staff'], description: 'Prepare memorials with families; a director publishes.' },
 ];
 
+/**
+ * Adds a funeral home in trial with its starting groups. Used by the command
+ * centre and by a home setting itself up from an onboarding link.
+ */
+export async function createOrg(
+  admin: SupabaseClient,
+  actorId: string,
+  input: Record<string, unknown>,
+): Promise<{ ok: true; id: string; name: string; plan: ProPlan } | { ok: false; error: string; status: number }> {
+  const name = text(input.name, 120);
+  if (name.length < 2) return { ok: false, error: 'Give the funeral home a name.', status: 400 };
+  const plan: ProPlan = isProPlan(input.plan) ? input.plan : 'pro';
+  const p = PRO_PLANS[plan];
+  const branches = Math.min(500, Math.max(1, Math.round(Number(input.branches) || p.branches)));
+  const slug = await uniqueSlug(admin, name);
+  const { data, error } = await admin
+    .from('memora_orgs')
+    .insert({
+      name,
+      slug,
+      plan,
+      status: 'trial',
+      monthly_fee_minor: p.monthlyMinor,
+      per_memorial_minor: p.perMemorialMinor,
+      onboarding_fee_minor: PRO_ONBOARDING_MINOR,
+      branches,
+      contact_name: text(input.contactName),
+      contact_phone: text(input.contactPhone, 40),
+      contact_email: text(input.contactEmail, 200).toLowerCase(),
+      notes: text(input.notes, 2000),
+      created_by: actorId,
+    })
+    .select('id')
+    .single();
+  if (error || !data) return { ok: false, error: 'Could not add the funeral home.', status: 500 };
+  await admin.from('memora_groups').insert(ORG_GROUPS.map((g) => ({ name: g.name, roles: g.roles, description: g.description, org_id: data.id })));
+  await log(admin, actorId, 'ORG_CREATED', { name, plan });
+  return { ok: true, id: data.id as string, name, plan };
+}
+
 const PERMISSION_FOR: Record<string, Permission> = {
   'org.create': 'orgs.manage',
   'org.update': 'orgs.manage',
@@ -223,11 +264,11 @@ const PERMISSION_FOR: Record<string, Permission> = {
 };
 
 export function isProAction(action: string): boolean {
-  return action in PERMISSION_FOR || action.startsWith('group.') || action === 'org.brand';
+  return action in PERMISSION_FOR || action.startsWith('group.') || action.startsWith('invite.') || action === 'org.brand';
 }
 
 /** What a funeral home's own people may do from their dashboard (each still permission-checked). */
-export const ORG_SELF_SERVICE = new Set(['group.addMember', 'group.removeMember', 'org.brand']);
+export const ORG_SELF_SERVICE = new Set(['group.addMember', 'group.removeMember', 'org.brand', 'invite.create', 'invite.revoke']);
 
 export async function performProAction(admin: SupabaseClient, actor: Principal, input: ProInput): Promise<ProResult> {
   const needed = PERMISSION_FOR[input.action];
@@ -237,33 +278,9 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
   switch (input.action) {
     // ---- Funeral homes ----
     case 'org.create': {
-      const name = text(input.name, 120);
-      if (name.length < 2) return { ok: false, error: 'Give the funeral home a name.', status: 400 };
-      const plan: ProPlan = isProPlan(input.plan) ? input.plan : 'pro';
-      const p = PRO_PLANS[plan];
-      const slug = await uniqueSlug(admin, name);
-      const { data, error } = await admin
-        .from('memora_orgs')
-        .insert({
-          name,
-          slug,
-          plan,
-          status: 'trial',
-          monthly_fee_minor: p.monthlyMinor,
-          per_memorial_minor: p.perMemorialMinor,
-          onboarding_fee_minor: PRO_ONBOARDING_MINOR,
-          branches: p.branches,
-          contact_name: text(input.contactName),
-          contact_phone: text(input.contactPhone, 40),
-          contact_email: text(input.contactEmail, 200).toLowerCase(),
-          created_by: actor.userId,
-        })
-        .select('id')
-        .single();
-      if (error || !data) return { ok: false, error: 'Could not add the funeral home.', status: 500 };
-      await admin.from('memora_groups').insert(ORG_GROUPS.map((g) => ({ name: g.name, roles: g.roles, description: g.description, org_id: data.id })));
-      await log(admin, actor.userId, 'ORG_CREATED', { name, plan });
-      return { ok: true, message: `${name} added on ${p.name}, in trial. Add their owner under Access.`, data: { id: data.id } };
+      const out = await createOrg(admin, actor.userId, input);
+      if (!out.ok) return out;
+      return { ok: true, message: `${out.name} added on ${PRO_PLANS[out.plan].name}, in trial. Add their owner under Access, or send them an onboarding link.`, data: { id: out.id } };
     }
     case 'org.update': {
       if (!uuid(input.id)) return { ok: false, error: 'Funeral home not found.', status: 404 };
@@ -449,6 +466,12 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       await log(admin, actor.userId, 'MEMBER_REMOVED', { group: g.name, who: input.userId });
       return { ok: true, message: 'Removed. Their access changes on their next page.' };
     }
+
+    // ---- Links: onboarding a funeral home, or a family starting under a home ----
+    case 'invite.create':
+      return createInvite(admin, actor, input);
+    case 'invite.revoke':
+      return revokeInvite(admin, actor, input);
   }
   return { ok: false, error: 'Unknown action.', status: 400 };
 }

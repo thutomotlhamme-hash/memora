@@ -82,7 +82,93 @@ export function PublishStep({
     );
   }
 
+  if (meta.home) return <HomePublish home={meta.home} owner={owner} meta={meta} setMeta={setMeta} flush={flush} refresh={refresh} nav={nav} head={head} />;
   return <Checkout owner={owner} meta={meta} setMeta={setMeta} flush={flush} refresh={refresh} nav={nav} head={head} />;
+}
+
+/** A funeral home's memorial: its director publishes (the home is billed); the family asks them to. */
+function HomePublish({
+  home,
+  owner,
+  meta,
+  setMeta,
+  flush,
+  refresh,
+  nav,
+  head,
+}: {
+  home: NonNullable<CaseMeta['home']>;
+  owner: Owner;
+  meta: CaseMeta;
+  setMeta: (m: CaseMeta) => void;
+  flush: () => Promise<void>;
+  refresh: () => void;
+  nav: Nav;
+  head: (t: string, l: string) => React.ReactNode;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const digits = home.phone.replace(/\D/g, '').replace(/^0(\d{9})$/, '27$1');
+
+  if (!home.canPublish) {
+    return (
+      <div className="panel">
+        {head('Ready for the funeral home.', `${home.name} publishes this memorial. There’s nothing for you to pay.`)}
+        <div className="note ok">
+          <span>
+            <strong>Everything they need is filled in.</strong> Let {home.name} know it’s ready. They’ll check it and publish it, and you can keep editing until then.
+          </span>
+        </div>
+        {digits.length >= 11 && (
+          <div className="row" style={{ marginTop: 20 }}>
+            <a
+              className="btn accent lg"
+              href={`https://wa.me/${digits}?text=${encodeURIComponent(`Hi ${home.name}, the memorial is ready for you to check and publish: ${typeof window === 'undefined' ? '' : window.location.origin}/memorials/${owner.caseId}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Tell {home.name} on WhatsApp
+            </a>
+          </div>
+        )}
+        <PanelFoot nav={nav} />
+      </div>
+    );
+  }
+
+  const publish = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      await flush();
+      const res = await fetch(`/api/memorials/${owner.caseId}/publish`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Could not publish.');
+      setMeta({ ...body.meta, home: meta.home });
+      toast('The memorial is live.');
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not publish.');
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="panel">
+      {head('Ready to publish.', `Publishing is billed to ${home.name} on your Memora Pro plan. The family pays nothing.`)}
+      {error && (
+        <div className="note error" role="alert" style={{ marginTop: 16 }}>
+          {error}
+        </div>
+      )}
+      <div className="row" style={{ marginTop: 24 }}>
+        <button className="btn accent lg" type="button" onClick={publish} disabled={busy}>
+          {busy ? 'Publishing…' : `Publish for ${home.name}`}
+        </button>
+      </div>
+      <PanelFoot nav={nav} />
+    </div>
+  );
 }
 
 function Checkout({

@@ -142,3 +142,50 @@ test.describe('Branding', () => {
     await expect(page.getByText('Arranged with care by')).toHaveCount(0);
   });
 });
+
+test.describe('Onboarding and family links', () => {
+  test('a made-up link explains itself instead of breaking', async ({ page }) => {
+    await page.goto('/join/not-a-real-link');
+    await expect(page.getByRole('heading', { name: 'This link isn’t working.' })).toBeVisible();
+    await expect(page.getByText('ask whoever sent it for a new one')).toBeVisible();
+  });
+
+  test('a link that looks right but is forged is refused', async ({ page }) => {
+    await page.goto('/join/00000000-0000-0000-0000-000000000000.forged-signature');
+    await expect(page.getByRole('heading', { name: 'This link isn’t working.' })).toBeVisible();
+  });
+
+  test('using a link needs an account, and never works cross-site', async ({ request, baseURL }) => {
+    const signedOut = await request.post('/api/join', { data: { token: 'x.y' }, headers: { origin: baseURL! } });
+    expect([401, 503]).toContain(signedOut.status());
+    expect((await signedOut.json()).error).toBeTruthy();
+    const evil = await request.post('/api/join', { data: { token: 'x.y' }, headers: { origin: 'https://evil.example' } });
+    expect(evil.status()).toBe(403);
+  });
+
+  test('links can’t be made or switched off without access', async ({ request, baseURL }) => {
+    for (const data of [
+      { action: 'invite.create', kind: 'family', orgId: '00000000-0000-0000-0000-00000000000a', label: 'Khumalo family' },
+      { action: 'invite.create', kind: 'org', label: 'Sneaky Funerals' },
+      { action: 'invite.revoke', id: '00000000-0000-0000-0000-00000000000b' },
+    ]) {
+      for (const path of ['/api/pro/actions', '/api/admin/actions']) {
+        const res = await request.post(path, { data, headers: { origin: baseURL! } });
+        expect([401, 403, 404], `${path} ${data.action}`).toContain(res.status());
+      }
+    }
+  });
+
+  test('every funeral-home tab needs a login', async ({ page }) => {
+    for (const tab of ['today', 'funerals', 'families', 'team', 'roles', 'branding', 'billing']) {
+      await page.goto(`/pro/dashboard?tab=${tab}`);
+      await expect(page.getByText(/Not switched on yet|Log in|log in/).first()).toBeVisible();
+      await expect(page.locator('.admin-tabs')).toHaveCount(0);
+    }
+  });
+
+  test('the memorials board filters can’t be opened by address', async ({ page }) => {
+    await page.goto('/admin?tab=memorials&status=draft');
+    await expect(page.locator('.cc-mem-section')).toHaveCount(0);
+  });
+});

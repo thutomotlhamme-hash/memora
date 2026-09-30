@@ -4,6 +4,8 @@ import { fmtDate } from '@/lib/memorial';
 import { PRO_PLANS, formatMoney, periodOf, proInvoice, type ProPlan } from '@/lib/plans';
 import { ALL_ROLES, PERMISSIONS, ROLES, can, canGrantRole, roleGrants, type Principal, type Role } from '@/lib/rbac';
 import { loadAudit, loadGroups, loadInvoices, loadOrgs, type Group, type Org } from '@/lib/server/pro';
+import { loadInvites } from '@/lib/server/invites';
+import { InviteList } from '@/components/pro/InviteList';
 import { ActionForm } from './ActionForm';
 import { AdminAction } from './AdminAction';
 
@@ -17,15 +19,36 @@ const STATUS_LABEL: Record<Org['status'], string> = { trial: 'Trial', active: 'A
 // ---------------------------------------------------------------------------
 
 export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Principal }) {
-  const orgs = await loadOrgs(admin);
   const manage = can(p, 'orgs.manage');
+  const [orgs, invites] = await Promise.all([loadOrgs(admin), manage ? loadInvites(admin, 'org') : Promise.resolve([])]);
   const billing = can(p, 'orgs.billing');
   return (
     <>
       {manage && (
+        <section className="card cc-onboard">
+          <h2 className="h3">Onboard a funeral home with a link</h2>
+          <p className="small muted">
+            Make a link and send it on WhatsApp. They open it on a phone or computer, create their account with their cellphone number, fill in their details, and become
+            the owner of their funeral home on Memora, in trial. Each link works once, for 14 days.
+          </p>
+          <ActionForm
+            action="invite.create"
+            extra={{ kind: 'org' }}
+            reset
+            compact
+            submit="Make onboarding link"
+            fields={[
+              { name: 'label', label: 'Funeral home (optional)', type: 'text', placeholder: 'e.g. Sizwe Funeral Services', hint: 'Fills in their name for them.' },
+              { name: 'plan', label: 'Plan', type: 'select', value: 'pro', options: PLAN_OPTIONS },
+            ]}
+          />
+          <InviteList invites={invites.slice(0, 12)} empty="No onboarding links yet." />
+        </section>
+      )}
+      {manage && (
         <details className="card cc-add">
           <summary>
-            <strong>+ Add a funeral home</strong>
+            <strong>+ Add a funeral home yourself</strong>
             <span className="muted small">Starts in trial with its Owners, Managers, Directors and Arrangements groups ready.</span>
           </summary>
           <ActionForm
@@ -394,13 +417,19 @@ export async function AccessPanel({ admin, p }: { admin: SupabaseClient; p: Prin
   );
 }
 
-function RoleCard({ role }: { role: Role }) {
+export function RoleCard({ role, yours = false }: { role: Role; yours?: boolean }) {
   const def = ROLES[role];
   return (
-    <article className="card cc-role">
-      <span className="eyebrow plain">{def.scope === 'platform' ? 'Memora team' : 'Funeral home'}</span>
+    <article className={`card cc-role${yours ? ' yours' : ''}`}>
+      <span className="eyebrow plain">
+        {def.scope === 'platform' ? 'Memora team' : 'Funeral home'}
+        {yours ? ' · You' : ''}
+      </span>
       <h3 className="h4">{def.label}</h3>
       <p className="small muted">{def.summary}</p>
+      <p className="small cc-for">
+        <strong>For:</strong> {def.forWho}
+      </p>
       <ul className="cc-cans">
         {roleGrants(role).map((perm) => (
           <li key={perm} className="can">
@@ -463,13 +492,15 @@ export async function AuditPanel({ admin }: { admin: SupabaseClient }) {
 /** A small picker to move a memorial into (or out of) a funeral home. */
 export function AssignHome({ caseId, orgId, orgs }: { caseId: string; orgId: string | null; orgs: { id: string; name: string }[] }) {
   return (
-    <ActionForm
-      action="org.assignMemorial"
-      extra={{ caseId }}
-      compact
-      submit="Move"
-      variant=""
-      fields={[{ name: 'orgId', label: 'Funeral home', type: 'select', value: orgId ?? '', options: [{ value: '', label: 'Family (no funeral home)' }, ...orgs.map((o) => ({ value: o.id, label: o.name }))] }]}
-    />
+    <div className="cc-assign">
+      <ActionForm
+        action="org.assignMemorial"
+        extra={{ caseId }}
+        compact
+        submit="Move"
+        variant=""
+        fields={[{ name: 'orgId', label: 'Funeral home', type: 'select', value: orgId ?? '', options: [{ value: '', label: 'No funeral home' }, ...orgs.map((o) => ({ value: o.id, label: o.name }))] }]}
+      />
+    </div>
   );
 }

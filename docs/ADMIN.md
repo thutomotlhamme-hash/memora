@@ -117,14 +117,31 @@ and can't, is on Command centre → Access, and in `src/lib/rbac.ts`.
   administrator can reset a Memora team member's password.
 - A disabled funeral home, or a switched-off group, grants nothing at once.
 
-**To onboard a funeral home:**
-1. Command centre → Funeral homes → Add a funeral home. It starts in trial
-   with its Owners, Managers, Directors and Arrangements groups.
-2. Ask their owner to create a Memora account, then add that number to their
-   Owners group (Access tab). They can add their own staff from
-   `/pro/dashboard`.
+**To onboard a funeral home (the quick way, a link):**
+1. Command centre → Funeral homes → *Onboard a funeral home with a link*.
+   Optionally type their name, pick the plan, press *Make onboarding link*.
+2. Press *WhatsApp* and send it. They open it on a phone or PC, create their
+   account with their cellphone number, fill in their details, and become the
+   owner of their funeral home, in trial. Each link works once, for 14 days.
 3. When the contract is signed: set the plan and prices (Finance), then
    Make active. Billing applies from that month.
+
+(Or add the home yourself with *+ Add a funeral home yourself*, then add their
+owner's number to its Owners group under Access.)
+
+**How a funeral home works (`/pro/dashboard`):** tabs appear by role.
+- *Today*: funerals this week, drafts waiting to be published, family links.
+- *Funerals*: grouped into This week / Being prepared / Coming up / Done.
+  Staff can open and edit any of the home's memorials, including ones a
+  family started. Directors publish (billed to the home) and get run-sheets.
+- *Family links*: type "Khumalo family", send the link on WhatsApp. The
+  family creates the memorial on their phone; it belongs to the home; the
+  family pays nothing and asks the home to publish when it's ready.
+- *Team*, *Who can do what*, *Branding*, *Plan & invoices*.
+
+**Command centre → Memorials** is grouped: *Made by the Memora team* (our own),
+one section per funeral home, and *Families on their own*. Filter by Drafts,
+Live or Closed; upcoming funerals sort to the top.
 
 **Billing:** Command centre → Billing → Raise invoices creates one draft per
 active home for the month: the monthly fee, each memorial published that

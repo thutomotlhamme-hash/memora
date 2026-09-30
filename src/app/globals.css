@@ -1418,3 +1418,31 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .pro-org-head { display: flex; gap: 14px; align-items: center; }
 .pro-org-head img, .pro-org-head .cc-org-mono { width: 56px; height: 56px; border-radius: 14px; object-fit: contain; }
 .pro-runlink { display: flex; gap: 6px; align-items: center; min-width: 260px; }
+
+/* ------------------------------------------- Links, grouping, funeral-home tabs */
+a.chip { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.tab-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--clay); color: #fff; font-size: 12px; font-weight: 600; }
+.pro-homes { gap: 6px; margin: -8px 0 16px; }
+.cc-onboard { margin-bottom: 16px; display: grid; gap: 12px; }
+.cc-filter { gap: 6px; margin-bottom: 16px; align-items: center; }
+.cc-jump { margin-left: auto; }
+.cc-mem-section { margin-bottom: 16px; }
+.cc-mem-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.cc-mem-head p { margin: 2px 0 0; }
+.cc-assign .action-form { display: flex; align-items: center; gap: 6px; }
+.cc-assign .field { margin: 0; }
+.cc-assign .field label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cc-assign .select { min-height: 36px; font-size: 14px; padding-top: 4px; padding-bottom: 4px; }
+.cc-role.yours { box-shadow: 0 0 0 2px var(--clay); }
+.cc-for { margin: 4px 0 0; }
+.invite-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.invite-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.invite-row.expired, .invite-row.revoked { opacity: 0.6; }
+.invite-state.open { background: var(--mist); color: var(--clay-ink); }
+.invite-state.used { background: #e3f1e7; color: #1e6b3a; }
+.join-wrap { display: grid; justify-items: center; padding: clamp(24px, 6vw, 64px) 16px 80px; }
+.join-card { width: 100%; max-width: 560px; }
+.join-steps { margin: 16px 0 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); }
+.join-form { display: grid; gap: 12px; }
+.join-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.join-form .field { margin: 0; }

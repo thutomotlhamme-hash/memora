@@ -3,6 +3,7 @@ import { CURRENCY, PRODUCT } from '@/lib/plans';
 import { readiness } from '@/lib/memorial';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { isCasePaid, loadOwnedCase } from '@/lib/server/cases';
+import { caseOrg } from '@/lib/server/org-cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
 import { createCheckout, yocoSecret } from '@/lib/server/yoco';
@@ -24,6 +25,8 @@ export async function POST(request: Request, { params }: Ctx) {
 
   const loaded = await loadOwnedCase(supabase, id);
   if (!loaded) return fail('Memorial not found.', 404);
+  // A funeral home's memorial is billed to the home: the family never pays.
+  if (await caseOrg(admin, id)) return fail('The funeral home publishes this memorial, so there’s nothing to pay.', 409);
   if (loaded.meta.status !== 'DRAFT') return fail('This memorial is already published.', 409);
   const r = readiness(loaded.draft);
   if (!r.complete) return fail(r.missing[0] ?? 'The memorial is not complete yet.', 409);

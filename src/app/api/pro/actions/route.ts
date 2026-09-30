@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (!body?.action || !ORG_SELF_SERVICE.has(body.action)) return fail('Not allowed here.', 403);
   try {
     const out = await performProAction(admin, access.principal, body);
-    return out.ok ? json({ message: out.message }) : fail(out.error, out.status);
+    return out.ok ? json({ message: out.message, ...(out.data ?? {}) }) : fail(out.error, out.status);
   } catch (err) {
     console.error('Pro action failed', body.action, err);
     return fail('Something went wrong. Refresh and check whether it was applied.', 500);

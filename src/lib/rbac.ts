@@ -48,6 +48,8 @@ export type RoleDef = {
   permissions: Permission[];
   /** Platform roles that also act inside every funeral home (to support them). */
   allOrgs?: Permission[];
+  /** Who the role is for, in everyday words. */
+  forWho: string;
   /** What this role can't do, said plainly. */
   cannot: string[];
 };
@@ -56,6 +58,7 @@ export const ROLES = {
   platform_admin: {
     label: 'Administrator',
     scope: 'platform',
+    forWho: 'You, and anyone who runs Memora with you.',
     summary: 'Runs Memora. Everything, everywhere.',
     permissions: PLATFORM_PERMISSIONS,
     allOrgs: ORG_PERMISSIONS,
@@ -64,6 +67,7 @@ export const ROLES = {
   ops: {
     label: 'Operations',
     scope: 'platform',
+    forWho: 'The person who signs up funeral homes and keeps things running.',
     summary: 'Onboards and looks after funeral homes and memorials day to day.',
     permissions: ['ops.view', 'orgs.manage', 'memorials.view_all', 'memorials.takedown', 'memorials.assign', 'gifts.manage', 'accounts.help', 'audit.view'],
     allOrgs: ['org.view', 'org.memorials.edit', 'org.runsheet', 'org.team', 'org.branding'],
@@ -72,6 +76,7 @@ export const ROLES = {
   support: {
     label: 'Support',
     scope: 'platform',
+    forWho: 'Whoever answers families’ and funeral homes’ WhatsApps.',
     summary: 'Helps families and funeral homes who are stuck.',
     permissions: ['ops.view', 'memorials.view_all', 'gifts.manage', 'accounts.help', 'audit.view'],
     allOrgs: ['org.view'],
@@ -80,6 +85,7 @@ export const ROLES = {
   finance: {
     label: 'Finance',
     scope: 'platform',
+    forWho: 'Whoever sends invoices and checks payments.',
     summary: 'Plans, prices, invoices and refunds.',
     permissions: ['ops.view', 'orgs.billing', 'orders.manage', 'audit.view'],
     allOrgs: ['org.billing.view'],
@@ -88,6 +94,7 @@ export const ROLES = {
   auditor: {
     label: 'Auditor',
     scope: 'platform',
+    forWho: 'An accountant or partner who needs to look, not touch.',
     summary: 'Read-only: sees memorials and the audit log.',
     permissions: ['ops.view', 'memorials.view_all', 'audit.view'],
     allOrgs: ['org.view'],
@@ -96,6 +103,7 @@ export const ROLES = {
   org_owner: {
     label: 'Funeral home owner',
     scope: 'org',
+    forWho: 'The owner of the funeral home business.',
     summary: 'Owns the funeral home’s Memora: team, branding, billing and every memorial.',
     permissions: ORG_PERMISSIONS,
     cannot: ['See other funeral homes', 'Change the plan or prices (ask Memora)'],
@@ -103,6 +111,7 @@ export const ROLES = {
   org_admin: {
     label: 'Funeral home manager',
     scope: 'org',
+    forWho: 'The branch or office manager.',
     summary: 'Runs the team and the memorials; sees the bill.',
     permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet', 'org.team', 'org.branding', 'org.billing.view'],
     cannot: ['See other funeral homes', 'Change the plan or prices'],
@@ -110,6 +119,7 @@ export const ROLES = {
   org_director: {
     label: 'Funeral director',
     scope: 'org',
+    forWho: 'The funeral director who conducts the service.',
     summary: 'Creates, publishes and runs funerals.',
     permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet'],
     cannot: ['Add or remove staff', 'Change branding', 'See billing'],
@@ -117,6 +127,7 @@ export const ROLES = {
   org_staff: {
     label: 'Arrangements staff',
     scope: 'org',
+    forWho: 'The arrangements clerk who sits with the family.',
     summary: 'Prepares memorials with families; a director publishes.',
     permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit'],
     cannot: ['Publish memorials', 'Run the day', 'Add staff', 'See billing'],
@@ -124,6 +135,7 @@ export const ROLES = {
   org_viewer: {
     label: 'Viewer',
     scope: 'org',
+    forWho: 'A receptionist or partner who only needs to look.',
     summary: 'Sees the funeral home’s memorials, changes nothing.',
     permissions: ['org.view'],
     cannot: ['Change anything'],
@@ -131,6 +143,12 @@ export const ROLES = {
 } as const satisfies Record<string, RoleDef>;
 
 export type Role = keyof typeof ROLES;
+
+/**
+ * The funeral-home roles that may edit that home's memorials. The database
+ * checks the same list (memora_org_edits in migration 0011): keep them in step.
+ */
+export const ORG_EDIT_ROLES = (Object.keys(ROLES) as Role[]).filter((r) => ROLES[r].scope === 'org' && (ROLES[r].permissions as readonly Permission[]).includes('org.memorials.edit'));
 export const ALL_ROLES = Object.keys(ROLES) as Role[];
 export const isRole = (v: unknown): v is Role => typeof v === 'string' && v in ROLES;
 export const roleScope = (r: Role): Scope => ROLES[r].scope;

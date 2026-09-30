@@ -7,7 +7,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { siteUrl } from '@/lib/config';
 import { fmtDate } from '@/lib/memorial';
 import { formatWhatsApp } from '@/lib/phone';
-import { formatMoney } from '@/lib/plans';
+import { PRO_PLANS, formatMoney } from '@/lib/plans';
 import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, setupChecks, teamInviteText, teamJoinText } from '@/lib/server/admin';
 import { getAdminAccess } from '@/lib/server/admin-auth';
 import { AccessPanel, AssignHome, AuditPanel, BillingPanel, HomesPanel } from '@/components/admin/CommandPanels';
@@ -36,7 +36,7 @@ const wa = (digits: string, text: string) => `https://wa.me/${digits}?text=${enc
 const when = (iso: string | null | undefined) => (iso ? fmtDate(String(iso).slice(0, 10)) : '—');
 const inDays = (d: number | null) => (d == null ? '' : d < 0 ? 'passed' : d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`);
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; status?: string }> }) {
   const access = await getAdminAccess();
 
   // ---- Unhappy paths: every visitor gets a clear, safe answer. ----
@@ -331,70 +331,150 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   }
 
   async function renderMemorials() {
-    const [cases, orgs, { data: links }] = await Promise.all([loadAdminCases(admin), loadOrgs(admin), admin.from('memora_cases').select('id,org_id').not('org_id', 'is', null)]);
+    const [cases, orgs, { data: links }, { data: people }, { data: platformGroups }, team] = await Promise.all([
+      loadAdminCases(admin),
+      loadOrgs(admin),
+      admin.from('memora_cases').select('id,org_id').not('org_id', 'is', null),
+      admin.rpc('memora_group_people'),
+      admin.from('memora_groups').select('id').is('org_id', null),
+      loadTeam(admin),
+    ]);
     const orgOf = new Map(((links ?? []) as { id: string; org_id: string }[]).map((l) => [l.id, l.org_id]));
-    const orgName = new Map(orgs.map((o) => [o.id, o.name]));
     const assign = can(p, 'memorials.assign');
     const takedown = can(p, 'memorials.takedown');
+    // Who counts as "us": owners, anyone in a Memora group, and the earlier team list.
+    const ours = new Set(((platformGroups ?? []) as { id: string }[]).map((g) => g.id));
+    const teamEmails = new Set([
+      ...team.owners,
+      ...team.staff.map((s) => s.email.toLowerCase()),
+      ...((people ?? []) as { group_id: string; email: string }[]).filter((m) => ours.has(m.group_id)).map((m) => m.email.toLowerCase()),
+    ]);
+
+    const filter = (await searchParams).status ?? 'all';
+    const shown = cases.filter((c) =>
+      filter === 'draft' ? c.status === 'DRAFT' : filter === 'live' ? c.status === 'PUBLISHED' : filter === 'closed' ? c.status === 'ARCHIVED' : true,
+    );
+    // Upcoming funerals first (soonest at the top), then the rest by last change.
+    const today = new Date().toISOString().slice(0, 10);
+    const order = (a: (typeof cases)[number], b: (typeof cases)[number]) => {
+      const au = a.funeralDate && a.funeralDate >= today ? a.funeralDate : null;
+      const bu = b.funeralDate && b.funeralDate >= today ? b.funeralDate : null;
+      if (au && bu) return au.localeCompare(bu);
+      if (au || bu) return au ? -1 : 1;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    };
+    const sections: { key: string; title: string; hint: string; rows: typeof cases; orgId?: string }[] = [
+      { key: 'ours', title: 'Made by the Memora team', hint: 'Memorials our own team made or is making.', rows: shown.filter((c) => !orgOf.has(c.id) && teamEmails.has(c.ownerEmail.toLowerCase())) },
+      ...orgs.map((o) => ({ key: o.id, orgId: o.id, title: o.name, hint: `${PRO_PLANS[o.plan].name} plan · ${o.status === 'trial' ? 'trial' : o.status}`, rows: shown.filter((c) => orgOf.get(c.id) === o.id) })),
+      { key: 'families', title: 'Families on their own', hint: 'Families who came to Memora directly, not through a funeral home.', rows: shown.filter((c) => !orgOf.has(c.id) && !teamEmails.has(c.ownerEmail.toLowerCase())) },
+    ];
+    const count = (st: string) => (st === 'all' ? cases.length : cases.filter((c) => (st === 'draft' ? c.status === 'DRAFT' : st === 'live' ? c.status === 'PUBLISHED' : c.status === 'ARCHIVED')).length);
+
     return (
-      <div className="board-wrap">
-        <table className="board">
-          <thead>
-            <tr>
-              <th>Memorial</th>
-              <th>Family account</th>
-              <th>Funeral home</th>
-              <th>Funeral</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cases.length === 0 && (
-              <tr>
-                <td colSpan={6} className="muted">
-                  No memorials yet.
-                </td>
-              </tr>
-            )}
-            {cases.map((c) => (
-              <tr key={c.id} id={c.id}>
-                <td>
-                  {c.name}
-                  <span className="sub">updated {when(c.updatedAt)}</span>
-                </td>
-                <td>{accountLabel(c.ownerEmail) || '—'}</td>
-                <td>{assign && orgs.length ? <AssignHome caseId={c.id} orgId={orgOf.get(c.id) ?? null} orgs={orgs} /> : (orgName.get(orgOf.get(c.id) ?? '') ?? '—')}</td>
-                <td>{c.funeralDate ? fmtDate(c.funeralDate) : '—'}</td>
-                <td>
-                  {c.status === 'PUBLISHED' ? 'Live' : c.status === 'ARCHIVED' ? 'Taken down / expired' : c.paid ? 'Draft · paid' : 'Draft'}
-                  {c.status === 'PUBLISHED' && <span className="sub">until {when(c.archiveAt)}</span>}
-                </td>
-                <td>
-                  <div className="row" style={{ gap: 6 }}>
-                    {c.slug && c.status === 'PUBLISHED' && (
-                      <a className="btn sm" href={`/m/${c.slug}`} target="_blank" rel="noopener noreferrer">
-                        Open ↗
-                      </a>
-                    )}
-                    {takedown && c.status === 'PUBLISHED' && (
-                      <AdminAction
-                        action="case.unpublish"
-                        id={c.id}
-                        label="Take down"
-                        variant="danger"
-                        prompt={{ field: 'reason', question: 'Why is this memorial being taken down? (e.g. family request, harmful content)' }}
-                        confirm="The public link will stop showing this memorial. The family keeps their draft. Continue?"
-                      />
-                    )}
-                    {takedown && c.status === 'ARCHIVED' && c.publishedAt && <AdminAction action="case.restore" id={c.id} label="Restore" />}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <>
+        <nav className="row cc-filter" aria-label="Filter memorials">
+          {(
+            [
+              ['all', 'All'],
+              ['draft', 'Drafts'],
+              ['live', 'Live'],
+              ['closed', 'Closed'],
+            ] as const
+          ).map(([k, label]) => (
+            <Link key={k} className={`chip${filter === k ? ' on' : ''}`} href={`/admin?tab=memorials&status=${k}`}>
+              {label} <span className="muted">{count(k)}</span>
+            </Link>
+          ))}
+          <span className="muted small cc-jump">
+            Jump to:{' '}
+            {sections
+              .filter((s) => s.rows.length)
+              .map((s, i) => (
+                <span key={s.key}>
+                  {i ? ' · ' : ''}
+                  <a href={`#sec-${s.key}`}>{s.title}</a>
+                </span>
+              ))}
+          </span>
+        </nav>
+        {sections.map((sec) =>
+          sec.rows.length === 0 && sec.key !== 'families' ? null : (
+            <section key={sec.key} id={`sec-${sec.key}`} className="card cc-mem-section">
+              <header className="cc-mem-head">
+                <div>
+                  <h2 className="h3">
+                    {sec.title} <span className="muted small">{sec.rows.length}</span>
+                  </h2>
+                  <p className="small muted">{sec.hint}</p>
+                </div>
+                {sec.orgId && (
+                  <Link className="btn sm" href={`/pro/dashboard?home=${sec.orgId}&tab=funerals`}>
+                    Their dashboard
+                  </Link>
+                )}
+              </header>
+              {sec.rows.length === 0 ? (
+                <p className="muted small">None{filter === 'all' ? '' : ' with this filter'}.</p>
+              ) : (
+                <div className="board-wrap">
+                  <table className="board">
+                    <thead>
+                      <tr>
+                        <th>Memorial</th>
+                        <th>Made by</th>
+                        <th>Funeral</th>
+                        <th>Status</th>
+                        {assign && <th>Funeral home</th>}
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...sec.rows].sort(order).map((c) => (
+                        <tr key={c.id} id={c.id}>
+                          <td>
+                            {c.name}
+                            <span className="sub">updated {when(c.updatedAt)}</span>
+                          </td>
+                          <td>{accountLabel(c.ownerEmail) || '—'}</td>
+                          <td>
+                            {c.funeralDate ? fmtDate(c.funeralDate) : '—'}
+                            {c.funeralDate && c.funeralDate >= today && <span className="sub">{inDays(Math.round((Date.parse(c.funeralDate) - Date.parse(today)) / 86_400_000))}</span>}
+                          </td>
+                          <td>
+                            {c.status === 'PUBLISHED' ? 'Live' : c.status === 'ARCHIVED' ? 'Taken down / expired' : c.paid ? 'Draft · paid' : 'Draft'}
+                            {c.status === 'PUBLISHED' && <span className="sub">until {when(c.archiveAt)}</span>}
+                          </td>
+                          {assign && <td>{orgs.length ? <AssignHome caseId={c.id} orgId={orgOf.get(c.id) ?? null} orgs={orgs} /> : '—'}</td>}
+                          <td>
+                            <div className="row" style={{ gap: 6 }}>
+                              {c.slug && c.status === 'PUBLISHED' && (
+                                <a className="btn sm" href={`/m/${c.slug}`} target="_blank" rel="noopener noreferrer">
+                                  Open ↗
+                                </a>
+                              )}
+                              {takedown && c.status === 'PUBLISHED' && (
+                                <AdminAction
+                                  action="case.unpublish"
+                                  id={c.id}
+                                  label="Take down"
+                                  variant="danger"
+                                  prompt={{ field: 'reason', question: 'Why is this memorial being taken down? (e.g. family request, harmful content)' }}
+                                  confirm="The public link will stop showing this memorial. The family keeps their draft. Continue?"
+                                />
+                              )}
+                              {takedown && c.status === 'ARCHIVED' && c.publishedAt && <AdminAction action="case.restore" id={c.id} label="Restore" />}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          ),
+        )}
+      </>
     );
   }
 

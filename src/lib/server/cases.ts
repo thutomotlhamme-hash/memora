@@ -142,10 +142,12 @@ export interface CaseSummary {
   archiveAt: string | null;
 }
 
-export async function listOwnedCases(client: SupabaseClient): Promise<CaseSummary[]> {
+/** The memorials this person made. (A funeral home's staff see the home's memorials on its dashboard.) */
+export async function listOwnedCases(client: SupabaseClient, userId: string): Promise<CaseSummary[]> {
   const { data: cases, error } = await client
     .from('memora_cases')
     .select('id,status,slug,updated_at,archive_at,memora_people(first_name,last_name,preferred_name,passing_date,portrait_path),memora_stops(event_date,sort_order)')
+    .eq('owner_id', userId)
     .order('updated_at', { ascending: false })
     .limit(50);
   if (error || !cases) return [];

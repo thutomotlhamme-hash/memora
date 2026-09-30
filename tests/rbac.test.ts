@@ -171,3 +171,15 @@ test('without a home named, a funeral-home permission is not granted', () => {
   assert.equal(can(null, 'org.view', HOME_A), false);
   assert.equal(can(null, 'ops.view'), false);
 });
+
+test('the roles the database lets edit a home’s memorials match the code', async () => {
+  const { ORG_EDIT_ROLES } = await import('../src/lib/rbac.ts');
+  const { readFileSync } = await import('node:fs');
+  const sql = readFileSync(new URL('../supabase/migrations/0011_memora_invites_home_editing.sql', import.meta.url), 'utf8');
+  const listed = [...(sql.match(/g\.roles && array\[([^\]]+)\]/)?.[1].matchAll(/'([a-z_]+)'/g) ?? [])].map((m) => m[1]);
+  assert.deepEqual([...listed].sort(), [...ORG_EDIT_ROLES].sort());
+});
+
+test('every role says who it is for', () => {
+  for (const r of ALL_ROLES) assert.ok((ROLES[r] as { forWho: string }).forWho.length > 10, r);
+});

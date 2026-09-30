@@ -17,20 +17,30 @@ function set(next: Partial<State>) {
   listeners.forEach((l) => l());
 }
 
-/** What this person may open: the command centre (team) and/or a funeral home's dashboard (pro). */
-async function accessFor(userId: string): Promise<{ team: boolean; pro: boolean }> {
-  const key = `memora:access:${userId}`;
+type Access = { team: boolean; pro: boolean };
+const keyFor = (userId: string) => `memora:access:${userId}`;
+
+function cachedAccess(userId: string): Access | null {
   try {
-    const cached = sessionStorage.getItem(key);
-    if (cached) return JSON.parse(cached);
+    const raw = sessionStorage.getItem(keyFor(userId));
+    return raw ? (JSON.parse(raw) as Access) : null;
   } catch {
-    /* storage blocked */
+    return null;
   }
-  const res = await fetch('/api/account/me').catch(() => null);
+}
+
+/**
+ * What this person may open: the command centre (team) and/or a funeral home's
+ * dashboard (pro). The last answer shows at once; a fresh one is always fetched,
+ * so being added to (or removed from) a group shows up on the next page.
+ */
+async function freshAccess(userId: string): Promise<Access | null> {
+  const res = await fetch('/api/account/me', { cache: 'no-store' }).catch(() => null);
   const body = res?.ok ? await res.json().catch(() => null) : null;
-  const out = { team: Boolean(body?.team), pro: Boolean(body?.pro) };
+  if (!body) return null;
+  const out = { team: Boolean(body.team), pro: Boolean(body.pro) };
   try {
-    sessionStorage.setItem(key, JSON.stringify(out));
+    sessionStorage.setItem(keyFor(userId), JSON.stringify(out));
   } catch {
     /* storage blocked */
   }
@@ -44,8 +54,8 @@ function start() {
   if (!supabase) return set({ known: true });
   const apply = (userId: string | null) => {
     if (userId === state.userId && state.known) return;
-    set({ known: true, userId, team: false, pro: false });
-    if (userId) void accessFor(userId).then((a) => state.userId === userId && set(a));
+    set({ known: true, userId, ...((userId && cachedAccess(userId)) || { team: false, pro: false }) });
+    if (userId) void freshAccess(userId).then((a) => a && state.userId === userId && set(a));
   };
   void supabase.auth.getSession().then(({ data }) => {
     const u = data.session?.user;

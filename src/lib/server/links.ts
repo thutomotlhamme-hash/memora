@@ -6,7 +6,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // Nothing secret sits in the database, and a gift's status (not the token) decides
 // whether a link still works.
 
-type Purpose = 'redeem' | 'buyer';
+type Purpose = 'redeem' | 'buyer' | 'invite';
 
 export function linkSecret(): string {
   return process.env.MEMORA_LINK_SECRET ?? '';

@@ -11,6 +11,8 @@ test.describe('Example memorial on the day', () => {
     await expect(now).toContainText('Naledi Magumba');
     await expect(now).toContainText('Family tributes');
     await expect(now.getByRole('link', { name: 'Directions' }).first()).toHaveAttribute('href', /google\.com\/maps/);
+    // The programme leads: the item on now is the headline, the place a detail.
+    await expect(now.locator('.sl-item')).toHaveText('Family tributes');
     // The usual header would repeat the portrait: it steps aside while the live view is on.
     await expect(page.locator('.m-hero')).toBeHidden();
   });

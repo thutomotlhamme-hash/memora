@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useEffect, useRef, useState } from 'react';
 import { useNow } from '@/lib/hooks';
-import { directionsUrl, fmtDate, prayerEveningFor, stopLabel, withPrayers, type Draft, type PrayerEvening, type Stop } from '@/lib/memorial';
-import { distanceM, etaRange, formatEta } from '@/lib/procession';
+import { directionsUrl, fmtDate, partOf, prayerEveningFor, stopLabel, withPrayers, type Draft, type PrayerEvening, type Stop } from '@/lib/memorial';
+import { distanceM, etaRange, formatDistance, formatEta } from '@/lib/procession';
 import { stageView, type StageView } from '@/lib/stage';
 import { BrandMark } from './Brand';
 import { useLiveData, type LiveData } from './LiveMemorial';
@@ -12,6 +13,14 @@ import { useLiveData, type LiveData } from './LiveMemorial';
 // memorial opens on a full-screen night view of what's happening now, driven by
 // the coordinator's run-sheet. Everything else is one scroll below. When guests
 // scroll away, a small bar keeps "now" in reach and changes as the day moves on.
+//
+// The programme item is the headline while it runs. When the procession leaves,
+// the stage hands over to the map; when the graveside starts, back to the
+// programme. Guests are brought back to the stage only at those handoffs (the
+// programme starting, leaving, arriving, the end), never between items, and
+// never while they're typing: between items only the bar updates.
+
+const ProcessionMap = dynamic(() => import('./ProcessionMap').then((m) => m.ProcessionMap), { ssr: false });
 
 const hasPin = (s: Stop) => Number.isFinite(s.lat) && Number.isFinite(s.lng) && !(s.lat === 0 && s.lng === 0);
 const place = (s: Stop) => (s.landmark ? `${s.title} · ${s.landmark}` : s.title);
@@ -89,6 +98,23 @@ function Stage({
   }, []);
 
   const { mode, vigil, focus, programme: prog, after } = view;
+  const procession = data.procession ?? null;
+  const onTheRoad = Boolean(procession && procession.state !== 'paused');
+
+  // The big moments bring guests back to the stage, once each.
+  const moment = onTheRoad ? `road:${procession?.toStopId ?? ''}` : prog?.current ? `prog:${partOf(prog.current)}` : `${mode}:${focus?.id ?? ''}`;
+  const lastMoment = useRef<string | null>(null);
+  useEffect(() => {
+    const before = lastMoment.current;
+    lastMoment.current = moment;
+    if (before === null || before === moment) return;
+    const el = document.getElementById('now');
+    if (!el) return;
+    const typing = document.activeElement instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable);
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!typing && el.getBoundingClientRect().top < -40) el.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+    if (!still) el.querySelector('.sl-inner')?.animate([{ opacity: 0.55, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 650, easing: 'cubic-bezier(.25,.1,.25,1)' });
+  }, [moment]);
   const tonight = vigil || focus?.type === 'prayers' ? 'Tonight' : 'Today';
 
   const kicker =
@@ -124,7 +150,6 @@ function Stage({
           ? `Heading to · ${focus.time}`
           : `Starts at ${focus.time}${startsIn != null ? ` · ${formatIn(startsIn)}` : ''}`;
 
-  const procession = data.procession ?? null;
   const dest = procession ? (data.journey.find((s) => s.id === procession.toStopId) ?? null) : null;
   const eta =
     procession?.state === 'moving' && dest && hasPin(dest)
@@ -132,8 +157,10 @@ function Stage({
       : '';
 
   // The bar's key changes with what's on, so it replays its arrival when the coordinator moves on.
-  const barKey = `${prog?.current?.id ?? ''}|${focus?.id ?? ''}|${mode}`;
-  const barText = prog?.current
+  const barKey = `${prog?.current?.id ?? ''}|${focus?.id ?? ''}|${mode}|${onTheRoad ? 'road' : ''}`;
+  const barText = onTheRoad
+    ? `The procession${dest ? ` to ${dest.title}` : ''}${eta ? ` · ${eta.toLowerCase()}` : ''}`
+    : prog?.current
     ? prog.current.title
     : mode === 'transit' && focus
       ? `On the way to ${focus.title}`
@@ -142,8 +169,9 @@ function Stage({
         : mode === 'after' && focus
           ? `${afterWhat === 'refreshments' ? 'Refreshments' : 'After-tears'} at ${focus.title}`
           : (focus?.title ?? '');
-  const barLabel =
-    mode === 'now' || mode === 'broadcast' || (mode === 'after' && view.arrived) ? 'Now' : mode === 'transit' ? 'Live' : mode === 'after' ? 'Next' : tonight;
+  const barLabel = onTheRoad
+    ? 'Live'
+    : mode === 'now' || mode === 'broadcast' || (mode === 'after' && view.arrived) ? 'Now' : mode === 'transit' ? 'Live' : mode === 'after' ? 'Next' : tonight;
 
   const cardSub = focus ? where(focus) : (prog?.current?.presenter ?? '');
 
@@ -168,6 +196,9 @@ function Stage({
             {dates && <div className="sl-dates">{dates}</div>}
           </div>
 
+          {onTheRoad && procession ? (
+            <StageProcession procession={procession} dest={dest} eta={eta} now={now} />
+          ) : (
           <article className="sl-card now" key={`${focus?.id ?? 'prog'}-${mode}`}>
             <div className="k">
               <span className={`sl-dot${mode === 'vigil_ended' || mode === 'after' ? ' still' : ''}`} aria-hidden="true" />
@@ -180,14 +211,26 @@ function Stage({
                   : 'The family thanks everyone who came to pray and remember. Tomorrow’s details are below.'}
               </p>
             ) : null}
-            {mode !== 'vigil_ended' && (focus || prog?.current) && (
+            {mode !== 'vigil_ended' && prog?.current ? (
+              // The programme takes centre stage: what's on, who leads it, then where.
               <>
-                <div className="sl-card-k2">{cardKicker}</div>
-                <div className="t" key={focus?.id ?? prog?.current?.id}>
-                  {focus ? focus.title : prog?.current?.title}
+                <div className="sl-card-k2">{prog.where}</div>
+                <div className="t sl-item" key={prog.current.id}>
+                  {prog.current.title}
                 </div>
-                {cardSub && <div className="s">{cardSub}</div>}
+                {prog.current.presenter && <div className="s">{prog.current.presenter}</div>}
               </>
+            ) : (
+              mode !== 'vigil_ended' &&
+              focus && (
+                <>
+                  <div className="sl-card-k2">{cardKicker}</div>
+                  <div className="t" key={focus.id}>
+                    {focus.title}
+                  </div>
+                  {cardSub && <div className="s">{cardSub}</div>}
+                </>
+              )
             )}
             {evening && (evening.word || evening.scripture || evening.leader) && (
               <div className="sl-evening">
@@ -212,11 +255,11 @@ function Stage({
               </div>
             )}
             {focus && prog?.current && (
-              <div className="sl-row live" key={prog.current.id}>
-                <span>{prog.where}</span>
+              <div className="sl-row">
+                <span>Where</span>
                 <strong>
-                  {prog.current.title}
-                  {prog.current.presenter && <small>{prog.current.presenter}</small>}
+                  {focus.title}
+                  {cardSub && <small>{cardSub}</small>}
                 </strong>
               </div>
             )}
@@ -234,8 +277,9 @@ function Stage({
             )}
             {focus && mode !== 'vigil_ended' && hasPin(focus) && <Directions stop={focus} />}
           </article>
+          )}
 
-          {procession && (
+          {procession && !onTheRoad && (
             <a className="sl-card sl-proc" href="#procession">
               <div>
                 <div className="k soft">The procession</div>
@@ -287,6 +331,42 @@ function Stage({
         <span className="nb-go">View</span>
       </a>
     </>
+  );
+}
+
+/** On the road: the map is the stage, with how far and how long. */
+function StageProcession({ procession, dest, eta, now }: { procession: NonNullable<LiveData['procession']>; dest: Stop | null; eta: string; now: Date }) {
+  const car = procession.state === 'moving' ? { lat: procession.lat, lng: procession.lng } : null;
+  const destPoint = dest && hasPin(dest) ? { lat: dest.lat, lng: dest.lng } : null;
+  const metres = car && destPoint ? distanceM(car, destPoint) : null;
+  const arrived = metres != null && metres <= 150;
+  const ago = 'positionAt' in procession && procession.positionAt ? Math.max(0, Math.round((now.getTime() - new Date(procession.positionAt).getTime()) / 60_000)) : null;
+  return (
+    <article className="sl-card now sl-road" key="road">
+      <div className="k">
+        <span className="sl-dot" aria-hidden="true" />
+        <span id="now-title">{arrived ? 'Arriving' : procession.state === 'waiting' ? 'Leaving now' : 'On the road'}</span>
+      </div>
+      <div className="sl-card-k2">The procession is heading to</div>
+      <div className="t">{dest ? dest.title : 'On its way'}</div>
+      <div className="s">
+        {procession.state === 'waiting'
+          ? 'The cars are about to leave. The map fills in within a minute.'
+          : procession.state === 'signal_lost'
+            ? `Waiting for the next update${ago != null ? ` (${ago} min)` : ''}. The lead car may be out of signal.`
+            : arrived
+              ? 'The procession is arriving now.'
+              : eta
+                ? `${eta} away${metres != null ? ` · ${formatDistance(metres)}` : ''}`
+                : 'On the road now'}
+      </div>
+      {(car || destPoint) && (
+        <div className="sl-map">
+          <ProcessionMap car={car} destination={destPoint} destinationLabel={dest?.title ?? 'the destination'} />
+        </div>
+      )}
+      {dest && hasPin(dest) && <Directions stop={dest} />}
+    </article>
   );
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { fmtDate, localDateKey, stopLabel, type Stop } from '@/lib/memorial';
 import { ARRIVAL_RADIUS_M, SHARING_HOURS, distanceM, etaRange, formatDistance, formatEta, shouldSend, type ProcessionRecord } from '@/lib/procession';
@@ -22,18 +22,23 @@ function defaultDestination(journey: Stop[]): string {
   return (next ?? journey.find(hasCoords))?.id ?? '';
 }
 
+/** What the run-sheet can ask of the procession: leave for a stop, or stop sharing on arrival. */
+export type ProcessionHandle = { startTo: (stopId: string) => void; endIfSharing: (message?: string) => void };
+
 export function ProcessionControl({
   token,
   journey,
   record,
   onRecord,
   onRevoked,
+  ref,
 }: {
   token: string;
   journey: Stop[];
   record: ProcessionRecord | null;
   onRecord: (r: ProcessionRecord | null) => void;
   onRevoked: () => void;
+  ref?: React.Ref<ProcessionHandle>;
 }) {
   const toast = useToast();
   const [toStop, setToStop] = useState(() => record?.toStopId ?? defaultDestination(journey));
@@ -162,15 +167,15 @@ export function ProcessionControl({
     };
   }, [holdScreen]);
 
-  const start = async () => {
-    if (!toStop) return setProblem('Choose where the procession is going.');
+  const start = async (to: string = toStop) => {
+    if (!to) return setProblem('Choose where the procession is going.');
     if (!('geolocation' in navigator)) return setProblem('This phone’s browser can’t share location. Try Chrome or Safari.');
     setBusy(true);
     setProblem('');
     // Ask for permission first, so guests never see "about to leave" from a phone that can't share.
     navigator.geolocation.getCurrentPosition(
       async () => {
-        const r = await send({ action: 'start', toStopId: toStop });
+        const r = await send({ action: 'start', toStopId: to });
         setBusy(false);
         if (r !== 'failed') {
           startWatching();
@@ -188,6 +193,16 @@ export function ProcessionControl({
       { enableHighAccuracy: true, timeout: 20_000 },
     );
   };
+
+  useImperativeHandle(ref, () => ({
+    startTo: (stopId: string) => {
+      setToStop(stopId);
+      if (status === 'ENDED') void start(stopId);
+    },
+    endIfSharing: (message?: string) => {
+      if (status !== 'ENDED' || watchId.current != null) void end(message);
+    },
+  }));
 
   const pause = async () => {
     stopWatching();

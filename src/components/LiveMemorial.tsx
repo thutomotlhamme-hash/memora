@@ -18,9 +18,13 @@ export type LiveData = {
 };
 
 const LiveContext = createContext<LiveData | null>(null);
-/** How often guests' pages check in: closely while something is on, gently the rest of the time. */
-const RUNNING_POLL_MS = 6_000;
-const DAY_POLL_MS = 15_000;
+/**
+ * How often guests' pages check in: every few seconds on the day (with the CDN's
+ * 2-second cache, a change reaches every guest within about 5 seconds), gently
+ * the rest of the time.
+ */
+const RUNNING_POLL_MS = 3_000;
+const DAY_POLL_MS = 3_000;
 const QUIET_POLL_MS = 60_000;
 
 function pollEvery(d: LiveData): number {

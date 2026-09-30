@@ -5,9 +5,10 @@ import { useToast } from '@/components/Toast';
 import { useNow } from '@/lib/hooks';
 import { PROGRAMME_PARTS, PROGRAMME_TYPE_LABELS, partLabel, partOf, partStart, partStartLabel, sortByPart, fmtDate, journeyOrderProblem, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammePart, type ProgrammeType, type Stop } from '@/lib/memorial';
 import type { ProcessionRecord } from '@/lib/procession';
-import { ProcessionControl } from './ProcessionControl';
+import { ProcessionControl, type ProcessionHandle } from './ProcessionControl';
+import { partsForStop } from '@/lib/stage';
 import { FUNERAL_ENDED, dayOfPart, endedDay, endedKey, type RunDay } from '@/lib/live';
-import { insertItem, moveItem, shiftFrom, shiftTodaysStops, startItem, toMinutes } from '@/lib/runsheet';
+import { durations, fromMinutes, insertItem, moveItem, shiftFrom, shiftTodaysStops, startItem, toMinutes } from '@/lib/runsheet';
 
 // The funeral-day coordinator's console. Every change is shown at once, saved in
 // the background, and reaches guests' memorial pages within half a minute.
@@ -178,6 +179,26 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   const today = now ? localDateKey(now) : '';
   const todaysStops = snap.journey.filter((s) => s.date === today);
 
+  // Leaving for the graveside: the last service item warns the MC, and one tap
+  // finishes the service and starts sharing the procession, so guests' screens
+  // hand over from the programme to the map.
+  const procRef = useRef<ProcessionHandle>(null);
+  const pinned = (s: Stop) => Number.isFinite(s.lat) && Number.isFinite(s.lng) && !(s.lat === 0 && s.lng === 0);
+  const dayStops = [...todaysStops].sort((a, b) => a.time.localeCompare(b.time));
+  const serviceAt = dayStops.findIndex((s) => partsForStop(s).includes('service'));
+  const leaveTo = serviceAt >= 0 ? (dayStops.slice(serviceAt + 1).find(pinned) ?? null) : null;
+  const liveItem = liveIndex >= 0 ? items[liveIndex] : null;
+  // Many MCs put the departure in the programme itself ("Procession to the cemetery").
+  const isDeparture = (i: ProgrammeItem | null) => Boolean(i && /\b(procession|depart(ure|s|ing)?|leav(e|es|ing)|off to the (cemetery|grave))\b/i.test(i.title));
+  const departureNext = Boolean(runDay === 'day' && leaveTo && isDeparture(nextItem));
+  const lastBeforeLeaving = Boolean(
+    runDay === 'day' && liveItem && leaveTo && !isDeparture(liveItem) && (departureNext || (partOf(liveItem) === 'service' && (!nextItem || partOf(nextItem) !== 'service'))),
+  );
+  const sharing = Boolean(snap.procession && snap.procession.status !== 'ENDED');
+  const sharingTo = sharing ? (snap.journey.find((st) => st.id === snap.procession?.toStopId) ?? null) : null;
+  const graveFirst = items.find((i) => partOf(i) === 'graveside') ?? null;
+  const graveNext = runDay === 'day' && graveFirst && (dayDone || (liveItem && partOf(liveItem) === 'service' && lastBeforeLeaving)) ? graveFirst : null;
+
   /** Later stops today move with the programme when the toggle is on. */
   const stopShift = (minutes: number): { journey?: Stop[]; stopTimes?: Pending['stopTimes'] } => {
     if (!moveStops || !minutes) return {};
@@ -208,6 +229,24 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
     toast(runDay === 'vigil' ? 'The vigil is finished. Guests now see a thank-you and tomorrow’s details.' : 'The service is finished. Guests keep seeing the rest of the day’s journey.');
   };
 
+  const leave = () => {
+    if (!leaveTo) return;
+    if (departureNext && nextItem) {
+      // Their own departure item goes live, and the procession starts with it.
+      start(nextItem.id);
+    } else {
+      const key = endedKey('day');
+      commit({ liveKey: key }, { liveKey: key });
+    }
+    procRef.current?.startTo(leaveTo.id);
+    toast(`Leaving for ${leaveTo.title}. Guests’ screens are switching to the procession map.`);
+  };
+
+  const arrive = (item: ProgrammeItem) => {
+    procRef.current?.endIfSharing(`Arrived. Guests are back on the programme: ${item.title}.`);
+    start(item.id);
+  };
+
   const endFuneral = () => {
     if (!window.confirm('End the funeral? Guests will see a thank-you and where the refreshments and after-tears are.')) return;
     commit({ liveKey: FUNERAL_ENDED }, { liveKey: FUNERAL_ENDED });
@@ -232,14 +271,47 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
     commit({ programme: next }, { programme: next });
   };
 
+  // Deleting is one tap; a short Undo replaces the "are you sure?".
+  const [undo, setUndo] = useState<{ title: string; programme: ProgrammeItem[]; liveKey: string | null } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remove = (item: ProgrammeItem) => {
     if (items.length <= 1) return toast('Keep at least one item in the programme.', 'error');
-    if (!window.confirm(`Remove “${item.title}” from the programme?`)) return;
     const next = items.filter((i) => i.id !== item.id);
     const liveGone = snap.liveKey === item.id;
+    setUndo({ title: item.title, programme: items, liveKey: snap.liveKey });
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndo(null), 7000);
     commit({ programme: next, ...(liveGone ? { liveKey: null } : {}) }, { programme: next, ...(liveGone ? { liveKey: null } : {}) });
     setEditing(null);
-    toast(`Removed “${item.title}”.`);
+  };
+  const undoRemove = () => {
+    if (!undo) return;
+    commit({ programme: undo.programme, liveKey: undo.liveKey }, { programme: undo.programme, liveKey: undo.liveKey });
+    setUndo(null);
+    toast(`“${undo.title}” is back.`);
+  };
+
+  // Times out of order after the live item (e.g. early starts on an older version): offer to lay the rest out from now.
+  const liveMin = liveItem ? toMinutes(liveItem.time) : null;
+  const upcoming = liveIndex >= 0 ? items.slice(liveIndex + 1).filter(inDay) : [];
+  const disordered = liveMin != null && upcoming.some((it, n) => {
+    const m = toMinutes(it.time);
+    const prev = n === 0 ? liveMin : toMinutes(upcoming[n - 1].time);
+    return m != null && prev != null && m < prev;
+  });
+  const tidy = () => {
+    if (liveMin == null) return;
+    const lengths = durations(items);
+    let t = liveMin + (lengths.get(liveItem!.id) ?? 10);
+    const ids = new Set(upcoming.map((u) => u.id));
+    const next = items.map((it) => {
+      if (!ids.has(it.id)) return it;
+      const out = { ...it, time: fromMinutes(t) };
+      t += Math.min(lengths.get(it.id) ?? 10, 30);
+      return out;
+    });
+    commit({ programme: next }, { programme: next });
+    toast('The rest of the programme now runs in order from now.');
   };
 
   const saveEdit = (item: ProgrammeItem, afterIndex: number | null) => {
@@ -366,6 +438,12 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
             <div className="t">{items[liveIndex].title}</div>
             {items[liveIndex].presenter && <div className="p">{items[liveIndex].presenter}</div>}
           </>
+        ) : dayDone && sharing && runDay === 'day' ? (
+          <>
+            <div className="k">The procession · on the way</div>
+            <div className="t">To {sharingTo?.title ?? 'the next stop'}</div>
+            <div className="p">Guests are following the map. When you arrive, start the graveside and their screens switch back to the programme.</div>
+          </>
         ) : dayDone ? (
           <>
             <div className="k">Finished</div>
@@ -377,33 +455,71 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
             <div className="t">{firstItem ? `Tap Start when ${dayName} begins.` : runDay === 'vigil' ? 'The vigil has no programme yet. Add items below.' : 'Add the first item below.'}</div>
           </>
         )}
+        {lastBeforeLeaving && leaveTo && (
+          <div className="run-leave" role="status">
+            <span className="run-leave-k">Last item before leaving</span>
+            <p>
+              When this ends, tap <strong>{departureNext && nextItem ? nextItem.title : `Leave for ${leaveTo.title}`}</strong>. {departureNext ? 'It' : 'The service finishes and it'} starts
+              sharing the procession from this phone, and guests’ screens switch to the map.
+            </p>
+          </div>
+        )}
         <div className="row" style={{ marginTop: 14 }}>
-          {liveIndex < 0 && firstItem && (
+          {liveIndex < 0 && dayDone && graveNext && (
+            <button className="btn on-night primary" type="button" onClick={() => arrive(graveNext)}>
+              {sharing ? 'Arrived · start' : 'Start the graveside'}: {graveNext.title}
+            </button>
+          )}
+          {liveIndex < 0 && firstItem && !(dayDone && graveNext) && (
             <button className="btn on-night primary" type="button" onClick={() => start(firstItem.id)}>
               {dayDone ? 'Start again' : 'Start'}: {firstItem.title}
             </button>
           )}
-          {liveIndex >= 0 && nextItem && (
+          {lastBeforeLeaving && leaveTo && (
+            <button className="btn on-night candle" type="button" onClick={leave}>
+              {departureNext && nextItem ? `${nextItem.title} →` : `Leave for ${leaveTo.title} →`}
+            </button>
+          )}
+          {liveIndex >= 0 && nextItem && !lastBeforeLeaving && (
             <button className="btn on-night primary" type="button" onClick={() => start(nextItem.id)}>
               Next: {nextItem.title}
             </button>
           )}
           {liveIndex >= 0 && (
             <button className="btn on-night" type="button" onClick={finish}>
-              {runDay === 'vigil' ? 'Finish the vigil' : 'Finish the service'}
+              {runDay === 'vigil' ? 'Finish the vigil' : lastBeforeLeaving ? 'Finish without the procession' : 'Finish the service'}
             </button>
           )}
-          {runDay === 'day' && (liveIndex >= 0 || dayDone) && (
+          {runDay === 'day' && (liveIndex >= 0 || dayDone) && !lastBeforeLeaving && (
             <button className="btn on-night candle" type="button" onClick={endFuneral}>
               End the funeral
             </button>
           )}
         </div>
-        {snap.status === 'PUBLISHED' && <p className="run-note">Guests with the memorial open see this full-screen within about 15 seconds.</p>}
+        {disordered && (
+          <div className="run-leave" role="status">
+            <span className="run-leave-k">Times out of order</span>
+            <p>Some items after this one are timed earlier than it.</p>
+            <button className="btn sm on-night" type="button" style={{ marginTop: 8 }} onClick={tidy}>
+              Tidy the times from now
+            </button>
+          </div>
+        )}
+        {snap.status === 'PUBLISHED' && <p className="run-note">Guests with the memorial open see each change within about 5 seconds.</p>}
       </section>
       )}
 
+      {undo && (
+        <div className="run-undo" role="status">
+          <span>Deleted “{undo.title}”.</span>
+          <button type="button" onClick={undoRemove}>
+            Undo
+          </button>
+        </div>
+      )}
+
       <ProcessionControl
+        ref={procRef}
         token={token}
         journey={snap.journey}
         record={snap.procession ?? null}
@@ -498,6 +614,11 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
                   </button>
                   <button className="icon-btn" type="button" aria-label={`Add an item after ${item.title}`} onClick={() => setEditing({ item: blank(partOf(item)), afterIndex: i })}>
                     +
+                  </button>
+                  <button className="icon-btn danger" type="button" aria-label={`Delete ${item.title}`} title="Delete" disabled={Boolean(drag)} onClick={() => remove(item)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6" />
+                    </svg>
                   </button>
                 </div>
               </li>

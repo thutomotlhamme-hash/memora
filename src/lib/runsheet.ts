@@ -76,6 +76,8 @@ export function shiftFrom(items: ProgrammeItem[], fromIndex: number, minutes: nu
 
 /** Starting more than this early or late doesn't move the rest of the programme. */
 export const MAX_SHIFT_MINUTES = 180;
+/** Starting early pulls the rest earlier by at most this much: guests plan around the printed times. */
+export const MAX_EARLY_MINUTES = 30;
 
 /**
  * The coordinator taps "Start" on an item. It becomes the live item and its time
@@ -90,11 +92,19 @@ export function startItem(items: ProgrammeItem[], key: string, now: Date, shiftU
   let next = items.map((item, i) => (i === index ? { ...item, time: fromMinutes(nowMin) } : item));
   // Hours away from the plan (a test run, or a wrong clock): start it, but don't move the rest.
   if (Math.abs(delay) > MAX_SHIFT_MINUTES) return { items: next, delay: 0 };
-  if (shiftUpcoming && delay !== 0) {
+  const shift = Math.max(delay, -MAX_EARLY_MINUTES);
+  if (shiftUpcoming && shift !== 0) {
     const after = next.findIndex((item, i) => i > index && sameRun(item, items[index]));
-    if (after >= 0) next = shiftFrom(next, after, delay);
+    if (after >= 0) next = shiftFrom(next, after, shift);
   }
-  return { items: next, delay };
+  // Moving on: nothing still to come is timed before the item that has just started.
+  if (shiftUpcoming)
+    next = next.map((item, i) => {
+      if (i <= index || !sameRun(item, items[index])) return item;
+      const m = toMinutes(item.time);
+      return m != null && m < nowMin ? { ...item, time: fromMinutes(nowMin) } : item;
+    });
+  return { items: next, delay: shift };
 }
 
 /** Insert a new item after `afterIndex` (−1 = at the top), timed to fit if the programme is timed. */

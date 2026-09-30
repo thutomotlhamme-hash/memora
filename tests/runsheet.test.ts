@@ -88,3 +88,15 @@ test('a late vigil never moves the funeral service', () => {
   const { items: next } = startItem(items, 'v1', new Date('2026-09-01T18:20:00'), true);
   assert.deepEqual(next.map((i) => i.time), ['18:20', '18:50', '10:00']);
 });
+
+test('starting well ahead of plan pulls the rest earlier by at most half an hour', () => {
+  const { items, delay } = startItem(service(), 'hymn', new Date('2026-09-29T09:10:00'), true);
+  assert.equal(delay, -30);
+  // hymn starts now; the rest move 30 min earlier but never before 09:10.
+  assert.deepEqual(times(items), ['welcome@10:00', 'hymn@09:10', 'tribute@09:45', 'eulogy@10:05']);
+});
+
+test('after an early start nothing still to come is timed before it', () => {
+  const { items } = startItem(service(), 'welcome', new Date('2026-09-29T09:00:00'), true);
+  for (const t of times(items).slice(1)) assert.ok(t.split('@')[1] >= '09:00', t);
+});

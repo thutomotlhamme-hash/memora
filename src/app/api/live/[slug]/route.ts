@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': 'public, max-age=0, must-revalidate',
-      'Netlify-CDN-Cache-Control': 'public, s-maxage=3, stale-while-revalidate=4',
+      'Netlify-CDN-Cache-Control': 'public, s-maxage=2, stale-while-revalidate=1',
     },
   });
 }

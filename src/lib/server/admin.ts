@@ -7,6 +7,7 @@ import { localDateKey } from '../memorial';
 import { normaliseWhatsApp } from '../phone';
 import { PRODUCT } from '../plans';
 import { can, type Permission, type Principal } from '../rbac';
+import { createResetLink, findAccountId, guardAccount, revokeResetLinks, setSuspended } from './accounts';
 import { isProAction, performProAction } from './pro';
 import { loadPrincipal } from './access';
 import { accountLabel, isPhoneLogin, loginAddress } from '../account-id';
@@ -156,6 +157,11 @@ type Result = { ok: true; message: string; data?: Record<string, string> } | { o
 const uuidOk = (id?: string): id is string => Boolean(id && /^[0-9a-f-]{36}$/i.test(id));
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+async function accountById(admin: SupabaseClient, id: string): Promise<{ id: string; email: string } | null> {
+  const { data } = await admin.auth.admin.getUserById(id);
+  return data?.user?.email ? { id, email: data.user.email } : null;
+}
+
 /** Finds an account by the cellphone number or email people sign in with. */
 async function findAccount(admin: SupabaseClient, who: string): Promise<{ id: string; email: string } | null> {
   const login = loginAddress(who);
@@ -187,6 +193,10 @@ const ACTION_PERMISSION: Record<string, Permission> = {
   'case.unpublish': 'memorials.takedown',
   'case.restore': 'memorials.takedown',
   'account.resetPassword': 'accounts.help',
+  'account.resetLink': 'accounts.help',
+  'account.revokeResetLinks': 'accounts.help',
+  'account.suspend': 'accounts.suspend',
+  'account.unsuspend': 'accounts.suspend',
   'team.add': 'access.manage',
   'team.remove': 'access.manage',
 };
@@ -275,16 +285,13 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
 
     // ---- Helping someone log in ----
     case 'account.resetPassword': {
-      const account = await findAccount(admin, input.who ?? '');
-      if (!account) return { ok: false, error: 'No account uses that cellphone number or email.', status: 404 };
-      // Resetting a staff member's password would hand over their access: only administrators may.
-      const target = await loadPrincipal(admin, account);
-      if (target.platform.size > 0 && !principal.roles.has('platform_admin')) {
-        return { ok: false, error: 'Only an administrator can reset the password of someone on the Memora team.', status: 403 };
-      }
+      const g = await guardAccount(admin, principal, uuidOk(input.id) ? await accountById(admin, input.id) : await findAccountId(admin, input.who ?? ''), 'reset');
+      if (!g.ok) return g;
+      const account = g.account;
       const password = temporaryPassword();
       const { error } = await admin.auth.admin.updateUserById(account.id, { password });
       if (error) return { ok: false, error: 'Could not set a temporary password.', status: 500 };
+      await revokeResetLinks(admin, account.id);
       await log(admin, actor.id, 'PASSWORD_RESET', null, { account: accountLabel(account.email) });
       const who = accountLabel(account.email);
       return {
@@ -296,6 +303,50 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
           whatsapp: isPhoneLogin(account.email) ? account.email.split('@')[0] : '',
           text: `Hi, it’s Memora. Your temporary password is ${password}\nLog in at ${siteUrl()}/account/login with ${who}, then choose a new password under Account.`,
         },
+      };
+    }
+    case 'account.resetLink': {
+      // Safer than a temporary password: nobody but the person ever knows the new one.
+      const g = await guardAccount(admin, principal, uuidOk(input.id) ? await accountById(admin, input.id) : await findAccountId(admin, input.who ?? ''), 'reset');
+      if (!g.ok) return g;
+      let url: string;
+      try {
+        url = await createResetLink(admin, actor.id, g.account.id);
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Could not make the link.', status: 503 };
+      }
+      const who = accountLabel(g.account.email);
+      await log(admin, actor.id, 'PASSWORD_RESET_LINK_SENT', null, { account: who });
+      return {
+        ok: true,
+        message: `Reset link ready for ${who}. It works once, for 24 hours.`,
+        data: {
+          url,
+          who,
+          whatsapp: isPhoneLogin(g.account.email) ? g.account.email.split('@')[0] : '',
+          text: `Hi, it’s Memora. Here is your link to choose a new password. It works once, for 24 hours: ${url}`,
+        },
+      };
+    }
+    case 'account.revokeResetLinks': {
+      if (!uuidOk(input.id)) return { ok: false, error: 'Account not found.', status: 404 };
+      await revokeResetLinks(admin, input.id);
+      await log(admin, actor.id, 'PASSWORD_RESET_LINKS_REVOKED', null, { account: input.id });
+      return { ok: true, message: 'Their reset links no longer work.' };
+    }
+    case 'account.suspend':
+    case 'account.unsuspend': {
+      const suspend = input.action === 'account.suspend';
+      const g = await guardAccount(admin, principal, uuidOk(input.id) ? await accountById(admin, input.id) : null, 'suspend');
+      if (!g.ok) return g;
+      if (suspend && !input.reason?.trim()) return { ok: false, error: 'Give a reason (it’s kept in the audit log).', status: 400 };
+      if (!(await setSuspended(admin, g.account.id, suspend))) return { ok: false, error: 'Could not change the account.', status: 500 };
+      await log(admin, actor.id, suspend ? 'ACCOUNT_SUSPENDED' : 'ACCOUNT_RESTORED', null, { account: accountLabel(g.account.email), reason: input.reason ?? '' });
+      return {
+        ok: true,
+        message: suspend
+          ? `${accountLabel(g.account.email)} is suspended: they can’t log in, and within the hour any open session ends. Their memorials stay up.`
+          : `${accountLabel(g.account.email)} can log in again.`,
       };
     }
 

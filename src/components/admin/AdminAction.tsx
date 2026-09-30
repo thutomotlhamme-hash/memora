@@ -90,42 +90,56 @@ export function AddTeamMember() {
   );
 }
 
-/**
- * Someone forgot their password (phone accounts can't reset by email). After
- * checking it's really them on WhatsApp, set a temporary password and send it.
- */
-export function HelpLogin() {
+type HelpResult = { kind: 'link' | 'password'; who: string; whatsapp: string; text: string; secret: string };
+
+/** Get someone back in: a reset link they use themselves (best), or a temporary password. */
+export function AccountHelp({ id, label }: { id: string; label: string }) {
   const toast = useToast();
-  const [who, setWho] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ password: string; who: string; whatsapp: string; text: string } | null>(null);
+  const router = useRouter();
+  const [busy, setBusy] = useState<'' | 'link' | 'password'>('');
+  const [result, setResult] = useState<HelpResult | null>(null);
+  const go = async (kind: 'link' | 'password') => {
+    const ask =
+      kind === 'link'
+        ? `Make a password reset link for ${label}? Check on WhatsApp that it’s really them first. Any older link stops working.`
+        : `Set a temporary password for ${label}? Check on WhatsApp that it’s really them first. A reset link is safer: only they will know the new password.`;
+    if (!window.confirm(ask)) return;
+    setBusy(kind);
+    setResult(null);
+    const res = await fetch('/api/admin/actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: kind === 'link' ? 'account.resetLink' : 'account.resetPassword', id }),
+    }).catch(() => null);
+    const out = res ? await res.json().catch(() => ({})) : {};
+    setBusy('');
+    if (!res?.ok) return toast(out?.error || 'That didn’t work.', 'error');
+    setResult({ kind, who: out.who, whatsapp: out.whatsapp, text: out.text, secret: kind === 'link' ? out.url : out.password });
+    toast(out.message);
+    router.refresh();
+  };
   return (
-    <div className="stack" style={{ ['--stack' as string]: '12px' }}>
-      <form
-        className="row"
-        style={{ flexWrap: 'nowrap' }}
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (!window.confirm(`Set a temporary password for ${who}? Only do this after checking on WhatsApp that it’s really them.`)) return;
-          setBusy(true);
-          setResult(null);
-          const res = await fetch('/api/admin/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'account.resetPassword', who }) });
-          const out = await res.json().catch(() => ({}));
-          setBusy(false);
-          if (!res.ok) return toast(out?.error || 'That didn’t work.', 'error');
-          setResult({ password: out.password, who: out.who, whatsapp: out.whatsapp, text: out.text });
-          toast(out.message);
-        }}
-      >
-        <input className="input" required placeholder="Their cellphone number or email" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Account to help" />
-        <button className="btn primary" type="submit" disabled={busy || !who.trim()}>
-          {busy ? 'Setting…' : 'Set temporary password'}
+    <div className="stack" style={{ ['--stack' as string]: '10px' }}>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn primary sm" type="button" disabled={Boolean(busy)} onClick={() => go('link')}>
+          {busy === 'link' ? 'Making link…' : 'Send reset link'}
         </button>
-      </form>
+        <button className="btn sm" type="button" disabled={Boolean(busy)} onClick={() => go('password')}>
+          {busy === 'password' ? 'Setting…' : 'Set temporary password'}
+        </button>
+      </div>
       {result && (
         <div className="note ok" role="status">
           <span>
-            <strong>{result.who}</strong> can now log in with <strong className="mono-pw">{result.password}</strong>. Send it only to them.
+            {result.kind === 'link' ? (
+              <>
+                Send this link to <strong>{result.who}</strong>. They choose their own new password; it works once, for 24 hours.
+              </>
+            ) : (
+              <>
+                <strong>{result.who}</strong> can now log in with <strong className="mono-pw">{result.secret}</strong>. Send it only to them.
+              </>
+            )}
             <span className="row" style={{ marginTop: 10 }}>
               {result.whatsapp && (
                 <a className="btn sm primary" href={`https://wa.me/${result.whatsapp}?text=${encodeURIComponent(result.text)}`} target="_blank" rel="noopener noreferrer">
@@ -133,6 +147,7 @@ export function HelpLogin() {
                 </a>
               )}
               <CopyButton text={result.text} label="Copy message" />
+              {result.kind === 'link' && <CopyButton text={result.secret} label="Copy link" />}
             </span>
           </span>
         </div>

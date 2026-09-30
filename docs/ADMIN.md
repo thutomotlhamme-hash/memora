@@ -157,3 +157,16 @@ to the Audit log tab.
 
 **Demo data:** see `docs/DEMO.md` for two demo funeral homes with branches,
 staff, memorials in every state, links and invoices, and how to remove them.
+
+**People (Command centre → People):** search anyone by cellphone number, or
+open one of the newest accounts. You see their memorials, their roles and
+their recent reset links, and can:
+- *Send reset link* (best): a one-time link, for 24 hours, sent on WhatsApp.
+  They choose their own new password; nobody else ever knows it.
+- *Set temporary password*: when they can't open links. They change it
+  under Account.
+- *Suspend account* (Operations and Administrators, with a reason): they
+  can't log in; any open session ends within the hour; memorials stay up.
+  *Restore account* undoes it.
+Only administrators can do any of this to Memora team members, and nobody can
+to the owners set in Netlify. Everything is in the audit log.

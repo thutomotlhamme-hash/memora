@@ -109,3 +109,31 @@ test.describe('Pages that need an account', () => {
     expect(invalid).toBe(true);
   });
 });
+
+test.describe('Password reset links fail gently', () => {
+  test('a made-up reset link says what to do', async ({ page }) => {
+    await page.goto('/account/reset-link/not-a-real-link');
+    await expect(page.getByRole('heading', { name: 'This link isn’t working.' })).toBeVisible();
+    await expect(page.getByText('Ask Memora on WhatsApp for a new one.')).toBeVisible();
+  });
+
+  test('the reset API refuses bad links and other sites', async ({ request, baseURL }) => {
+    const bad = await request.post('/api/account/reset-link', { data: { token: 'x.y', password: 'longenough' }, headers: { origin: baseURL! } });
+    expect([410, 503]).toContain(bad.status());
+    expect((await bad.json()).error).toBeTruthy();
+    const evil = await request.post('/api/account/reset-link', { data: { token: 'x.y', password: 'longenough' }, headers: { origin: 'https://evil.example' } });
+    expect(evil.status()).toBe(403);
+  });
+
+  test('nobody signed out can reset, link or suspend an account', async ({ request, baseURL }) => {
+    for (const action of ['account.resetLink', 'account.resetPassword', 'account.suspend', 'account.unsuspend', 'account.revokeResetLinks']) {
+      const res = await request.post('/api/admin/actions', { data: { action, id: '00000000-0000-0000-0000-000000000001', who: '0721234567', reason: 'x' }, headers: { origin: baseURL! } });
+      expect([401, 403, 404], action).toContain(res.status());
+    }
+  });
+
+  test('the People tab needs a login', async ({ page }) => {
+    await page.goto('/admin?tab=people&q=0721234567');
+    await expect(page.locator('.people-search')).toHaveCount(0);
+  });
+});

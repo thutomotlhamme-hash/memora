@@ -22,7 +22,8 @@ export const PERMISSIONS = {
   'memorials.assign': { scope: 'platform', can: 'Move a memorial into or out of a funeral home' },
   'gifts.manage': { scope: 'platform', can: 'Follow up, recheck and cancel gifted memorials' },
   'orders.manage': { scope: 'platform', can: 'Recheck payments and record refunds' },
-  'accounts.help': { scope: 'platform', can: 'Give a family a temporary password when they are locked out' },
+  'accounts.help': { scope: 'platform', can: 'Look people up, send password reset links and set temporary passwords' },
+  'accounts.suspend': { scope: 'platform', can: 'Suspend an account so it can’t log in, or restore it' },
   'access.manage': { scope: 'platform', can: 'Create groups, give groups roles, and add or remove people' },
   'audit.view': { scope: 'platform', can: 'Read the audit log of every change' },
   // ---- Funeral home: inside one home only ----
@@ -70,7 +71,7 @@ export const ROLES = {
     scope: 'platform',
     forWho: 'The person who signs up funeral homes and keeps things running.',
     summary: 'Onboards and looks after funeral homes and memorials day to day.',
-    permissions: ['ops.view', 'orgs.manage', 'memorials.view_all', 'memorials.takedown', 'memorials.assign', 'gifts.manage', 'accounts.help', 'audit.view'],
+    permissions: ['ops.view', 'orgs.manage', 'memorials.view_all', 'memorials.takedown', 'memorials.assign', 'gifts.manage', 'accounts.help', 'accounts.suspend', 'audit.view'],
     allOrgs: ['org.view', 'org.memorials.edit', 'org.runsheet', 'org.team', 'org.branches', 'org.branding'],
     cannot: ['Change plans, prices or invoices', 'Give anyone roles or change groups', 'Record refunds'],
   },
@@ -81,7 +82,7 @@ export const ROLES = {
     summary: 'Helps families and funeral homes who are stuck.',
     permissions: ['ops.view', 'memorials.view_all', 'gifts.manage', 'accounts.help', 'audit.view'],
     allOrgs: ['org.view'],
-    cannot: ['Take memorials down', 'Add or disable funeral homes', 'See or change billing', 'Change who has access'],
+    cannot: ['Take memorials down', 'Suspend accounts', 'Add or disable funeral homes', 'See or change billing', 'Change who has access'],
   },
   finance: {
     label: 'Finance',

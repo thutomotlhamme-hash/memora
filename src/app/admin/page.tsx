@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { AdminAction, CopyButton, HelpLogin } from '@/components/admin/AdminAction';
+import { AdminAction, CopyButton } from '@/components/admin/AdminAction';
 import { accountLabel } from '@/lib/account-id';
 import { StatusScreen } from '@/components/MemorialView';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -11,6 +11,7 @@ import { PRO_PLANS, formatMoney } from '@/lib/plans';
 import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, setupChecks, teamInviteText, teamJoinText } from '@/lib/server/admin';
 import { getAdminAccess } from '@/lib/server/admin-auth';
 import { AccessPanel, AssignHome, AuditPanel, BillingPanel, HomesPanel } from '@/components/admin/CommandPanels';
+import { PeoplePanel } from '@/components/admin/PeoplePanel';
 import { ROLES, can, type Permission } from '@/lib/rbac';
 import { loadOrgs } from '@/lib/server/pro';
 import { giftWhatsAppText, loadGiftBoard } from '@/lib/server/gifts';
@@ -26,6 +27,7 @@ const TABS = [
   ['memorials', 'Memorials', 'memorials.view_all'],
   ['gifts', 'Gifts', 'gifts.manage'],
   ['payments', 'Payments', 'orders.manage'],
+  ['people', 'People', 'accounts.help'],
   ['billing', 'Billing', 'orgs.billing'],
   ['access', 'Access', 'ops.view'],
   ['audit', 'Audit log', 'audit.view'],
@@ -36,7 +38,7 @@ const wa = (digits: string, text: string) => `https://wa.me/${digits}?text=${enc
 const when = (iso: string | null | undefined) => (iso ? fmtDate(String(iso).slice(0, 10)) : '—');
 const inDays = (d: number | null) => (d == null ? '' : d < 0 ? 'passed' : d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`);
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; status?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; status?: string; q?: string; id?: string }> }) {
   const access = await getAdminAccess();
 
   // ---- Unhappy paths: every visitor gets a clear, safe answer. ----
@@ -110,6 +112,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {tab === 'memorials' && (await renderMemorials())}
         {tab === 'payments' && (await renderPayments())}
         {tab === 'homes' && <HomesPanel admin={admin} p={p} />}
+        {tab === 'people' && <PeoplePanel admin={admin} p={p} q={(await searchParams).q} id={(await searchParams).id} />}
         {tab === 'billing' && <BillingPanel admin={admin} />}
         {tab === 'access' && (
           <>
@@ -567,10 +570,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <div className="card">
           <h2 className="h3">Help someone log in</h2>
           <p className="small muted">
-            Forgot their password? First check on WhatsApp that it’s really them (for example, ask for the name on their memorial). Then set a temporary
-            password and send it. They change it under Account.
+            Forgot their password? Find them under People, check on WhatsApp that it’s really them, then send a reset link. They choose their own new
+            password.
           </p>
-          {canHelp ? <HelpLogin /> : <p className="small muted">Needs a role with “help with logins”.</p>}
+          {canHelp ? (
+            <Link className="btn primary" href="/admin?tab=people">
+              Open People
+            </Link>
+          ) : (
+            <p className="small muted">Needs a role with “help with logins”.</p>
+          )}
         </div>
         <div className="card">
           <h2 className="h3">Add someone</h2>

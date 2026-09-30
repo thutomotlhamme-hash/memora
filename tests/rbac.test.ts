@@ -207,3 +207,15 @@ test('the roles the database lets edit a home’s memorials match the code', asy
 test('every role says who it is for', () => {
   for (const r of ALL_ROLES) assert.ok((ROLES[r] as { forWho: string }).forWho.length > 10, r);
 });
+
+test('helping someone log in and suspending an account are separate powers', () => {
+  const support = principalFrom('s', [{ roles: ['support'], orgId: null }]);
+  const ops = principalFrom('o', [{ roles: ['ops'], orgId: null }]);
+  const finance = principalFrom('f', [{ roles: ['finance'], orgId: null }]);
+  assert.equal(can(support, 'accounts.help'), true, 'support sends reset links');
+  assert.equal(can(support, 'accounts.suspend'), false, 'but can’t suspend');
+  assert.equal(can(ops, 'accounts.suspend'), true);
+  assert.equal(can(finance, 'accounts.help'), false);
+  const owner = principalFrom('w', [{ roles: ['org_owner'], orgId: HOME_A }]);
+  assert.equal(can(owner, 'accounts.help'), false, 'a funeral home can’t reset anyone’s password');
+});

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { AddTeamMember, AdminAction, CopyButton, HelpLogin } from '@/components/admin/AdminAction';
+import { AdminAction, CopyButton, HelpLogin } from '@/components/admin/AdminAction';
 import { accountLabel } from '@/lib/account-id';
 import { StatusScreen } from '@/components/MemorialView';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -10,19 +10,26 @@ import { formatWhatsApp } from '@/lib/phone';
 import { formatMoney } from '@/lib/plans';
 import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, setupChecks, teamInviteText, teamJoinText } from '@/lib/server/admin';
 import { getAdminAccess } from '@/lib/server/admin-auth';
+import { AccessPanel, AssignHome, AuditPanel, BillingPanel, HomesPanel } from '@/components/admin/CommandPanels';
+import { ROLES, can, type Permission } from '@/lib/rbac';
+import { loadOrgs } from '@/lib/server/pro';
 import { giftWhatsAppText, loadGiftBoard } from '@/lib/server/gifts';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Admin', robots: { index: false } };
+export const metadata = { title: 'Command centre', robots: { index: false } };
 
+/** Each tab shows only to people whose roles grant its permission. */
 const TABS = [
-  ['overview', 'Needs attention'],
-  ['gifts', 'Gifts'],
-  ['memorials', 'Memorials'],
-  ['payments', 'Payments'],
-  ['team', 'Team'],
-] as const;
+  ['overview', 'Needs attention', 'ops.view'],
+  ['homes', 'Funeral homes', 'ops.view'],
+  ['memorials', 'Memorials', 'memorials.view_all'],
+  ['gifts', 'Gifts', 'gifts.manage'],
+  ['payments', 'Payments', 'orders.manage'],
+  ['billing', 'Billing', 'orgs.billing'],
+  ['access', 'Access', 'ops.view'],
+  ['audit', 'Audit log', 'audit.view'],
+] as const satisfies readonly (readonly [string, string, Permission])[];
 type Tab = (typeof TABS)[number][0];
 
 const wa = (digits: string, text: string) => `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
@@ -68,8 +75,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   }
 
   const admin = getAdminSupabase()!;
+  const p = access.principal;
+  const tabs = TABS.filter(([, , perm]) => can(p, perm));
   const requested = (await searchParams).tab;
-  const tab: Tab = (TABS.find(([t]) => t === requested)?.[0] ?? 'overview') as Tab;
+  const tab: Tab = (tabs.find(([t]) => t === requested)?.[0] ?? 'overview') as Tab;
+  const roleNames = [...p.roles].filter((r) => ROLES[r].scope === 'platform').map((r) => ROLES[r].label);
 
   return (
     <>
@@ -78,7 +88,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <div className="page-head">
           <div>
             <span className="eyebrow">
-              Admin · {access.role === 'owner' ? 'Owner' : 'Staff'} · {accountLabel(access.user.email)}
+              Command centre · {roleNames.join(', ') || 'Team'} · {accountLabel(access.user.email)}
             </span>
             <h1 className="h1" style={{ marginTop: 10 }}>
               Running Memora
@@ -89,7 +99,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </a>
         </div>
         <nav className="admin-tabs" aria-label="Admin sections">
-          {TABS.map(([t, label]) => (
+          {tabs.map(([t, label]) => (
             <Link key={t} href={`/admin?tab=${t}`} aria-current={t === tab ? 'page' : undefined}>
               {label}
             </Link>
@@ -99,7 +109,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {tab === 'gifts' && (await renderGifts())}
         {tab === 'memorials' && (await renderMemorials())}
         {tab === 'payments' && (await renderPayments())}
-        {tab === 'team' && (await renderTeam(access.role === 'owner'))}
+        {tab === 'homes' && <HomesPanel admin={admin} p={p} />}
+        {tab === 'billing' && <BillingPanel admin={admin} />}
+        {tab === 'access' && (
+          <>
+            {await renderTeam(can(p, 'access.manage'), can(p, 'accounts.help'))}
+            <AccessPanel admin={admin} p={p} />
+          </>
+        )}
+        {tab === 'audit' && <AuditPanel admin={admin} />}
       </main>
     </>
   );
@@ -313,7 +331,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   }
 
   async function renderMemorials() {
-    const cases = await loadAdminCases(admin);
+    const [cases, orgs, { data: links }] = await Promise.all([loadAdminCases(admin), loadOrgs(admin), admin.from('memora_cases').select('id,org_id').not('org_id', 'is', null)]);
+    const orgOf = new Map(((links ?? []) as { id: string; org_id: string }[]).map((l) => [l.id, l.org_id]));
+    const orgName = new Map(orgs.map((o) => [o.id, o.name]));
+    const assign = can(p, 'memorials.assign');
+    const takedown = can(p, 'memorials.takedown');
     return (
       <div className="board-wrap">
         <table className="board">
@@ -321,6 +343,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <tr>
               <th>Memorial</th>
               <th>Family account</th>
+              <th>Funeral home</th>
               <th>Funeral</th>
               <th>Status</th>
               <th>Actions</th>
@@ -329,7 +352,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <tbody>
             {cases.length === 0 && (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   No memorials yet.
                 </td>
               </tr>
@@ -341,6 +364,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   <span className="sub">updated {when(c.updatedAt)}</span>
                 </td>
                 <td>{accountLabel(c.ownerEmail) || '—'}</td>
+                <td>{assign && orgs.length ? <AssignHome caseId={c.id} orgId={orgOf.get(c.id) ?? null} orgs={orgs} /> : (orgName.get(orgOf.get(c.id) ?? '') ?? '—')}</td>
                 <td>{c.funeralDate ? fmtDate(c.funeralDate) : '—'}</td>
                 <td>
                   {c.status === 'PUBLISHED' ? 'Live' : c.status === 'ARCHIVED' ? 'Taken down / expired' : c.paid ? 'Draft · paid' : 'Draft'}
@@ -353,7 +377,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                         Open ↗
                       </a>
                     )}
-                    {c.status === 'PUBLISHED' && (
+                    {takedown && c.status === 'PUBLISHED' && (
                       <AdminAction
                         action="case.unpublish"
                         id={c.id}
@@ -363,7 +387,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                         confirm="The public link will stop showing this memorial. The family keeps their draft. Continue?"
                       />
                     )}
-                    {c.status === 'ARCHIVED' && c.publishedAt && <AdminAction action="case.restore" id={c.id} label="Restore" />}
+                    {takedown && c.status === 'ARCHIVED' && c.publishedAt && <AdminAction action="case.restore" id={c.id} label="Restore" />}
                   </div>
                 </td>
               </tr>
@@ -428,12 +452,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     );
   }
 
-  async function renderTeam(isOwner: boolean) {
+  async function renderTeam(isOwner: boolean, canHelp: boolean) {
     const team = await loadTeam(admin);
     return (
       <div className="grid-2" style={{ alignItems: 'start', marginBottom: 64 }}>
         <div className="card">
-          <h2 className="h3">Who has access</h2>
+          <h2 className="h3">Owners</h2>
           <p className="small muted">People sign in with their own account (cellphone or email). Access is tied to that account, so a forwarded link never gives anyone else access.</p>
           {team.owners.map((e) => (
             <div className="kv" key={e}>
@@ -445,7 +469,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           ))}
           {team.staff.map((s) => (
             <div className="kv" key={s.email}>
-              <span>Staff</span>
+              <span>Earlier team list</span>
               <span className="row" style={{ justifyContent: 'space-between' }}>
                 <span>
                   {accountLabel(s.email)} <span className="muted small">· added by {accountLabel(s.addedBy)}</span>
@@ -466,27 +490,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             Forgot their password? First check on WhatsApp that it’s really them (for example, ask for the name on their memorial). Then set a temporary
             password and send it. They change it under Account.
           </p>
-          <HelpLogin />
+          {canHelp ? <HelpLogin /> : <p className="small muted">Needs a role with “help with logins”.</p>}
         </div>
         <div className="card">
           <h2 className="h3">Add someone</h2>
-          {isOwner ? (
-            <>
-              <p className="small muted">
-                1. Ask them to create a Memora account first (Copy sign-up message, then paste on WhatsApp). 2. When they send you the number they used, add
-                it here. The Admin link then appears at the top of the site for them.
-              </p>
-              <div className="row" style={{ marginBottom: 12 }}>
-                <CopyButton text={teamJoinText()} label="Copy sign-up message" />
-              </div>
-              <AddTeamMember />
-              <p className="small muted" style={{ marginTop: 16 }}>
-                Owners can add and remove staff. Staff can do everything else. To add another owner, add their email to MEMORA_ADMIN_EMAILS in Netlify.
-              </p>
-            </>
-          ) : (
-            <p className="small muted">Only owners can add or remove team members.</p>
-          )}
+          <p className="small muted">
+            1. Ask them to create a Memora account (Copy sign-up message, then paste on WhatsApp). 2. Add the number they used to the right group below.
+            Their access follows the group’s roles.
+          </p>
+          <CopyButton text={teamJoinText()} label="Copy sign-up message" />
         </div>
       </div>
     );

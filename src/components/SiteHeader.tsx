@@ -32,6 +32,7 @@ export function SiteFooter() {
         <span>Memora · Remember beautifully</span>
         <nav className="row" aria-label="Footer" style={{ gap: 18 }}>
           {paymentsOn && <Link href="/gift">Give a memorial</Link>}
+          <Link href="/pro">For funeral homes</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
           <Link href="/contact">Contact us</Link>

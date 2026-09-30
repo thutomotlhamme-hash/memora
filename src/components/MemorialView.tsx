@@ -13,7 +13,22 @@ import { JourneyTimeline, ProgrammeTimeline } from './MemorialTimelines';
  * The public memorial. Also used for owner and guest previews (with a banner).
  * With `live`, the funeral-day parts follow the coordinator's run-sheet.
  */
-export function MemorialView({ draft, path, banner, live }: { draft: Draft; path: string; banner?: React.ReactNode; live?: { slug: string; liveKey: string | null } }) {
+/** A funeral home's branding, when the memorial belongs to one. */
+export type HomeBrand = { name: string; logoUrl: string; brandColour: string } | null;
+
+export function MemorialView({
+  draft,
+  path,
+  banner,
+  live,
+  brand = null,
+}: {
+  draft: Draft;
+  path: string;
+  banner?: React.ReactNode;
+  live?: { slug: string; liveKey: string | null };
+  brand?: HomeBrand;
+}) {
   const p = draft.person;
   const name = displayName(p, 'In loving memory');
   // A programme the family is still finalising shows as "coming soon" until it's released.
@@ -29,6 +44,14 @@ export function MemorialView({ draft, path, banner, live }: { draft: Draft; path
         </LiveProvider>
       ) : (
         <MemorialPage draft={draft} path={path} name={name} formal={formal} hasJourney={hasJourney} />
+      )}
+      {brand && (
+        <div className="m-brand" style={brand.brandColour ? ({ ['--home' as string]: brand.brandColour } as React.CSSProperties) : undefined}>
+          {brand.logoUrl && <img src={brand.logoUrl} alt="" />}
+          <span>
+            Arranged with care by <strong>{brand.name}</strong>
+          </span>
+        </div>
       )}
       <footer className="m-footer">
         <Brand />

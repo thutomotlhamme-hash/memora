@@ -1,4 +1,7 @@
 import { MEDIA_BUCKET } from '@/lib/config';
+import { can } from '@/lib/rbac';
+import { getAccess } from '@/lib/server/access';
+import { getAdminSupabase } from '@/lib/supabase/admin';
 import { normaliseDraft } from '@/lib/memorial';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
@@ -10,9 +13,22 @@ export async function POST(request: Request) {
   if (auth instanceof Response) return auth;
   const { supabase, user } = auth;
 
-  const body = (await request.json().catch(() => ({}))) as { draft?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { draft?: unknown; orgId?: string };
+  // Starting a memorial for a funeral home needs that home's permission, and a home that isn't disabled.
+  const orgId = typeof body.orgId === 'string' && /^[0-9a-f-]{36}$/i.test(body.orgId) ? body.orgId : null;
+  const admin = orgId ? getAdminSupabase() : null;
+  if (orgId) {
+    const access = await getAccess();
+    if (!admin || !can(access?.principal ?? null, 'org.memorials.create', orgId)) return fail('You can’t start memorials for this funeral home.', 403);
+    const { data: org } = await admin.from('memora_orgs').select('status').eq('id', orgId).maybeSingle();
+    if (!org || org.status === 'disabled') return fail('This funeral home’s Memora is switched off. Contact Memora.', 403);
+  }
   const { data: created, error } = await supabase.from('memora_cases').insert({ owner_id: user.id }).select('id').single();
   if (error || !created) return fail('Could not create the memorial.', 500);
+  if (orgId && admin) {
+    await admin.from('memora_cases').update({ org_id: orgId }).eq('id', created.id);
+    await admin.from('memora_activity_log').insert({ case_id: created.id, actor_user_id: user.id, action: 'CASE_CREATED_FOR_HOME', metadata: { org: orgId } });
+  }
 
   if (body?.draft) {
     const draft = normaliseDraft(body.draft);

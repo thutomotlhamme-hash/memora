@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 const TOPICS = [
   ['help', 'Help with a memorial'],
+  ['pro', 'Memora Pro for my funeral home'],
   ['account', 'Logging in or my password'],
   ['gift', 'A gift'],
   ['payment', 'A payment or refund'],

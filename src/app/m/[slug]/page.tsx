@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { MemorialView, StatusScreen } from '@/components/MemorialView';
 import { displayName, lifeDates } from '@/lib/memorial';
 import { loadPublicMemorial } from '@/lib/server/cases';
+import { orgBrand } from '@/lib/server/org-cases';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
 // Served from the edge cache and re-rendered at most once a minute, so guests
@@ -53,5 +54,6 @@ export default async function PublicMemorial({ params }: { params: Promise<{ slu
       />
     );
   }
-  return <MemorialView draft={m.draft} path={`/m/${slug}`} live={{ slug, liveKey: m.meta.liveKey ?? null }} />;
+  const brand = await orgBrand(getAdminSupabase()!, m.meta.id);
+  return <MemorialView draft={m.draft} path={`/m/${slug}`} live={{ slug, liveKey: m.meta.liveKey ?? null }} brand={brand} />;
 }

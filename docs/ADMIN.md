@@ -95,3 +95,42 @@ Families don't have to sign up first. They build as a guest, and when they want 
 2. They send you the number or email they used. Add it under **Add someone**.
 
 Only existing accounts can be added. Nobody can sign up with a teammate's details afterwards and inherit their access.
+
+## Command centre and access (Memora Pro)
+
+`/admin` is the command centre. What each person sees and can do comes from
+their roles, ServiceNow-style but simpler:
+
+**person → groups → roles → permissions.** People join groups; groups hold
+roles; each role grants named permissions, each with a plain "can", and lists
+its "can'ts". Anything not granted is refused. The full list, with every can
+and can't, is on Command centre → Access, and in `src/lib/rbac.ts`.
+
+- **Memora team roles:** Administrator, Operations, Support, Finance, Auditor.
+  Groups ready to use: Memora Administrators, Operations, Support, Finance.
+- **Funeral home roles:** Owner, Manager, Director, Arrangements staff,
+  Viewer. They only ever apply inside that funeral home.
+- The owners in `MEMORA_ADMIN_EMAILS` are always administrators. People on
+  the earlier Team list keep Operations access until moved into a group.
+- No one can give a role with more than they have. Only administrators make
+  administrators; only a funeral home's owner makes another owner. Only an
+  administrator can reset a Memora team member's password.
+- A disabled funeral home, or a switched-off group, grants nothing at once.
+
+**To onboard a funeral home:**
+1. Command centre → Funeral homes → Add a funeral home. It starts in trial
+   with its Owners, Managers, Directors and Arrangements groups.
+2. Ask their owner to create a Memora account, then add that number to their
+   Owners group (Access tab). They can add their own staff from
+   `/pro/dashboard`.
+3. When the contract is signed: set the plan and prices (Finance), then
+   Make active. Billing applies from that month.
+
+**Billing:** Command centre → Billing → Raise invoices creates one draft per
+active home for the month: the monthly fee, each memorial published that
+month, and the onboarding fee on the first invoice. Mark them sent and paid as
+money comes in. Homes in trial aren't billed. Per-memorial prices can't go
+below R999.
+
+Every change (homes, plans, groups, people, invoices, take-downs) is written
+to the Audit log tab.

@@ -6,7 +6,9 @@ import { daysUntil } from '../gift';
 import { localDateKey } from '../memorial';
 import { normaliseWhatsApp } from '../phone';
 import { PRODUCT } from '../plans';
-import type { AdminRole } from './admin-auth';
+import { can, type Permission, type Principal } from '../rbac';
+import { isProAction, performProAction } from './pro';
+import { loadPrincipal } from './access';
 import { accountLabel, isPhoneLogin, loginAddress } from '../account-id';
 import { ownerEmails } from './admin-auth';
 import { confirmGiftWithYoco, markGiftContacted } from './gifts';
@@ -148,7 +150,7 @@ export async function loadOverview(admin: SupabaseClient, now = new Date()): Pro
 // Actions
 // ---------------------------------------------------------------------------
 
-export type AdminActionInput = { action: string; id?: string; email?: string; who?: string; reason?: string; whatsapp?: string; name?: string };
+export type AdminActionInput = Record<string, unknown> & { action: string; id?: string; email?: string; who?: string; reason?: string; whatsapp?: string; name?: string };
 type Result = { ok: true; message: string; data?: Record<string, string> } | { ok: false; error: string; status: number };
 
 const uuidOk = (id?: string): id is string => Boolean(id && /^[0-9a-f-]{36}$/i.test(id));
@@ -174,7 +176,26 @@ async function log(admin: SupabaseClient, actorId: string, action: string, caseI
   await admin.from('memora_activity_log').insert({ case_id: caseId, actor_user_id: actorId, action: `ADMIN_${action}`, metadata });
 }
 
-export async function performAdminAction(admin: SupabaseClient, actor: { id: string; email: string }, role: AdminRole, input: AdminActionInput): Promise<Result> {
+/** The permission each command-centre action needs. Anything not listed is refused. */
+const ACTION_PERMISSION: Record<string, Permission> = {
+  'gift.contacted': 'gifts.manage',
+  'gift.recheck': 'gifts.manage',
+  'gift.cancel': 'gifts.manage',
+  'gift.updateContact': 'gifts.manage',
+  'order.recheck': 'orders.manage',
+  'order.refunded': 'orders.manage',
+  'case.unpublish': 'memorials.takedown',
+  'case.restore': 'memorials.takedown',
+  'account.resetPassword': 'accounts.help',
+  'team.add': 'access.manage',
+  'team.remove': 'access.manage',
+};
+
+export async function performAdminAction(admin: SupabaseClient, actor: { id: string; email: string }, principal: Principal, input: AdminActionInput): Promise<Result> {
+  if (isProAction(input.action)) return performProAction(admin, principal, input);
+  const needed = ACTION_PERMISSION[input.action];
+  if (!needed) return { ok: false, error: 'Unknown action.', status: 400 };
+  if (!can(principal, needed)) return { ok: false, error: 'You don’t have permission to do that.', status: 403 };
   const now = new Date().toISOString();
   switch (input.action) {
     // ---- Gifts ----
@@ -256,8 +277,10 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
     case 'account.resetPassword': {
       const account = await findAccount(admin, input.who ?? '');
       if (!account) return { ok: false, error: 'No account uses that cellphone number or email.', status: 404 };
-      if (ownerEmails().includes(account.email.toLowerCase()) && role !== 'owner') {
-        return { ok: false, error: 'Only an owner can reset an owner’s password.', status: 403 };
+      // Resetting a staff member's password would hand over their access: only administrators may.
+      const target = await loadPrincipal(admin, account);
+      if (target.platform.size > 0 && !principal.roles.has('platform_admin')) {
+        return { ok: false, error: 'Only an administrator can reset the password of someone on the Memora team.', status: 403 };
       }
       const password = temporaryPassword();
       const { error } = await admin.auth.admin.updateUserById(account.id, { password });
@@ -279,7 +302,6 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
     // ---- Team (owners only) ----
     case 'team.add':
     case 'team.remove': {
-      if (role !== 'owner') return { ok: false, error: 'Only owners can change the team.', status: 403 };
       let email = (input.email ?? input.who ?? '').trim().toLowerCase();
       if (input.action === 'team.add') {
         // Only existing accounts can be added, so nobody can sign up with a

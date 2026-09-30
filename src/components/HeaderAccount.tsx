@@ -7,8 +7,8 @@ import { getBrowserSupabase } from '@/lib/supabase/client';
 // The signed-in part of the header, worked out in the browser so the pages
 // around it can be served straight from the CDN instead of rendered per visit.
 
-type State = { known: boolean; userId: string | null; team: boolean };
-let state: State = { known: false, userId: null, team: false };
+type State = { known: boolean; userId: string | null; team: boolean; pro: boolean };
+let state: State = { known: false, userId: null, team: false, pro: false };
 const listeners = new Set<() => void>();
 let started = false;
 
@@ -17,23 +17,24 @@ function set(next: Partial<State>) {
   listeners.forEach((l) => l());
 }
 
-async function teamFor(userId: string): Promise<boolean> {
-  const key = `memora:team:${userId}`;
+/** What this person may open: the command centre (team) and/or a funeral home's dashboard (pro). */
+async function accessFor(userId: string): Promise<{ team: boolean; pro: boolean }> {
+  const key = `memora:access:${userId}`;
   try {
     const cached = sessionStorage.getItem(key);
-    if (cached) return cached === '1';
+    if (cached) return JSON.parse(cached);
   } catch {
     /* storage blocked */
   }
   const res = await fetch('/api/account/me').catch(() => null);
   const body = res?.ok ? await res.json().catch(() => null) : null;
-  const team = Boolean(body?.team);
+  const out = { team: Boolean(body?.team), pro: Boolean(body?.pro) };
   try {
-    sessionStorage.setItem(key, team ? '1' : '0');
+    sessionStorage.setItem(key, JSON.stringify(out));
   } catch {
     /* storage blocked */
   }
-  return team;
+  return out;
 }
 
 function start() {
@@ -43,8 +44,8 @@ function start() {
   if (!supabase) return set({ known: true });
   const apply = (userId: string | null) => {
     if (userId === state.userId && state.known) return;
-    set({ known: true, userId, team: false });
-    if (userId) void teamFor(userId).then((team) => state.userId === userId && set({ team }));
+    set({ known: true, userId, team: false, pro: false });
+    if (userId) void accessFor(userId).then((a) => state.userId === userId && set(a));
   };
   void supabase.auth.getSession().then(({ data }) => {
     const u = data.session?.user;
@@ -60,7 +61,7 @@ const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => listeners.delete(l);
 };
-const serverState: State = { known: false, userId: null, team: false };
+const serverState: State = { known: false, userId: null, team: false, pro: false };
 
 export function HeaderAccount({ hideCreate }: { hideCreate: boolean }) {
   const s = useSyncExternalStore(subscribe, () => state, () => serverState);
@@ -72,7 +73,12 @@ export function HeaderAccount({ hideCreate }: { hideCreate: boolean }) {
       <>
         {s.team && (
           <Link className="btn ghost" href="/admin">
-            Admin
+            Command centre
+          </Link>
+        )}
+        {s.pro && (
+          <Link className="btn ghost" href="/pro/dashboard">
+            Funeral home
           </Link>
         )}
         <Link className="btn ghost" href="/account">

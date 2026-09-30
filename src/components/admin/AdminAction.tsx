@@ -14,15 +14,16 @@ type Props = {
   /** Ask for a value first (e.g. a reason or a new number). */
   prompt?: { field: 'reason' | 'whatsapp' | 'email'; question: string; initial?: string };
   extra?: Record<string, string>;
+  endpoint?: string;
 };
 
-async function run(body: Record<string, string | undefined>) {
-  const res = await fetch('/api/admin/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+async function run(body: Record<string, string | undefined>, endpoint = '/api/admin/actions') {
+  const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const out = await res.json().catch(() => ({}));
   return { ok: res.ok, message: (out?.message || out?.error || (res.ok ? 'Done.' : 'That didn’t work.')) as string };
 }
 
-export function AdminAction({ action, id, label, variant = '', confirm, prompt, extra }: Props) {
+export function AdminAction({ action, id, label, variant = '', confirm, prompt, extra, endpoint }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -40,7 +41,7 @@ export function AdminAction({ action, id, label, variant = '', confirm, prompt, 
         }
         if (confirm && !window.confirm(confirm)) return;
         setBusy(true);
-        const out = await run(body);
+        const out = await run(body, endpoint);
         setBusy(false);
         toast(out.message, out.ok ? 'info' : 'error');
         if (out.ok) router.refresh();

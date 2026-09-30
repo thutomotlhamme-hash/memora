@@ -1,11 +1,10 @@
-import { roleForEmail } from '@/lib/server/admin-auth';
+import { can, orgsOf } from '@/lib/rbac';
+import { getAccess } from '@/lib/server/access';
 import { json } from '@/lib/server/http';
-import { isSupabaseConfigured } from '@/lib/config';
-import { getSessionUser } from '@/lib/supabase/server';
 
-/** For the header: is the signed-in person on the Memora team? */
+/** For the header: may this person open the command centre, or a funeral home's dashboard? */
 export async function GET() {
-  const user = isSupabaseConfigured() ? await getSessionUser() : null;
-  const team = user ? Boolean(await roleForEmail(user.email)) : false;
-  return json({ signedIn: Boolean(user), team });
+  const access = await getAccess();
+  const p = access?.principal ?? null;
+  return json({ signedIn: Boolean(access), team: can(p, 'ops.view'), pro: orgsOf(p).length > 0 || Boolean(p?.anyOrg.has('org.view')) });
 }

@@ -1,4 +1,7 @@
 import { readiness, slugify } from '@/lib/memorial';
+import { can } from '@/lib/rbac';
+import { getAccess } from '@/lib/server/access';
+import { caseOrg, publishCase } from '@/lib/server/org-cases';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { paymentsOn } from '@/lib/config';
 import { archiveDate } from '@/lib/plans';
@@ -22,6 +25,17 @@ export async function POST(request: Request, { params }: Ctx) {
 
   const admin = getAdminSupabase();
   if (!admin) return fail('Publishing is not configured on this deployment yet.', 503);
+
+  // A funeral home's memorial: publishing follows the home's roles (a director
+  // publishes, arrangements staff can't) and is billed to the home, not the family.
+  const org = await caseOrg(admin, id);
+  if (org) {
+    const access = await getAccess();
+    if (!can(access?.principal ?? null, 'org.memorials.publish', org.orgId)) return fail('Only a funeral director or manager can publish this memorial.', 403);
+    if (org.status === 'disabled') return fail('This funeral home’s Memora is switched off. Contact Memora.', 403);
+    const out = await publishCase(admin, id, user.id, { org: org.orgId, billed_to: 'funeral_home' });
+    return out.ok ? json({ meta: out.meta }) : fail(out.error, out.status);
+  }
 
   const loaded = await loadOwnedCase(supabase, id);
   if (!loaded) return fail('Memorial not found.', 404);

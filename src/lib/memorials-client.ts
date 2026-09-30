@@ -3,11 +3,12 @@
 import { clearGuestDraft, loadGuestDraft } from './guest';
 import { hasMeaningfulDraft, type Draft } from './memorial';
 
-export async function createMemorial(draft?: Draft): Promise<string> {
+/** Starts a memorial; with orgId it belongs to that funeral home (the server checks the right to). */
+export async function createMemorial(draft?: Draft, orgId?: string): Promise<string> {
   const res = await fetch('/api/memorials', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(draft ? { draft } : {}),
+    body: JSON.stringify({ ...(draft ? { draft } : {}), ...(orgId ? { orgId } : {}) }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.id) throw new Error(body?.error || 'Could not create the memorial.');

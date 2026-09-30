@@ -99,6 +99,9 @@ function MemorialPage({ draft, path, name, formal, hasJourney }: BodyProps) {
               <a className="link chev" href="#story">
                 Read their story
               </a>
+              <a className="link chev" href="#share">
+                Share
+              </a>
             </div>
           </div>
         </div>

@@ -59,3 +59,11 @@ test.describe('Example memorial on the day', () => {
     await expect(page.locator('#journey')).toContainText('Burial');
   });
 });
+
+test('Share, next to Read their story, goes straight to the QR code', async ({ page }) => {
+  await page.clock.install({ time: todayAt(23, 30) });
+  await page.goto('/m/preview?demo=1');
+  await page.locator('.m-hero').getByRole('link', { name: /^Share/ }).click();
+  await expect(page).toHaveURL(/#share$/);
+  await expect(page.locator('#share img, #share svg').first()).toBeInViewport();
+});

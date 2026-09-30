@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { QrImage } from '@/components/Share';
 import { useToast } from '@/components/Toast';
 import { useNow } from '@/lib/hooks';
 import { PROGRAMME_PARTS, PROGRAMME_TYPE_LABELS, partLabel, partOf, partStart, partStartLabel, sortByPart, fmtDate, journeyOrderProblem, localDateKey, newId, programmeTypeLabel, stopLabel, type ProgrammeItem, type ProgrammePart, type ProgrammeType, type Stop } from '@/lib/memorial';
@@ -44,6 +45,8 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
   const [shiftOnStart, setShiftOnStart] = useState(true);
   const [chosenDay, setChosenDay] = useState<RunDay | null>(null);
   const [editing, setEditing] = useState<{ item: ProgrammeItem; afterIndex: number | null } | null>(null);
+  /** This run-sheet's own link, shown as a QR code to open it on another phone. */
+  const [handover, setHandover] = useState<string | null>(null);
 
   // ---- Saving ---------------------------------------------------------------
   const base = useRef(initial.updatedAt);
@@ -426,11 +429,39 @@ export function RunSheet({ token, initial }: { token: string; initial: RunSnapsh
           <span className="eyebrow plain">Funeral-day run-sheet</span>
           <h1 className="h3">{snap.name}</h1>
         </div>
-        <div className="run-status">
-          {clock && <span className="run-clock">{clock}</span>}
-          <SaveBadge state={save} onRetry={() => void flush()} />
+        <div className="run-top-actions">
+          <button className="btn sm" type="button" onClick={() => setHandover(window.location.href)}>
+            Hand over · QR
+          </button>
+          <div className="run-status">
+            {clock && <span className="run-clock">{clock}</span>}
+            <SaveBadge state={save} onRetry={() => void flush()} />
+          </div>
         </div>
       </header>
+
+      {handover && (
+        <div className="run-handover" role="dialog" aria-modal="true" aria-label="Open this run-sheet on another phone" onClick={() => setHandover(null)}>
+          <div className="run-handover-card" onClick={(e) => e.stopPropagation()}>
+            <span className="eyebrow plain">Hand over the run-sheet</span>
+            <QrImage url={handover} label="QR code for this run-sheet" />
+            <p>Scan with the other phone’s camera to open this run-sheet there. Both phones can run it together.</p>
+            <p className="tiny muted">Only show this to people helping run the funeral. Anyone with it can change the programme.</p>
+            <div className="row">
+              <button
+                className="btn sm"
+                type="button"
+                onClick={() => navigator.clipboard.writeText(handover).then(() => toast('Link copied.'), () => toast('Copy failed.', 'error'))}
+              >
+                Copy link
+              </button>
+              <button className="btn sm primary" type="button" onClick={() => setHandover(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {snap.status !== 'PUBLISHED' && (
         <div className="note warn" style={{ marginBottom: 14 }}>

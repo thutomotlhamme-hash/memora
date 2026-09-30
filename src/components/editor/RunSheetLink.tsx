@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CopyField } from '@/components/Share';
+import { CopyField, QrImage, downloadQrPng } from '@/components/Share';
 import { useToast } from '@/components/Toast';
 
 /**
@@ -44,7 +44,7 @@ export function RunSheetLink({ caseId, name }: { caseId: string; name: string })
       </div>
       <p className="muted" style={{ marginTop: 0 }}>
         The programme director gets a private run-sheet on their phone: start items, drag them into a new order, add or edit items and push
-        times back when things run late. Guests see the changes on the memorial within half a minute. No account needed.
+        times back when things run late. Guests see the changes on the memorial within seconds. No account needed.
       </p>
       {!url ? (
         <button className="btn primary" type="button" disabled={busy} onClick={() => void load(false)}>
@@ -52,6 +52,20 @@ export function RunSheetLink({ caseId, name }: { caseId: string; name: string })
         </button>
       ) : (
         <div className="run-link-box">
+          <div className="run-link-qr">
+            <QrImage url={url} label={`QR code for the run-sheet for ${name}`} />
+            <div>
+              <strong>Scan to open the run-sheet</strong>
+              <p className="tiny muted">Point the programme director’s phone camera at this code. It opens the run-sheet straight away.</p>
+              <button
+                className="btn sm"
+                type="button"
+                onClick={() => downloadQrPng(url, 'run-sheet-qr.png').then(() => toast('QR code downloaded.'), () => toast('The QR code could not be created.', 'error'))}
+              >
+                Download QR
+              </button>
+            </div>
+          </div>
           <CopyField value={url} />
           <div className="row">
             <a className="btn primary" href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noopener noreferrer">

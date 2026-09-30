@@ -915,6 +915,15 @@ body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-
 .t-item.now .pill { margin-top: 6px; }
 .run-link-box { display: grid; gap: 12px; }
 .run-link-box .input { font-size: 13.5px; }
+.run-link-qr { display: flex; gap: 18px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); }
+.run-link-qr .qr { width: 132px; flex: none; padding: 8px; }
+.run-link-qr p { margin: 4px 0 10px; }
+.run-handover { position: fixed; inset: 0; z-index: 60; background: rgba(20, 20, 19, 0.55); display: grid; place-items: center; padding: 16px; }
+.run-handover-card { width: min(380px, 100%); background: var(--card); border-radius: var(--r-xl); padding: 24px; display: grid; gap: 14px; justify-items: center; text-align: center; box-shadow: var(--shadow-lg); }
+.run-handover-card .qr { width: min(260px, 70vw); }
+.run-handover-card p { margin: 0; }
+.run-top-actions { display: flex; align-items: center; gap: 12px; }
+@media (max-width: 480px) { .run-link-qr { flex-direction: column; align-items: flex-start; } }
 
 /* Procession tracker (guests' memorial page and the coordinator's run-sheet) */
 .proc-card { margin-top: clamp(28px, 5vw, 48px); padding: clamp(20px, 3vw, 28px); border-radius: var(--r-xl); background: var(--card); border: 1px solid var(--line); display: grid; gap: 16px; }

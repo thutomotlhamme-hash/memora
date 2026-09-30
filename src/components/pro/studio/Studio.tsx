@@ -296,7 +296,19 @@ export function Studio(d: StudioData) {
             <Widget label="Published this month" value={publishedThisMonth} note={`${d.funerals.filter((f) => f.stage === 'upcoming').length} more coming up`} />
           )}
           {can(p, 'org.billing.view', org.id) ? (
-            <Widget label="This month (excl. VAT)" value={org.status === 'trial' ? 'Trial' : formatMoney(proInvoice(org, org.publishedThisMonth, false).total)} note={org.status === 'trial' ? 'Nothing billed yet' : `${formatMoney(org.perMemorialMinor)} per memorial`} />
+            <Widget
+              label={org.includedMemorials ? 'Allowance this month' : 'This month (excl. VAT)'}
+              value={org.includedMemorials ? `${org.publishedThisMonth} of ${org.includedMemorials}` : org.status === 'trial' ? 'Trial' : formatMoney(proInvoice(org, org.publishedThisMonth, false).total)}
+              note={
+                org.status === 'trial'
+                  ? 'Trial: nothing billed yet'
+                  : org.includedMemorials
+                    ? org.publishedThisMonth > org.includedMemorials
+                      ? `${org.publishedThisMonth - org.includedMemorials} extra at ${formatMoney(org.perMemorialMinor)}`
+                      : `${org.includedMemorials - org.publishedThisMonth} left, then ${formatMoney(org.perMemorialMinor)} each`
+                    : `${formatMoney(org.perMemorialMinor)} per funeral`
+              }
+            />
           ) : (
             <Widget label="Family links waiting" value={waitingLinks.length} note={waitingLinks.length ? 'Sent, not used yet' : 'None out'} />
           )}
@@ -1088,18 +1100,35 @@ export function Studio(d: StudioData) {
           <span className="st-eyebrow">Your plan</span>
           <h2>{plan.name}</h2>
           <p className="st-plan-price">
-            {org.monthlyFeeMinor ? `${formatMoney(org.monthlyFeeMinor)} a month + ` : ''}
-            {formatMoney(org.perMemorialMinor)} per published memorial
+            {org.monthlyFeeMinor
+              ? `${formatMoney(org.monthlyFeeMinor)} a month · ${org.includedMemorials} funerals included · ${formatMoney(org.perMemorialMinor)} each after that`
+              : `${formatMoney(org.perMemorialMinor)} per published funeral · no monthly fee`}
           </p>
-          <p className="st-sub">Excluding VAT. {org.status === 'trial' ? 'You’re in your trial: nothing is billed yet.' : 'To change plan, talk to Memora.'}</p>
+          <p className="st-sub">
+            Excluding VAT. A funeral counts when its memorial is published, once. The allowance resets on the 1st.{' '}
+            {org.status === 'trial' ? 'You’re in your trial: nothing is billed yet.' : 'To change plan, talk to Memora.'}
+          </p>
+          {org.includedMemorials > 0 && (
+            <div className="st-allowance" role="img" aria-label={`${org.publishedThisMonth} of ${org.includedMemorials} included funerals used`}>
+              <span style={{ width: `${Math.min(100, (org.publishedThisMonth / org.includedMemorials) * 100)}%` }} />
+            </div>
+          )}
           <div className="st-bill">
             <div>
               <span>Published this month</span>
-              <b>{org.publishedThisMonth}</b>
+              <b>
+                {org.publishedThisMonth}
+                {org.includedMemorials ? <small> of {org.includedMemorials} included</small> : null}
+              </b>
             </div>
             <div>
               <span>So far this month</span>
               <b>{org.status === 'trial' ? 'R0' : formatMoney(bill.total)}</b>
+              {org.status !== 'trial' && bill.overageMemorials > 0 && (
+                <small>
+                  incl. {bill.overageMemorials} extra × {formatMoney(bill.overageRate)}
+                </small>
+              )}
             </div>
           </div>
         </section>
@@ -1114,11 +1143,16 @@ export function Studio(d: StudioData) {
                 <span className="st-row-main">
                   <strong>{fmt(`${i.period}-15`, { month: 'long', year: 'numeric' })}</strong>
                   <small>
-                    {i.memorials} memorial{i.memorials === 1 ? '' : 's'}
+                    {i.memorials} funeral{i.memorials === 1 ? '' : 's'}
+                    {i.overageMemorials && i.includedMemorials ? ` · ${i.overageMemorials} beyond the allowance` : ''}
                     {i.onboardingMinor ? ' · includes onboarding' : ''}
+                    {i.adjustmentsMinor < 0 ? ' · credit applied' : ''}
                   </small>
                 </span>
-                <b className="st-amount">{formatMoney(i.amountMinor)}</b>
+                <b className="st-amount">
+                  {formatMoney(i.amountMinor + i.vatMinor)}
+                  <small>incl. VAT</small>
+                </b>
                 <span className={`st-pill ${i.status === 'PAID' ? 'ok' : i.status === 'VOID' ? 'muted' : ''}`}>{i.status === 'DRAFT' ? 'Being prepared' : i.status.toLowerCase()}</span>
               </div>
             ))}

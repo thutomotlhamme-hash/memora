@@ -3,7 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { accountLabel, loginAddress } from '../account-id';
 import { slugify } from '../memorial';
-import { PRO_ONBOARDING_MINOR, PRO_PLANS, isProPlan, periodOf, proInvoice, type ProPlan } from '../plans';
+import { PRO_PLANS, billableUsage, isProPlan, periodOf, proInvoice, type ProPlan } from '../plans';
 import { ALL_ROLES, ROLES, can, canGrantRole, canIn, isRole, type Permission, type Principal, type Role } from '../rbac';
 import { createInvite, revokeInvite } from './invites';
 import { refreshPublicPages } from './public-cache';
@@ -31,6 +31,9 @@ export interface Org {
   plan: ProPlan;
   status: 'trial' | 'active' | 'disabled';
   monthlyFeeMinor: number;
+  /** Published memorials included each month. */
+  includedMemorials: number;
+  /** Each published memorial beyond the allowance. */
   perMemorialMinor: number;
   onboardingFeeMinor: number;
   onboardingPaid: boolean;
@@ -55,6 +58,7 @@ const toOrg = (r: Row): Omit<Org, 'memorials' | 'publishedThisMonth'> => ({
   plan: r.plan,
   status: r.status,
   monthlyFeeMinor: r.monthly_fee_minor,
+  includedMemorials: r.included_memorials ?? 0,
   perMemorialMinor: r.per_memorial_minor,
   onboardingFeeMinor: r.onboarding_fee_minor,
   onboardingPaid: r.onboarding_paid,
@@ -70,19 +74,29 @@ const toOrg = (r: Row): Omit<Org, 'memorials' | 'publishedThisMonth'> => ({
   createdAt: r.created_at,
 });
 
-function monthRange(period: string): [string, string] {
-  const [y, m] = period.split('-').map(Number);
-  return [new Date(Date.UTC(y, m - 1, 1)).toISOString(), new Date(Date.UTC(y, m, 1)).toISOString()];
-}
-
-/** Published memorials per funeral home in a month: what gets billed. */
+/**
+ * Memorials each funeral home published in a month: what gets billed. Read from
+ * the usage ledger (one row per memorial, written when it is first published),
+ * so edits, re-publishing, takedowns and restores never count twice.
+ */
 export async function usageFor(admin: SupabaseClient, period: string, orgId?: string): Promise<Map<string, number>> {
-  const [from, to] = monthRange(period);
-  let q = admin.from('memora_cases').select('org_id').not('org_id', 'is', null).gte('published_at', from).lt('published_at', to);
+  let q = admin.from('memora_org_usage').select('case_id,org_id,published_at').eq('period', period);
   if (orgId) q = q.eq('org_id', orgId);
   const { data } = await q;
+  return billableUsage(((data ?? []) as Row[]).map((r) => ({ caseId: r.case_id, orgId: r.org_id, status: 'PUBLISHED', publishedAt: r.published_at })), period);
+}
+
+/** Credits and extra charges for a month, per funeral home. */
+export async function adjustmentsFor(admin: SupabaseClient, period: string): Promise<Map<string, number>> {
+  const { data } = await admin.from('memora_billing_adjustments').select('org_id,amount_minor').eq('period', period).not('org_id', 'is', null);
   const out = new Map<string, number>();
-  for (const r of (data ?? []) as Row[]) out.set(r.org_id, (out.get(r.org_id) ?? 0) + 1);
+  for (const r of (data ?? []) as Row[]) out.set(r.org_id, (out.get(r.org_id) ?? 0) + Number(r.amount_minor));
+  return out;
+}
+
+export function countBy(rows: Row[], key: string): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of rows) if (r[key]) out.set(r[key], (out.get(r[key]) ?? 0) + 1);
   return out;
 }
 
@@ -133,10 +147,15 @@ export interface Invoice {
   orgId: string;
   period: string;
   memorials: number;
+  includedMemorials: number;
+  overageMemorials: number;
   monthlyFeeMinor: number;
   perMemorialMinor: number;
   onboardingMinor: number;
+  adjustmentsMinor: number;
+  /** Excluding VAT. */
   amountMinor: number;
+  vatMinor: number;
   status: 'DRAFT' | 'SENT' | 'PAID' | 'VOID';
   createdAt: string;
 }
@@ -150,10 +169,14 @@ export async function loadInvoices(admin: SupabaseClient, orgId?: string): Promi
     orgId: r.org_id,
     period: r.period,
     memorials: r.memorials,
+    includedMemorials: r.included_memorials ?? 0,
+    overageMemorials: r.overage_memorials ?? r.memorials,
     monthlyFeeMinor: r.monthly_fee_minor,
     perMemorialMinor: r.per_memorial_minor,
     onboardingMinor: r.onboarding_minor,
+    adjustmentsMinor: r.adjustments_minor ?? 0,
     amountMinor: r.amount_minor,
+    vatMinor: r.vat_minor ?? 0,
     status: r.status,
     createdAt: r.created_at,
   }));
@@ -255,7 +278,7 @@ export async function createOrg(
   if (name.length < 2) return { ok: false, error: 'Give the funeral home a name.', status: 400 };
   const plan: ProPlan = isProPlan(input.plan) ? input.plan : 'pro';
   const p = PRO_PLANS[plan];
-  const branches = Math.min(500, Math.max(1, Math.round(Number(input.branches) || p.branches)));
+  const branches = Math.min(500, Math.max(1, Math.round(Number(input.branches) || p.branches || 1)));
   const slug = await uniqueSlug(admin, name);
   const { data, error } = await admin
     .from('memora_orgs')
@@ -265,8 +288,9 @@ export async function createOrg(
       plan,
       status: 'trial',
       monthly_fee_minor: p.monthlyMinor,
-      per_memorial_minor: p.perMemorialMinor,
-      onboarding_fee_minor: PRO_ONBOARDING_MINOR,
+      included_memorials: p.includedMemorials,
+      per_memorial_minor: p.overageMinor,
+      onboarding_fee_minor: p.onboardingMinor,
       branches,
       contact_name: text(input.contactName),
       contact_phone: text(input.contactPhone, 40),
@@ -292,6 +316,7 @@ const PERMISSION_FOR: Record<string, Permission> = {
   'org.assignMemorial': 'memorials.assign',
   'invoice.generate': 'orgs.billing',
   'invoice.setStatus': 'orgs.billing',
+  'billing.adjust': 'orgs.billing',
 };
 
 export function isProAction(action: string): boolean {
@@ -368,16 +393,27 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     case 'org.setPlan': {
       if (!uuid(input.id)) return { ok: false, error: 'Funeral home not found.', status: 404 };
       if (!isProPlan(input.plan)) return { ok: false, error: 'Choose a plan.', status: 400 };
+      // A new plan brings its list terms; anything filled in overrides them (a negotiated contract).
       const p = PRO_PLANS[input.plan];
-      const monthly = rands(input.monthly) ?? p.monthlyMinor;
-      const per = rands(input.perMemorial) ?? p.perMemorialMinor;
-      const onboarding = rands(input.onboarding) ?? PRO_ONBOARDING_MINOR;
-      if (per < PRO_PLANS.pro.perMemorialMinor) return { ok: false, error: `The per-memorial price can’t go below R${PRO_PLANS.pro.perMemorialMinor / 100}.`, status: 400 };
+      const { data: before } = await admin.from('memora_orgs').select('plan,monthly_fee_minor,included_memorials,per_memorial_minor,onboarding_fee_minor,branches').eq('id', input.id).maybeSingle();
+      const changedPlan = before?.plan !== input.plan;
+      // Switching plan: a field left at the old plan's value takes the new plan's list price.
+      const pick = (v: number | null, list: number, prev: number | undefined) => (changedPlan && (v === null || v === prev) ? list : (v ?? prev ?? list));
+      const monthly = pick(rands(input.monthly), p.monthlyMinor, before?.monthly_fee_minor);
+      const per = pick(rands(input.perMemorial), p.overageMinor, before?.per_memorial_minor);
+      const onboarding = pick(rands(input.onboarding), p.onboardingMinor, before?.onboarding_fee_minor);
+      const includedRaw = Number(String(input.included ?? '').trim() || NaN);
+      const included = pick(Number.isFinite(includedRaw) ? Math.max(0, Math.min(10_000, Math.round(includedRaw))) : null, p.includedMemorials, before?.included_memorials);
+      const allowedBranches = Number(String(input.branches ?? '').trim() || NaN);
+      const branchCap = pick(Number.isFinite(allowedBranches) ? Math.max(1, Math.min(500, Math.round(allowedBranches))) : null, p.branches ?? before?.branches ?? 1, before?.branches);
+      if (per <= 0 && included === 0 && monthly === 0) return { ok: false, error: 'That would make every memorial free. Set a monthly fee or a price per memorial.', status: 400 };
       await admin
         .from('memora_orgs')
         .update({
           plan: input.plan,
           monthly_fee_minor: monthly,
+          included_memorials: included,
+          branches: branchCap,
           per_memorial_minor: per,
           onboarding_fee_minor: onboarding,
           onboarding_paid: input.onboardingPaid === true || input.onboardingPaid === 'true',
@@ -386,7 +422,11 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
           updated_at: now,
         })
         .eq('id', input.id);
-      await log(admin, actor.userId, 'ORG_PLAN_SET', { org: input.id, plan: input.plan, monthly: monthly / 100, perMemorial: per / 100, onboarding: onboarding / 100 });
+      await log(admin, actor.userId, 'ORG_PLAN_SET', {
+        org: input.id,
+        before: before ? { plan: before.plan, monthly: before.monthly_fee_minor / 100, included: before.included_memorials, perMemorial: before.per_memorial_minor / 100, onboarding: before.onboarding_fee_minor / 100 } : null,
+        after: { plan: input.plan, monthly: monthly / 100, included, perMemorial: per / 100, onboarding: onboarding / 100, branches: branchCap },
+      });
       return { ok: true, message: `Plan set to ${p.name}.` };
     }
     case 'org.assignMemorial': {
@@ -404,25 +444,30 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     case 'invoice.generate': {
       const period = typeof input.period === 'string' && /^\d{4}-\d{2}$/.test(input.period) ? input.period : periodOf();
       const { data: orgs } = await admin.from('memora_orgs').select('*').neq('status', 'disabled');
-      const usage = await usageFor(admin, period);
+      const [usage, adjustments] = await Promise.all([usageFor(admin, period), adjustmentsFor(admin, period)]);
       const { data: existing } = await admin.from('memora_org_invoices').select('org_id,period,status');
-      const had = new Set(((existing ?? []) as Row[]).map((r) => r.org_id));
+      // Onboarding goes on a home's first invoice; re-making this month's draft keeps it there.
+      const had = new Set(((existing ?? []) as Row[]).filter((r) => r.period < period).map((r) => r.org_id));
       const locked = new Set(((existing ?? []) as Row[]).filter((r) => r.period === period && r.status !== 'DRAFT').map((r) => r.org_id));
       let made = 0;
       for (const r of (orgs ?? []) as Row[]) {
         if (r.status === 'trial' || locked.has(r.id)) continue;
         const o = toOrg(r);
         const count = usage.get(o.id) ?? 0;
-        const inv = proInvoice(o, count, !had.has(o.id));
+        const inv = proInvoice(o, count, !had.has(o.id), adjustments.get(o.id) ?? 0);
         await admin.from('memora_org_invoices').upsert(
           {
             org_id: o.id,
             period,
             memorials: count,
+            included_memorials: inv.included,
+            overage_memorials: inv.overageMemorials,
             monthly_fee_minor: inv.monthly,
             per_memorial_minor: o.perMemorialMinor,
             onboarding_minor: inv.onboarding,
-            amount_minor: inv.total,
+            adjustments_minor: inv.adjustments,
+            vat_minor: inv.vat,
+            amount_minor: inv.subtotal,
             status: 'DRAFT',
             updated_at: now,
           },
@@ -432,6 +477,19 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       }
       await log(admin, actor.userId, 'INVOICES_GENERATED', { period, invoices: made });
       return { ok: true, message: made ? `${made} draft invoice${made === 1 ? '' : 's'} for ${period}. Homes in trial aren’t billed.` : 'No active funeral homes to bill.' };
+    }
+    case 'billing.adjust': {
+      if (!uuid(input.orgId)) return { ok: false, error: 'Funeral home not found.', status: 404 };
+      const period = typeof input.period === 'string' && /^\d{4}-\d{2}$/.test(input.period) ? input.period : periodOf();
+      const raw = String(input.amount ?? '').trim();
+      const amount = rands(raw.replace(/^-/, ''));
+      if (!amount) return { ok: false, error: 'Enter an amount in rand.', status: 400 };
+      const signed = raw.startsWith('-') || input.kind === 'credit' ? -amount : amount;
+      const reason = text(input.reason, 300);
+      if (reason.length < 3) return { ok: false, error: 'Give a reason (it shows on the invoice record).', status: 400 };
+      await admin.from('memora_billing_adjustments').insert({ org_id: input.orgId, period, amount_minor: signed, reason, created_by: actor.userId });
+      await log(admin, actor.userId, 'BILLING_ADJUSTED', { org: input.orgId, period, amount: signed / 100, reason });
+      return { ok: true, message: `${signed < 0 ? 'Credit' : 'Charge'} recorded for ${period}. Re-make the drafts to include it.` };
     }
     case 'invoice.setStatus': {
       if (!uuid(input.id)) return { ok: false, error: 'Invoice not found.', status: 404 };
@@ -510,6 +568,12 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     // ---- Branches (owners, and Memora operations) ----
     case 'branch.create': {
       if (!uuid(input.orgId) || !canIn(actor, 'org.branches', input.orgId, null)) return deny('Only the funeral home’s owner can add branches.');
+      const [{ data: home }, { count: have }] = await Promise.all([
+        admin.from('memora_orgs').select('branches,plan').eq('id', input.orgId).maybeSingle(),
+        admin.from('memora_branches').select('id', { count: 'exact', head: true }).eq('org_id', input.orgId),
+      ]);
+      if (home && (have ?? 0) >= home.branches)
+        return { ok: false, error: `Your plan includes ${home.branches} branch${home.branches === 1 ? '' : 'es'}. Talk to Memora to add more.`, status: 409 };
       const out = await createBranch(admin, input.orgId, text(input.name, 80), text(input.area, 120));
       if (!out.ok) return out;
       await log(admin, actor.userId, 'BRANCH_ADDED', { org: input.orgId, branch: text(input.name, 80) });

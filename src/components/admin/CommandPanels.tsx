@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtDate } from '@/lib/memorial';
-import { PRO_PLANS, formatMoney, periodOf, proInvoice, type ProPlan } from '@/lib/plans';
+import { PRO_PLANS, formatMoney, periodOf, planLabel, proInvoice, type ProPlan } from '@/lib/plans';
 import { ALL_ROLES, BRANCH_ROLES, PERMISSIONS, ROLES, can, canGrantRole, roleGrants, type Principal, type Role } from '@/lib/rbac';
 import { loadAudit, loadBranches, loadGroups, loadInvoices, loadOrgs, type Group, type Org } from '@/lib/server/pro';
 import { loadInvites } from '@/lib/server/invites';
@@ -11,7 +11,13 @@ import { AdminAction } from './AdminAction';
 
 const R = (minor: number) => formatMoney(minor);
 const when = (iso: string | null | undefined) => (iso ? fmtDate(String(iso).slice(0, 10)) : '—');
-const PLAN_OPTIONS = (Object.keys(PRO_PLANS) as ProPlan[]).map((p) => ({ value: p, label: `${PRO_PLANS[p].name} · ${PRO_PLANS[p].monthlyMinor ? `${R(PRO_PLANS[p].monthlyMinor)}/month + ` : ''}${R(PRO_PLANS[p].perMemorialMinor)} per memorial` }));
+const PLAN_OPTIONS = (Object.keys(PRO_PLANS) as ProPlan[]).map((p) => ({ value: p, label: planLabel(p) }));
+/** Self-serve plans: Enterprise is set up with the Enterprise wizard, never a one-line link. */
+const SELF_SERVE_OPTIONS = PLAN_OPTIONS.filter((o) => !PRO_PLANS[o.value].quoted);
+const termsLine = (o: Org) =>
+  o.monthlyFeeMinor
+    ? `${R(o.monthlyFeeMinor)}/mo · ${o.includedMemorials} included · ${R(o.perMemorialMinor)} extra`
+    : `${R(o.perMemorialMinor)} per funeral`;
 const STATUS_LABEL: Record<Org['status'], string> = { trial: 'Trial', active: 'Active', disabled: 'Disabled' };
 
 // ---------------------------------------------------------------------------
@@ -39,7 +45,7 @@ export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Princ
             submit="Make onboarding link"
             fields={[
               { name: 'label', label: 'Funeral home (optional)', type: 'text', placeholder: 'e.g. Sizwe Funeral Services', hint: 'Fills in their name for them.' },
-              { name: 'plan', label: 'Plan', type: 'select', value: 'pro', options: PLAN_OPTIONS },
+              { name: 'plan', label: 'Plan', type: 'select', value: 'pro', options: SELF_SERVE_OPTIONS, hint: 'For a group, franchise or insurer, use Create Enterprise account instead.' },
             ]}
           />
           <InviteList invites={invites.slice(0, 12)} empty="No onboarding links yet." />
@@ -57,7 +63,7 @@ export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Princ
             submit="Add funeral home"
             fields={[
               { name: 'name', label: 'Funeral home', type: 'text', required: true, placeholder: 'e.g. Sizwe Funeral Services' },
-              { name: 'plan', label: 'Plan', type: 'select', value: 'pro', options: PLAN_OPTIONS },
+              { name: 'plan', label: 'Plan', type: 'select', value: 'pro', options: SELF_SERVE_OPTIONS },
               { name: 'contactName', label: 'Contact person', type: 'text' },
               { name: 'contactPhone', label: 'Contact number', type: 'tel', placeholder: '082 123 4567' },
               { name: 'contactEmail', label: 'Contact email', type: 'email' },
@@ -91,10 +97,14 @@ export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Princ
                     <strong>{o.status === 'trial' ? 'Trial: not billed' : R(inv.total)}</strong>
                   </div>
                   <div>
-                    <span>Price</span>
+                    <span>Terms</span>
+                    <strong>{termsLine(o)}</strong>
+                  </div>
+                  <div>
+                    <span>Used this month</span>
                     <strong>
-                      {o.monthlyFeeMinor ? `${R(o.monthlyFeeMinor)}/mo + ` : ''}
-                      {R(o.perMemorialMinor)} each
+                      {o.includedMemorials ? `${o.publishedThisMonth} of ${o.includedMemorials} included` : `${o.publishedThisMonth} published`}
+                      {inv.overageMemorials ? ` · ${inv.overageMemorials} extra` : ''}
                     </strong>
                   </div>
                   <div>
@@ -162,7 +172,9 @@ export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Princ
                           fields={[
                             { name: 'plan', label: 'Plan', type: 'select', value: o.plan, options: PLAN_OPTIONS },
                             { name: 'monthly', label: 'Monthly fee (R)', type: 'money', value: String(o.monthlyFeeMinor / 100) },
-                            { name: 'perMemorial', label: 'Per memorial (R)', type: 'money', value: String(o.perMemorialMinor / 100), hint: `Never below ${R(PRO_PLANS.pro.perMemorialMinor)}.` },
+                            { name: 'included', label: 'Funerals included each month', type: 'text', value: String(o.includedMemorials) },
+                            { name: 'perMemorial', label: 'Each extra funeral (R)', type: 'money', value: String(o.perMemorialMinor / 100), hint: 'Switching plan? Leave these as they are to take the new plan’s list prices.' },
+                            { name: 'branches', label: 'Branches allowed', type: 'text', value: String(o.branches) },
                             { name: 'onboarding', label: 'Onboarding fee (R)', type: 'money', value: String(o.onboardingFeeMinor / 100) },
                             { name: 'onboardingPaid', label: 'Onboarding fee paid', type: 'checkbox', value: o.onboardingPaid },
                             { name: 'contractStart', label: 'Contract starts', type: 'date', value: o.contractStart ?? '' },
@@ -217,11 +229,28 @@ export async function BillingPanel({ admin }: { admin: SupabaseClient }) {
       <div className="card" style={{ marginBottom: 20 }}>
         <h2 className="h3">Raise this month’s invoices</h2>
         <p className="small muted">
-          One draft per active funeral home: the monthly fee, each memorial published in the month, and the onboarding fee on a first invoice. Homes in trial
-          aren’t billed. Running it again updates drafts; sent or paid invoices are left alone.
+          One draft per active funeral home: the monthly fee, each published funeral beyond the month’s allowance, any credits or charges, and the onboarding fee
+          on a first invoice, plus VAT. Homes in trial aren’t billed. Running it again updates drafts; sent or paid invoices are left alone.
         </p>
         <ActionForm action="invoice.generate" compact submit="Raise invoices" fields={[{ name: 'period', label: 'Month', type: 'text', value: period, placeholder: 'YYYY-MM' }]} />
       </div>
+      <details className="card" style={{ marginBottom: 20 }}>
+        <summary>
+          <strong>Credit or extra charge</strong> <span className="muted small">A goodwill credit, a correction, or a once-off charge, with a reason.</span>
+        </summary>
+        <ActionForm
+          action="billing.adjust"
+          reset
+          submit="Record it"
+          fields={[
+            { name: 'orgId', label: 'Funeral home', type: 'select', value: orgs[0]?.id ?? '', options: orgs.map((o) => ({ value: o.id, label: o.name })) },
+            { name: 'kind', label: 'Kind', type: 'select', value: 'credit', options: [{ value: 'credit', label: 'Credit (reduces the invoice)' }, { value: 'charge', label: 'Extra charge' }] },
+            { name: 'amount', label: 'Amount (R, excl. VAT)', type: 'money', value: '' },
+            { name: 'period', label: 'Month', type: 'text', value: period, placeholder: 'YYYY-MM' },
+            { name: 'reason', label: 'Reason', type: 'text', required: true, placeholder: 'e.g. Duplicate memorial published in error' },
+          ]}
+        />
+      </details>
       <div className="board-wrap">
         <table className="board">
           <thead>
@@ -250,8 +279,12 @@ export async function BillingPanel({ admin }: { admin: SupabaseClient }) {
                 <td>
                   {R(i.amountMinor)}
                   <span className="sub">
-                    {R(i.monthlyFeeMinor)} fee + {i.memorials} × {R(i.perMemorialMinor)}
+                    {i.monthlyFeeMinor ? `${R(i.monthlyFeeMinor)} fee` : 'No fee'}
+                    {i.includedMemorials ? ` (${i.includedMemorials} included)` : ''}
+                    {i.overageMemorials ? ` + ${i.overageMemorials} × ${R(i.perMemorialMinor)}` : ''}
                     {i.onboardingMinor ? ` + ${R(i.onboardingMinor)} onboarding` : ''}
+                    {i.adjustmentsMinor ? ` ${i.adjustmentsMinor < 0 ? '−' : '+'} ${R(Math.abs(i.adjustmentsMinor))} adjustment` : ''}
+                    {` · VAT ${R(i.vatMinor)} · ${R(i.amountMinor + i.vatMinor)} incl.`}
                   </span>
                 </td>
                 <td>{i.status.toLowerCase()}</td>

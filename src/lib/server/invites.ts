@@ -95,6 +95,7 @@ export async function createInvite(admin: SupabaseClient, actor: Principal, inpu
   if (kind === 'org') {
     if (!can(actor, 'orgs.manage')) return { ok: false, error: 'You don’t have permission to onboard funeral homes.', status: 403 };
     plan = isProPlan(input.plan) ? input.plan : 'pro';
+    if (PRO_PLANS[plan].quoted) return { ok: false, error: 'Enterprise is set up with Create Enterprise account, not a self-serve link.', status: 400 };
   } else {
     if (!uuid(input.orgId) || !uuid(input.branchId) || !canIn(actor, 'org.memorials.create', input.orgId, input.branchId)) return { ok: false, error: 'You can’t send family links for this branch.', status: 403 };
     const { data: branch } = await admin.from('memora_branches').select('org_id').eq('id', input.branchId).maybeSingle();

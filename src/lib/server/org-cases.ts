@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { readiness, slugify, type CaseMeta, type Draft } from '../memorial';
-import { archiveDate } from '../plans';
+import { archiveDate, periodOf } from '../plans';
 import { loadCaseById } from './cases';
 import { refreshPublicPages } from './public-cache';
 
@@ -53,9 +53,23 @@ export async function publishCase(admin: SupabaseClient, id: string, actorId: st
     .maybeSingle();
   if (error || !updated) return { ok: false, error: 'Could not publish the memorial.', status: 500 };
   refreshPublicPages();
+  await recordUsage(admin, id, actorId, now);
   await admin.from('memora_activity_log').insert({ case_id: id, actor_user_id: actorId, action: 'CASE_PUBLISHED', metadata: { slug, archive_at: archiveAt, ...metadata } });
   return {
     ok: true,
     meta: { ...meta, status: updated.status, slug: updated.slug, publishedAt: updated.published_at, archiveAt: updated.archive_at, updatedAt: updated.updated_at },
   };
+}
+
+/**
+ * One billable publication for the funeral home the memorial belongs to. The
+ * memorial's id is the key, so it is billed once, in the month it was first
+ * published; publishing again, editing or restoring it never adds a second.
+ */
+export async function recordUsage(admin: SupabaseClient, caseId: string, actorId: string, at: Date): Promise<void> {
+  const { data: c } = await admin.from('memora_cases').select('org_id,branch_id').eq('id', caseId).maybeSingle();
+  if (!c?.org_id) return;
+  await admin
+    .from('memora_org_usage')
+    .upsert({ case_id: caseId, org_id: c.org_id, branch_id: c.branch_id ?? null, period: periodOf(at), published_at: at.toISOString(), published_by: actorId }, { onConflict: 'case_id', ignoreDuplicates: true });
 }

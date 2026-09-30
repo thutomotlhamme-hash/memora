@@ -6,7 +6,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { BrandMark } from '@/components/Brand';
 import { Constellation } from '@/components/pro/studio/Constellation';
 import { accountLabel, isPhoneLogin } from '@/lib/account-id';
-import { PRO_PLANS } from '@/lib/plans';
+import { PRO_PLANS, formatMoney } from '@/lib/plans';
 import { openInvite } from '@/lib/server/invites';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { getSessionUser } from '@/lib/supabase/server';
@@ -109,8 +109,12 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
                   <b>Your team.</b> Add branches, managers and arrangers from your dashboard.
                 </li>
                 <li>
-                  <b>Your first family.</b> Send a link, or start the memorial yourself. Free trial first; then {plan.monthlyMinor ? `R${(plan.monthlyMinor / 100).toLocaleString('en-ZA')} a month + ` : ''}R
-                  {(plan.perMemorialMinor / 100).toLocaleString('en-ZA')} per memorial, excl. VAT.
+                  <b>Your first family.</b> Send a link, or start the memorial yourself. Free trial first; then{' '}
+                  {plan.quoted
+                    ? 'the terms in your agreement.'
+                    : plan.monthlyMinor
+                      ? `${formatMoney(plan.monthlyMinor)} a month with ${plan.includedMemorials} funerals included, then ${formatMoney(plan.overageMinor)} each, excl. VAT.`
+                      : `${formatMoney(plan.overageMinor)} per published funeral, excl. VAT. No monthly fee.`}
                 </li>
               </>
             )}

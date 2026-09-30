@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
-import { PRO_ONBOARDING_MINOR, PRO_PLANS, formatMoney, type ProPlan } from '@/lib/plans';
+import { PRODUCT, PRO_PLANS, formatMoney, type ProPlan } from '@/lib/plans';
 
 export const metadata = {
   title: 'Memora Pro for funeral homes',
@@ -51,17 +51,17 @@ export default function ProPage() {
 
         <section className="container pro-plans" id="plans">
           <h2 className="h2" style={{ textAlign: 'center' }}>
-            Plans
+            Plans for funeral homes
           </h2>
           <p className="muted" style={{ textAlign: 'center', marginTop: 8 }}>
-            Prices exclude VAT. 12-month agreement. Once-off onboarding {formatMoney(PRO_ONBOARDING_MINOR)}: your branding, templates and staff training done for
-            you.
+            A funeral counts when its memorial is published. Allowances reset every month. Prices exclude VAT.
           </p>
           <div className="pro-plan-grid">
             {ORDER.map((id) => {
               const p = PRO_PLANS[id];
+              const ask = `/contact?topic=pro&message=${encodeURIComponent(p.quoted ? 'We’d like to talk to Memora about Enterprise for our group.' : `We’re interested in ${p.name} for our funeral home.`)}`;
               return (
-                <article key={id} className={`card pro-plan${id === 'pro' ? ' featured' : ''}`}>
+                <article key={id} className={`card pro-plan${id === 'pro' ? ' featured' : ''}${p.quoted ? ' enterprise' : ''}`}>
                   {id === 'pro' && <span className="pill">Most homes start here</span>}
                   <h3 className="h3">{p.name}</h3>
                   <span className="muted small">{p.forWho}</span>
@@ -69,7 +69,7 @@ export default function ProPage() {
                     {p.quoted ? (
                       <>
                         <strong>From {formatMoney(p.monthlyMinor)}</strong>
-                        <span>per month, quoted</span>
+                        <span>per month, by contract</span>
                       </>
                     ) : p.monthlyMinor ? (
                       <>
@@ -79,11 +79,35 @@ export default function ProPage() {
                     ) : (
                       <>
                         <strong>No monthly fee</strong>
-                        <span>pay per memorial</span>
+                        <span>{formatMoney(p.overageMinor)} per funeral</span>
                       </>
                     )}
                   </div>
-                  <div className="pro-per">+ {formatMoney(p.perMemorialMinor)} per published memorial</div>
+                  <ul className="pro-terms">
+                    {p.quoted ? (
+                      <>
+                        <li>
+                          <strong>{p.includedMemorials}+</strong> funerals a month
+                        </li>
+                        <li>Volume rates from {formatMoney(p.overageMinor)}</li>
+                        <li>Custom branch structure</li>
+                      </>
+                    ) : p.monthlyMinor ? (
+                      <>
+                        <li>
+                          <strong>{p.includedMemorials}</strong> funerals included each month
+                        </li>
+                        <li>{formatMoney(p.overageMinor)} per additional funeral</li>
+                        <li>{p.branches === 1 ? 'One branch' : `Up to ${p.branches === 3 ? 'three' : p.branches} branches`}</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>Pay only when a memorial is published</li>
+                        <li>One branch</li>
+                        <li>No long-term commitment</li>
+                      </>
+                    )}
+                  </ul>
                   <ul className="cc-cans">
                     {p.features.map((f) => (
                       <li key={f} className="can">
@@ -91,13 +115,23 @@ export default function ProPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link className={`btn ${id === 'pro' ? 'primary' : ''} block`} href={`/contact?topic=pro&message=${encodeURIComponent(`We’re interested in ${p.name} for our funeral home.`)}`}>
-                    {p.quoted ? 'Talk to us' : 'Get started'}
+                  <p className="tiny muted pro-fine">
+                    {p.quoted
+                      ? 'Terms, allowance and onboarding set in your agreement.'
+                      : p.agreementMonths
+                        ? `${p.agreementMonths}-month agreement · once-off onboarding ${formatMoney(p.onboardingMinor)}`
+                        : 'Set yourself up. No onboarding fee.'}
+                  </p>
+                  <Link className={`btn ${id === 'pro' ? 'primary' : ''} block`} href={ask}>
+                    {p.quoted ? 'Talk to Memora' : 'Get started'}
                   </Link>
                 </article>
               );
             })}
           </div>
+          <p className="small muted" style={{ textAlign: 'center', marginTop: 22 }}>
+            A family buying a memorial themselves pays {formatMoney(PRODUCT.amountMinor)} once, for {PRODUCT.name}. Memora Pro is for funeral homes running funerals through Memora.
+          </p>
         </section>
       </main>
       <SiteFooter />

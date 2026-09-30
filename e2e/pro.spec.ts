@@ -1,16 +1,20 @@
 import { expect, test } from './fixtures';
 
 test.describe('Memora Pro and the command centre', () => {
-  test('the Pro page shows every plan, and no plan undercuts families', async ({ page }) => {
+  test('the Pro page shows the four ways to run Memora', async ({ page }) => {
     await page.goto('/pro');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('beautifully remembered');
     const plans = page.locator('.pro-plan');
     await expect(plans).toHaveCount(4);
-    await expect(page.locator('.pro-plan.featured')).toContainText(/R6\s?500/);
-    for (const per of await page.locator('.pro-per').allTextContents()) {
-      const rands = Number(per.replace(/[^\d]/g, ''));
-      expect(rands).toBeGreaterThanOrEqual(999);
-    }
+    await expect(plans.nth(0)).toContainText('No monthly fee');
+    await expect(plans.nth(0)).toContainText('R1,490 per funeral');
+    await expect(page.locator('.pro-plan.featured')).toContainText('R6,500');
+    await expect(page.locator('.pro-plan.featured')).toContainText('5 funerals included each month');
+    await expect(page.locator('.pro-plan.featured')).toContainText('R899 per additional funeral');
+    await expect(plans.nth(2)).toContainText('R14,500');
+    await expect(plans.nth(2)).toContainText('15 funerals included each month');
+    await expect(plans.nth(2)).toContainText('R699 per additional funeral');
+    await expect(plans.nth(2)).toContainText('Up to three branches');
     await page.locator('.pro-plan.featured').getByRole('link').click();
     await expect(page).toHaveURL(/\/contact\?topic=pro/);
     await expect(page.locator('#c-topic')).toHaveValue('pro');
@@ -43,8 +47,12 @@ test.describe('Memora Pro: the offer', () => {
   test('prices are clear: VAT, the onboarding fee, and Enterprise is quoted', async ({ page }) => {
     await page.goto('/pro');
     await expect(page.getByText(/Prices exclude VAT/)).toBeVisible();
-    await expect(page.getByText(/onboarding R9\s?500/)).toBeVisible();
-    await expect(page.locator('.pro-plan').last().getByRole('link')).toHaveText('Talk to us');
+    await expect(page.getByText(/once-off onboarding R3,500/)).toBeVisible();
+    const enterprise = page.locator('.pro-plan.enterprise');
+    await expect(enterprise).toContainText('From R35,000');
+    await expect(enterprise).toContainText('Volume rates from R499');
+    await expect(enterprise.getByRole('link')).toHaveText('Talk to Memora');
+    await expect(page.getByText(/Memora Complete/)).toBeVisible();
     for (const plan of await page.locator('.pro-plan').all()) {
       await expect(plan.getByRole('link')).toHaveAttribute('href', /\/contact\?topic=pro/);
     }

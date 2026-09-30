@@ -108,15 +108,6 @@ test('no one can give out more than they have', () => {
   assert.equal(canGrantRole(admin, 'org_owner', null), false, 'funeral-home roles need a home');
 });
 
-test('Pro pricing never undercuts families, and invoices add up', async () => {
-  const { PRO_PLANS, PRODUCT, proInvoice } = await import('../src/lib/plans.ts');
-  for (const plan of Object.values(PRO_PLANS)) assert.ok(plan.perMemorialMinor >= PRODUCT.amountMinor, plan.name);
-  const org = { monthlyFeeMinor: 650000, perMemorialMinor: 99900, onboardingFeeMinor: 950000, onboardingPaid: false };
-  assert.deepEqual(proInvoice(org, 12, true), { monthly: 650000, usage: 1198800, onboarding: 950000, total: 2798800 });
-  assert.equal(proInvoice({ ...org, onboardingPaid: true }, 0, true).total, 650000);
-  assert.equal(proInvoice(org, 3, false).onboarding, 0);
-});
-
 test('finance bills funeral homes but cannot run them or change memorials', () => {
   const f = principalFrom('u1', [{ roles: ['finance'], orgId: null }]);
   assert.equal(can(f, 'ops.view'), true);

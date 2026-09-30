@@ -13,11 +13,11 @@ import { refreshPublicPages } from './public-cache';
 export type OrgBrand = { id: string; name: string; logoUrl: string; brandColour: string };
 
 /** The funeral home a memorial belongs to, and whether that home can still act. */
-export async function caseOrg(admin: SupabaseClient, caseId: string): Promise<{ orgId: string; status: string } | null> {
-  const { data } = await admin.from('memora_cases').select('org_id, memora_orgs(status)').eq('id', caseId).maybeSingle();
+export async function caseOrg(admin: SupabaseClient, caseId: string): Promise<{ orgId: string; branchId: string | null; status: string } | null> {
+  const { data } = await admin.from('memora_cases').select('org_id, branch_id, memora_orgs(status)').eq('id', caseId).maybeSingle();
   if (!data?.org_id) return null;
   const org = Array.isArray(data.memora_orgs) ? data.memora_orgs[0] : data.memora_orgs;
-  return { orgId: data.org_id as string, status: (org as { status?: string } | null)?.status ?? 'disabled' };
+  return { orgId: data.org_id as string, branchId: (data.branch_id as string | null) ?? null, status: (org as { status?: string } | null)?.status ?? 'disabled' };
 }
 
 /** Branding for guests' pages; none when the home is disabled. */

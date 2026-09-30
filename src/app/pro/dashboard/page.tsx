@@ -10,11 +10,11 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { accountLabel } from '@/lib/account-id';
 import { fmtDate } from '@/lib/memorial';
 import { PRO_PLANS, formatMoney, proInvoice } from '@/lib/plans';
-import { ALL_ROLES, ROLES, can, canGrantRole, orgsOf, type Permission, type Role } from '@/lib/rbac';
+import { ALL_ROLES, ROLES, branchScope, can, canGrantRole, canIn, orgsOf, type Permission, type Role } from '@/lib/rbac';
 import { getAccess } from '@/lib/server/access';
 import { loadAdminCases, type AdminCase } from '@/lib/server/admin';
 import { loadInvites } from '@/lib/server/invites';
-import { loadGroups, loadInvoices, loadOrgs } from '@/lib/server/pro';
+import { loadBranches, loadGroups, loadInvoices, loadOrgs, type Branch, type Group as TeamGroup } from '@/lib/server/pro';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +27,7 @@ const TABS = [
   ['today', 'Today', 'org.view'],
   ['funerals', 'Funerals', 'org.view'],
   ['families', 'Family links', 'org.memorials.create'],
-  ['team', 'Team', 'org.view'],
+  ['team', 'Branches & people', 'org.view'],
   ['roles', 'Who can do what', 'org.view'],
   ['branding', 'Branding', 'org.branding'],
   ['billing', 'Plan & invoices', 'org.billing.view'],
@@ -45,7 +45,7 @@ const addDays = (iso: string, n: number) => {
 type Group = 'soon' | 'drafts' | 'upcoming' | 'past';
 const GROUP_TITLE: Record<Group, [string, string]> = {
   soon: ['This week', 'Funerals in the next seven days.'],
-  drafts: ['Being prepared', 'Drafts, by families or your staff. A director publishes them.'],
+  drafts: ['Being prepared', 'Drafts, by families or your arrangers. An arranger or manager publishes them.'],
   upcoming: ['Coming up', 'Published, with the funeral more than a week away.'],
   past: ['Done', 'Funerals that have passed. Memorials stay up for the family.'],
 };
@@ -58,7 +58,7 @@ function groupOf(c: AdminCase, today: string, weekEnd: string): Group {
   return 'upcoming';
 }
 
-export default async function ProDashboard({ searchParams }: { searchParams: Promise<{ home?: string; tab?: string; welcome?: string }> }) {
+export default async function ProDashboard({ searchParams }: { searchParams: Promise<{ home?: string; tab?: string; welcome?: string; branch?: string }> }) {
   const access = await getAccess();
   const admin = getAdminSupabase();
   if (!admin) return <StatusScreen eyebrow="Memora Pro" title="Not switched on yet." body="The site owner needs to finish setup." />;
@@ -92,24 +92,34 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
   const tab: Tab = (tabs.find(([t]) => t === sp.tab)?.[0] ?? 'today') as Tab;
   const href = (t: Tab) => `/pro/dashboard?home=${org.id}&tab=${t}`;
 
-  const [{ data: links }, cases, groups, invoices, families] = await Promise.all([
-    admin.from('memora_cases').select('id').eq('org_id', org.id),
+  const [{ data: links }, cases, groups, invoices, families, allBranches] = await Promise.all([
+    admin.from('memora_cases').select('id,branch_id').eq('org_id', org.id),
     loadAdminCases(admin),
     loadGroups(admin, org.id),
     can(p, 'org.billing.view', org.id) ? loadInvoices(admin, org.id) : Promise.resolve([]),
     can(p, 'org.memorials.create', org.id) ? loadInvites(admin, 'family', org.id) : Promise.resolve([]),
+    loadBranches(admin, org.id),
   ]);
-  const ids = new Set(((links ?? []) as { id: string }[]).map((l) => l.id));
-  const memorials = cases.filter((c) => ids.has(c.id));
+  // Branch staff work in their own branches; owners (and Memora's team) in all of them.
+  const scope = branchScope(p, org.id);
+  const myBranches = scope === 'all' ? allBranches : allBranches.filter((b) => scope.includes(b.id));
+  const branchName = new Map(allBranches.map((b) => [b.id, b.name]));
+  const onlyBranch = myBranches.find((b) => b.id === sp.branch)?.id ?? null;
+  const branchOf = new Map(((links ?? []) as { id: string; branch_id: string | null }[]).map((l) => [l.id, l.branch_id]));
+  const inView = (branchId: string | null | undefined) => (onlyBranch ? branchId === onlyBranch : scope === 'all' || (branchId != null && scope.includes(branchId)));
+  const memorials = cases.filter((c) => branchOf.has(c.id) && inView(branchOf.get(c.id)));
+  const canBranches = canIn(p, 'org.branches', org.id, null);
+  const createIn = myBranches.filter((b) => canIn(p, 'org.memorials.create', org.id, b.id));
+  const shownFamilies = families.filter((f) => inView(f.branchId));
   const fromLink = new Map(families.filter((f) => f.caseId).map((f) => [f.caseId!, f.label]));
+  const edit = (branchId: string | null | undefined) => Boolean(p.orgWide.get(org.id)?.has('org.memorials.edit') || (branchId && p.branches.get(org.id)?.get(branchId)?.has('org.memorials.edit')));
   const bill = proInvoice(org, org.publishedThisMonth, false);
   const plan = PRO_PLANS[org.plan];
   const live = org.status !== 'disabled';
-  // Editing opens the family's draft directly; that works for the home's own staff (the database checks the same roles).
-  const edits = p.orgs.get(org.id)?.has('org.memorials.edit') ?? false;
   const myRoles = [...(p.orgRoles.get(org.id) ?? [])] as Role[];
+  const myBranchNames = scope === 'all' ? '' : myBranches.map((b) => b.name).join(', ');
   const platformRoles = [...p.roles].filter((r) => ROLES[r].scope === 'platform');
-  const youAre = myRoles.length ? myRoles.map((r) => ROLES[r].label).join(', ') : platformRoles.length ? `Memora ${ROLES[platformRoles[0]].label}` : 'Viewer';
+  const youAre = myRoles.length ? `${myRoles.map((r) => ROLES[r].label).join(', ')}${myBranchNames ? ` · ${myBranchNames}` : ''}` : platformRoles.length ? `Memora ${ROLES[platformRoles[0]].label}` : 'Viewer';
 
   const today = saToday();
   const weekEnd = addDays(today, 7);
@@ -121,7 +131,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
   grouped.drafts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   grouped.past.sort((a, b) => byDate(b, a));
   const waitingToPublish = memorials.filter((c) => c.status === 'DRAFT');
-  const openLinks = families.filter((f) => f.state === 'open');
+  const openLinks = shownFamilies.filter((f) => f.state === 'open');
 
   return (
     <>
@@ -152,7 +162,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
                 ← Command centre
               </Link>
             )}
-            {live && can(p, 'org.memorials.create', org.id) && <NewHomeMemorial orgId={org.id} name={org.name} />}
+            {live && createIn.length > 0 && <NewHomeMemorial orgId={org.id} branches={createIn.map((b) => ({ id: b.id, name: b.name }))} />}
           </div>
         </div>
         {allOrgs.length > 1 && (
@@ -160,6 +170,18 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
             {allOrgs.map((o) => (
               <Link key={o.id} className={`chip${o.id === org.id ? ' on' : ''}`} href={`/pro/dashboard?home=${o.id}&tab=${tab}`}>
                 {o.name}
+              </Link>
+            ))}
+          </nav>
+        )}
+        {myBranches.length > 1 && (tab === 'today' || tab === 'funerals' || tab === 'families') && (
+          <nav className="row pro-homes" aria-label="Branches">
+            <Link className={`chip${onlyBranch ? '' : ' on'}`} href={href(tab)}>
+              {scope === 'all' ? 'All branches' : 'My branches'}
+            </Link>
+            {myBranches.map((b) => (
+              <Link key={b.id} className={`chip${onlyBranch === b.id ? ' on' : ''}`} href={`${href(tab)}&branch=${b.id}`}>
+                {b.name}
               </Link>
             ))}
           </nav>
@@ -201,8 +223,8 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
               )}
             </div>
             <FuneralSection title="This week" hint="Funerals in the next seven days. Get the run-sheet link to run the day." rows={grouped.soon} empty="No funerals in the next seven days." />
-            {can(p, 'org.memorials.publish', org.id) && (
-              <FuneralSection title="Waiting to be published" hint="Check each one, then publish. Publishing is billed to the funeral home." rows={waitingToPublish} empty="Nothing waiting." />
+            {waitingToPublish.some((c) => canIn(p, 'org.memorials.publish', org.id, branchOf.get(c.id))) && (
+              <FuneralSection title="Waiting to be published" hint="Check each one, then publish. Publishing is billed to the funeral home." rows={waitingToPublish} empty="" />
             )}
             {can(p, 'org.memorials.create', org.id) && (
               <section className="card" style={{ marginBottom: 20 }}>
@@ -233,23 +255,28 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
               <h2 className="h3">Send a family a link</h2>
               <p className="small muted">
                 The family opens it on their phone, makes an account with their number, and fills in the memorial: photo, story, programme. It belongs to {org.name}: your
-                staff can edit it, and a director publishes and runs it. The family pays nothing. Each link works once, for 30 days.
+                branch’s arrangers can edit it, publish it and run the day. The family pays nothing. Each link works once, for 30 days.
               </p>
-              {live && (
+              {live && createIn.length > 0 && (
                 <ActionForm
                   endpoint={SELF}
                   action="invite.create"
-                  extra={{ kind: 'family', orgId: org.id }}
+                  extra={{ kind: 'family', orgId: org.id, ...(createIn.length === 1 ? { branchId: createIn[0].id } : {}) }}
                   reset
                   compact
                   submit="Make the link"
-                  fields={[{ name: 'label', label: 'Who is it for?', type: 'text', required: true, placeholder: 'e.g. Khumalo family', hint: 'Only your team sees this.' }]}
+                  fields={[
+                    { name: 'label', label: 'Who is it for?', type: 'text', required: true, placeholder: 'e.g. Khumalo family', hint: 'Only your team sees this.' },
+                    ...(createIn.length > 1
+                      ? [{ name: 'branchId', label: 'Branch', type: 'select' as const, value: onlyBranch ?? createIn[0].id, options: createIn.map((b) => ({ value: b.id, label: b.name })) }]
+                      : []),
+                  ]}
                 />
               )}
             </section>
             <section className="card" style={{ marginBottom: 64 }}>
               <h2 className="h3">Links you’ve sent</h2>
-              <InviteList invites={families} endpoint={SELF} from={org.name} empty="No links yet." />
+              <InviteList invites={shownFamilies} endpoint={SELF} from={org.name} branches={branchName} empty="No links yet." />
             </section>
           </>
         )}
@@ -257,54 +284,43 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
         {tab === 'team' && (
           <section style={{ marginBottom: 64 }}>
             <p className="small muted" style={{ marginTop: 0 }}>
-              People join a group; the group’s role decides what they can do. They need a Memora account first (their cellphone number). See “Who can do what” for each role.
+              Owners run the whole funeral home. Each branch has its managers and arrangers. People need a Memora account first (their cellphone number). See “Who can do
+              what” for each role.
             </p>
             <div className="cc-groups">
-              {groups.map((g) => {
-                const manage = live && g.roles.every((r) => canGrantRole(p, r, org.id));
-                return (
-                  <article key={g.id} className="card cc-group">
-                    <header className="cc-group-head">
-                      <h3 className="h4">{g.name}</h3>
-                      <div className="cc-roles">
-                        {g.roles.map((r) => (
-                          <span key={r} className="pill" title={ROLES[r].summary}>
-                            {ROLES[r].label}
-                          </span>
-                        ))}
-                      </div>
-                    </header>
-                    <p className="small muted">{g.description}</p>
-                    <ul className="cc-members">
-                      {g.members.length === 0 && <li className="muted small">No one yet.</li>}
-                      {g.members.map((m) => (
-                        <li key={m.userId}>
-                          <span>
-                            <strong>{m.name || m.label}</strong>
-                            {m.name && <span className="muted small"> · {m.label}</span>}
-                            {m.userId === access.user.id && <span className="muted small"> · you</span>}
-                          </span>
-                          {manage && m.userId !== access.user.id && (
-                            <AdminAction endpoint={SELF} action="group.removeMember" extra={{ groupId: g.id, userId: m.userId }} label="Remove" variant="ghost" confirm={`Remove ${m.name || m.label}?`} />
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    {manage && (
-                      <ActionForm
-                        endpoint={SELF}
-                        action="group.addMember"
-                        extra={{ groupId: g.id }}
-                        compact
-                        reset
-                        submit="Add"
-                        fields={[{ name: 'who', label: 'Their cellphone number', type: 'tel', placeholder: '072 123 4567', hint: 'They create a Memora account first.' }]}
-                      />
-                    )}
-                  </article>
-                );
-              })}
+              {groups
+                .filter((g) => !g.branchId)
+                .map((g) => (
+                  <GroupCard key={g.id} g={g} title={`${g.name} · whole funeral home`} />
+                ))}
             </div>
+            <h2 className="h3 cc-h">
+              Branches <span className="muted small">{allBranches.length}</span>
+            </h2>
+            <div className="branch-list">
+              {(scope === 'all' ? allBranches : myBranches).map((b) => (
+                <BranchCard key={b.id} b={b} />
+              ))}
+            </div>
+            {canBranches && live && (
+              <details className="card cc-add" style={{ marginTop: 16 }}>
+                <summary>
+                  <strong>+ Add a branch</strong>
+                  <span className="muted small">It gets its own Managers and Arrangers groups.</span>
+                </summary>
+                <ActionForm
+                  endpoint={SELF}
+                  action="branch.create"
+                  extra={{ orgId: org.id }}
+                  reset
+                  submit="Add branch"
+                  fields={[
+                    { name: 'name', label: 'Branch name', type: 'text', required: true, placeholder: 'e.g. Pimville' },
+                    { name: 'area', label: 'Area or address', type: 'text', placeholder: 'e.g. 12 Koma Road, Pimville' },
+                  ]}
+                />
+              </details>
+            )}
           </section>
         )}
 
@@ -364,6 +380,105 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
     </>
   );
 
+  function GroupCard({ g, title }: { g: TeamGroup; title?: string }) {
+    const manage = live && g.roles.every((r) => canGrantRole(p, r, org.id, g.branchId));
+    return (
+      <article className="card cc-group">
+        <header className="cc-group-head">
+          <h3 className="h4">{title ?? g.name}</h3>
+          <div className="cc-roles">
+            {g.roles.map((r) => (
+              <span key={r} className="pill" title={ROLES[r].summary}>
+                {ROLES[r].label}
+              </span>
+            ))}
+          </div>
+        </header>
+        <p className="small muted">{g.description}</p>
+        <ul className="cc-members">
+          {g.members.length === 0 && <li className="muted small">No one yet.</li>}
+          {g.members.map((m) => (
+            <li key={m.userId}>
+              <span>
+                <strong>{m.name || m.label}</strong>
+                {m.name && <span className="muted small"> · {m.label}</span>}
+                {m.userId === access!.user.id && <span className="muted small"> · you</span>}
+              </span>
+              {manage && m.userId !== access!.user.id && (
+                <AdminAction endpoint={SELF} action="group.removeMember" extra={{ groupId: g.id, userId: m.userId }} label="Remove" variant="ghost" confirm={`Remove ${m.name || m.label} from ${g.name}?`} />
+              )}
+            </li>
+          ))}
+        </ul>
+        {manage && (
+          <ActionForm
+            endpoint={SELF}
+            action="group.addMember"
+            extra={{ groupId: g.id }}
+            compact
+            reset
+            submit="Appoint"
+            fields={[{ name: 'who', label: 'Their cellphone number', type: 'tel', placeholder: '072 123 4567', hint: 'They create a Memora account first.' }]}
+          />
+        )}
+      </article>
+    );
+  }
+
+  function BranchCard({ b }: { b: Branch }) {
+    const inBranch = groups.filter((g) => g.branchId === b.id);
+    const others = allBranches.filter((x) => x.id !== b.id);
+    return (
+      <section className="card branch-card" id={`branch-${b.id}`}>
+        <header className="cc-mem-head">
+          <div>
+            <h3 className="h3">{b.name}</h3>
+            <p className="small muted">
+              {[b.area, `${b.memorials} memorial${b.memorials === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            <Link className="btn sm" href={`${href('funerals')}&branch=${b.id}`}>
+              Its funerals
+            </Link>
+            {canBranches && live && others.length > 0 && (
+              <AdminAction
+                endpoint={SELF}
+                action="branch.delete"
+                id={b.id}
+                extra={{ moveTo: others[0].id }}
+                label="Remove branch"
+                variant="danger"
+                confirm={`Remove ${b.name}? Its managers and arrangers lose this branch, and its ${b.memorials} memorial${b.memorials === 1 ? '' : 's'} move to ${others[0].name}.`}
+              />
+            )}
+          </div>
+        </header>
+        {canBranches && live && (
+          <details className="cc-edit">
+            <summary>Rename or change the area</summary>
+            <ActionForm
+              endpoint={SELF}
+              action="branch.rename"
+              extra={{ id: b.id }}
+              compact
+              submit="Save"
+              fields={[
+                { name: 'name', label: 'Branch name', type: 'text', value: b.name },
+                { name: 'area', label: 'Area or address', type: 'text', value: b.area },
+              ]}
+            />
+          </details>
+        )}
+        <div className="cc-groups" style={{ marginTop: 12 }}>
+          {inBranch.map((g) => (
+            <GroupCard key={g.id} g={g} />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   function FuneralSection({ title, hint, rows, empty }: { title: string; hint: string; rows: AdminCase[]; empty: string }) {
     if (!rows.length && !empty) return null;
     return (
@@ -385,6 +500,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
                   <th>Funeral</th>
                   <th>Status</th>
                   <th>Made by</th>
+                  {allBranches.length > 1 && <th>Branch</th>}
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -392,6 +508,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
                 {rows.map((c) => {
                   const own = c.ownerEmail.toLowerCase() === access!.user.email.toLowerCase();
                   const family = fromLink.get(c.id);
+                  const branch = branchOf.get(c.id) ?? null;
                   return (
                     <tr key={c.id}>
                       <td>
@@ -407,9 +524,28 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
                         {own ? 'You' : family ? 'The family' : accountLabel(c.ownerEmail) || '—'}
                         {family && <span className="sub">{family}</span>}
                       </td>
+                      {allBranches.length > 1 && (
+                        <td>
+                          {canBranches && live ? (
+                            <div className="cc-assign">
+                              <ActionForm
+                                endpoint={SELF}
+                                action="memorial.setBranch"
+                                extra={{ caseId: c.id }}
+                                compact
+                                variant=""
+                                submit="Move"
+                                fields={[{ name: 'branchId', label: 'Branch', type: 'select', value: branch ?? '', options: allBranches.map((b) => ({ value: b.id, label: b.name })) }]}
+                              />
+                            </div>
+                          ) : (
+                            (branchName.get(branch ?? '') ?? '—')
+                          )}
+                        </td>
+                      )}
                       <td>
                         <div className="row" style={{ gap: 6 }}>
-                          {(own || edits) && (
+                          {(own || edit(branch)) && (
                             <Link className="btn sm" href={`/memorials/${c.id}`}>
                               {c.status === 'DRAFT' ? 'Open' : 'Edit'}
                             </Link>
@@ -419,8 +555,8 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
                               View ↗
                             </a>
                           )}
-                          {c.status === 'DRAFT' && live && can(p, 'org.memorials.publish', org.id) && <PublishForHome caseId={c.id} />}
-                          {c.status === 'PUBLISHED' && live && can(p, 'org.runsheet', org.id) && <RunSheetFor caseId={c.id} />}
+                          {c.status === 'DRAFT' && live && canIn(p, 'org.memorials.publish', org.id, branch) && <PublishForHome caseId={c.id} />}
+                          {c.status === 'PUBLISHED' && live && canIn(p, 'org.runsheet', org.id, branch) && <RunSheetFor caseId={c.id} />}
                         </div>
                       </td>
                     </tr>

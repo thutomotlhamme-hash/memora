@@ -1,5 +1,5 @@
 import { MEDIA_BUCKET } from '@/lib/config';
-import { can } from '@/lib/rbac';
+import { canIn } from '@/lib/rbac';
 import { getAccess } from '@/lib/server/access';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { normaliseDraft } from '@/lib/memorial';
@@ -13,21 +13,27 @@ export async function POST(request: Request) {
   if (auth instanceof Response) return auth;
   const { supabase, user } = auth;
 
-  const body = (await request.json().catch(() => ({}))) as { draft?: unknown; orgId?: string };
+  const body = (await request.json().catch(() => ({}))) as { draft?: unknown; orgId?: string; branchId?: string };
   // Starting a memorial for a funeral home needs that home's permission, and a home that isn't disabled.
   const orgId = typeof body.orgId === 'string' && /^[0-9a-f-]{36}$/i.test(body.orgId) ? body.orgId : null;
+  const branchId = orgId && typeof body.branchId === 'string' && /^[0-9a-f-]{36}$/i.test(body.branchId) ? body.branchId : null;
   const admin = orgId ? getAdminSupabase() : null;
   if (orgId) {
+    // A home's memorial always belongs to a branch, and needs the right to create there.
     const access = await getAccess();
-    if (!admin || !can(access?.principal ?? null, 'org.memorials.create', orgId)) return fail('You can’t start memorials for this funeral home.', 403);
-    const { data: org } = await admin.from('memora_orgs').select('status').eq('id', orgId).maybeSingle();
+    if (!admin || !branchId || !canIn(access?.principal ?? null, 'org.memorials.create', orgId, branchId)) return fail('You can’t start memorials for this branch.', 403);
+    const [{ data: org }, { data: branch }] = await Promise.all([
+      admin.from('memora_orgs').select('status').eq('id', orgId).maybeSingle(),
+      admin.from('memora_branches').select('org_id').eq('id', branchId).maybeSingle(),
+    ]);
+    if (branch?.org_id !== orgId) return fail('Branch not found.', 404);
     if (!org || org.status === 'disabled') return fail('This funeral home’s Memora is switched off. Contact Memora.', 403);
   }
   const { data: created, error } = await supabase.from('memora_cases').insert({ owner_id: user.id }).select('id').single();
   if (error || !created) return fail('Could not create the memorial.', 500);
   if (orgId && admin) {
-    await admin.from('memora_cases').update({ org_id: orgId }).eq('id', created.id);
-    await admin.from('memora_activity_log').insert({ case_id: created.id, actor_user_id: user.id, action: 'CASE_CREATED_FOR_HOME', metadata: { org: orgId } });
+    await admin.from('memora_cases').update({ org_id: orgId, branch_id: branchId }).eq('id', created.id);
+    await admin.from('memora_activity_log').insert({ case_id: created.id, actor_user_id: user.id, action: 'CASE_CREATED_FOR_HOME', metadata: { org: orgId, branch: branchId } });
   }
 
   if (body?.draft) {

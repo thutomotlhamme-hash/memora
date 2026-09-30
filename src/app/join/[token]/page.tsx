@@ -88,7 +88,7 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
           ) : (
             <ul className="join-steps">
               <li>Tell us your funeral home’s details. You become its owner on Memora.</li>
-              <li>You start in a free trial. Add your directors and arrangements staff from your dashboard.</li>
+              <li>You start in a free trial. Add your branches, branch managers and arrangers from your dashboard.</li>
               <li>
                 Then send families a link, or make memorials yourselves. {plan.name}: {plan.monthlyMinor ? `R${(plan.monthlyMinor / 100).toLocaleString('en-ZA')} a month + ` : ''}R
                 {(plan.perMemorialMinor / 100).toLocaleString('en-ZA')} per published memorial, excl. VAT, once the trial ends.

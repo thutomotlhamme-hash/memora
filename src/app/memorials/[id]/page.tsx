@@ -4,7 +4,7 @@ import { Editor } from '@/components/editor/Editor';
 import { DeleteMemorial } from '@/components/DeleteMemorial';
 import { SiteHeader } from '@/components/SiteHeader';
 import { displayName } from '@/lib/memorial';
-import { can } from '@/lib/rbac';
+import { canIn } from '@/lib/rbac';
 import { getAccess } from '@/lib/server/access';
 import { loadOwnedCase } from '@/lib/server/cases';
 import { giftForCase } from '@/lib/server/gifts';
@@ -24,16 +24,16 @@ export default async function MemorialEditorPage({ params }: { params: Promise<{
   const [gift, home] = admin
     ? await Promise.all([
         giftForCase(admin, id),
-        admin.from('memora_cases').select('owner_id, org_id, memora_orgs(name, contact_phone, status)').eq('id', id).maybeSingle(),
+        admin.from('memora_cases').select('owner_id, org_id, branch_id, memora_orgs(name, contact_phone, status)').eq('id', id).maybeSingle(),
       ])
     : [null, null];
   // A funeral home's memorial: its staff may be editing a family's draft; the home publishes.
-  const row = home?.data as { owner_id: string; org_id: string | null; memora_orgs: { name: string; contact_phone: string; status: string } | { name: string; contact_phone: string; status: string }[] | null } | null | undefined;
+  const row = home?.data as { owner_id: string; org_id: string | null; branch_id: string | null; memora_orgs: { name: string; contact_phone: string; status: string } | { name: string; contact_phone: string; status: string }[] | null } | null | undefined;
   const org = row?.memora_orgs ? (Array.isArray(row.memora_orgs) ? row.memora_orgs[0] : row.memora_orgs) : null;
   const isOwner = !row || row.owner_id === user.id;
   if (row?.org_id && org) {
     const access = await getAccess();
-    loaded.meta.home = { name: org.name, canPublish: org.status !== 'disabled' && can(access?.principal ?? null, 'org.memorials.publish', row.org_id), phone: org.contact_phone };
+    loaded.meta.home = { name: org.name, canPublish: org.status !== 'disabled' && canIn(access?.principal ?? null, 'org.memorials.publish', row.org_id, row.branch_id), phone: org.contact_phone };
   }
 
   const paymentsReady =

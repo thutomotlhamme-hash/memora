@@ -86,7 +86,7 @@ export function PublishStep({
   return <Checkout owner={owner} meta={meta} setMeta={setMeta} flush={flush} refresh={refresh} nav={nav} head={head} />;
 }
 
-/** A funeral home's memorial: its director publishes (the home is billed); the family asks them to. */
+/** A funeral home's memorial: its arranger or manager publishes (the home is billed); the family asks them to. */
 function HomePublish({
   home,
   owner,

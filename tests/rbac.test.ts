@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ALL_PERMISSIONS, ALL_ROLES, PERMISSIONS, ROLES, can, canGrantRole, orgsOf, principalFrom } from '../src/lib/rbac.ts';
+import { ALL_PERMISSIONS, ALL_ROLES, PERMISSIONS, ROLES, branchScope, can, canGrantRole, canIn, orgsOf, principalFrom } from '../src/lib/rbac.ts';
 
 const HOME_A = '00000000-0000-0000-0000-00000000000a';
 const HOME_B = '00000000-0000-0000-0000-00000000000b';
@@ -34,20 +34,37 @@ test('support can help families but not take memorials down, bill or change acce
   assert.equal(can(s, 'org.memorials.publish', HOME_A), false);
 });
 
+const SOWETO = '00000000-0000-0000-0000-0000000000b1';
+const PIMVILLE = '00000000-0000-0000-0000-0000000000b2';
+
 test('funeral-home roles only work inside their own home', () => {
-  const d = principalFrom('u1', [{ roles: ['org_director'], orgId: HOME_A }]);
-  assert.equal(can(d, 'org.memorials.publish', HOME_A), true);
-  assert.equal(can(d, 'org.runsheet', HOME_A), true);
-  assert.equal(can(d, 'org.view', HOME_B), false);
-  assert.equal(can(d, 'org.team', HOME_A), false);
-  assert.equal(can(d, 'ops.view'), false, 'no command centre');
-  assert.deepEqual(orgsOf(d), [HOME_A]);
+  const a = principalFrom('u1', [{ roles: ['org_staff'], orgId: HOME_A, branchId: SOWETO }]);
+  assert.equal(can(a, 'org.memorials.publish', HOME_A), true);
+  assert.equal(can(a, 'org.runsheet', HOME_A), true);
+  assert.equal(can(a, 'org.view', HOME_B), false);
+  assert.equal(can(a, 'org.team', HOME_A), false);
+  assert.equal(can(a, 'ops.view'), false, 'no command centre');
+  assert.deepEqual(orgsOf(a), [HOME_A]);
 });
 
-test('staff prepare memorials; a director publishes', () => {
-  const s = principalFrom('u1', [{ roles: ['org_staff'], orgId: HOME_A }]);
-  assert.equal(can(s, 'org.memorials.create', HOME_A), true);
-  assert.equal(can(s, 'org.memorials.publish', HOME_A), false);
+test('an arranger does everything for their branch’s families, and only their branch', () => {
+  const a = principalFrom('u1', [{ roles: ['org_staff'], orgId: HOME_A, branchId: SOWETO }]);
+  for (const perm of ['org.view', 'org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet'] as const) {
+    assert.equal(canIn(a, perm, HOME_A, SOWETO), true, perm);
+    assert.equal(canIn(a, perm, HOME_A, PIMVILLE), false, `${perm} in another branch`);
+  }
+  for (const perm of ['org.team', 'org.branches', 'org.branding', 'org.billing.view'] as const) assert.equal(canIn(a, perm, HOME_A, SOWETO), false, perm);
+  assert.deepEqual(branchScope(a, HOME_A), [SOWETO]);
+});
+
+test('an owner works across every branch; branch roles never count home-wide', () => {
+  const owner = principalFrom('w', [{ roles: ['org_owner'], orgId: HOME_A }]);
+  assert.equal(canIn(owner, 'org.memorials.publish', HOME_A, PIMVILLE), true);
+  assert.equal(canIn(owner, 'org.branches', HOME_A, null), true);
+  assert.equal(branchScope(owner, HOME_A), 'all');
+  const manager = principalFrom('m', [{ roles: ['org_admin'], orgId: HOME_A, branchId: SOWETO }]);
+  assert.equal(canIn(manager, 'org.memorials.publish', HOME_A, null), false, 'no branch named: home-wide only');
+  assert.equal(canIn(manager, 'org.branches', HOME_A, SOWETO), false, 'managers never add or remove branches');
 });
 
 test('roles in the wrong kind of group grant nothing', () => {
@@ -80,15 +97,14 @@ test('no one can give out more than they have', () => {
   const admin = principalFrom('a', [{ roles: ['platform_admin'], orgId: null }]);
   const ops = principalFrom('o', [{ roles: ['ops'], orgId: null }]);
   const owner = principalFrom('w', [{ roles: ['org_owner'], orgId: HOME_A }]);
-  const manager = principalFrom('m', [{ roles: ['org_admin'], orgId: HOME_A }]);
+  const manager = principalFrom('m', [{ roles: ['org_admin'], orgId: HOME_A, branchId: SOWETO }]);
   assert.equal(canGrantRole(admin, 'platform_admin', null), true);
   assert.equal(canGrantRole(admin, 'finance', null), true);
   assert.equal(canGrantRole(ops, 'support', null), false, 'ops cannot change access');
-  assert.equal(canGrantRole(owner, 'org_director', HOME_A), true);
-  assert.equal(canGrantRole(owner, 'org_director', HOME_B), false, 'not in another home');
+  assert.equal(canGrantRole(owner, 'org_staff', HOME_A, SOWETO), true);
+  assert.equal(canGrantRole(owner, 'org_staff', HOME_B, SOWETO), false, 'not in another home');
   assert.equal(canGrantRole(owner, 'support', null), false, 'not platform roles');
   assert.equal(canGrantRole(manager, 'org_owner', HOME_A), false, 'a manager cannot make an owner');
-  assert.equal(canGrantRole(manager, 'org_director', HOME_A), true);
   assert.equal(canGrantRole(admin, 'org_owner', null), false, 'funeral-home roles need a home');
 });
 
@@ -132,37 +148,44 @@ test('operations run homes and memorials but cannot hand out roles', () => {
   assert.equal(can(o, 'org.memorials.publish', HOME_A), false, 'publishing stays with the home’s directors');
 });
 
-test('a viewer in a funeral home can only look', () => {
-  const v = principalFrom('u1', [{ roles: ['org_viewer'], orgId: HOME_A }]);
-  assert.equal(can(v, 'org.view', HOME_A), true);
-  for (const perm of ['org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet', 'org.team', 'org.branding', 'org.billing.view'] as const) {
-    assert.equal(can(v, perm, HOME_A), false, perm);
-  }
-  assert.equal(canGrantRole(v, 'org_viewer', HOME_A), false);
-});
+test('an owner appoints branch managers; a branch manager appoints arrangers in their own branch only', () => {
+  const owner = principalFrom('w', [{ roles: ['org_owner'], orgId: HOME_A }]);
+  assert.equal(canGrantRole(owner, 'org_admin', HOME_A, SOWETO), true);
+  assert.equal(canGrantRole(owner, 'org_admin', HOME_A, PIMVILLE), true);
+  assert.equal(canGrantRole(owner, 'org_owner', HOME_A), true, 'only an owner makes an owner');
+  assert.equal(canGrantRole(owner, 'org_owner', HOME_B), false);
 
-test('a manager builds the team in their own home only, and never above themselves', () => {
-  const m = principalFrom('u1', [{ roles: ['org_admin'], orgId: HOME_A }]);
-  assert.equal(canGrantRole(m, 'org_staff', HOME_A), true);
-  assert.equal(canGrantRole(m, 'org_director', HOME_A), true);
-  assert.equal(canGrantRole(m, 'org_staff', HOME_B), false, 'not in another home');
+  const m = principalFrom('m', [{ roles: ['org_admin'], orgId: HOME_A, branchId: SOWETO }]);
+  assert.equal(canGrantRole(m, 'org_staff', HOME_A, SOWETO), true);
+  assert.equal(canGrantRole(m, 'org_staff', HOME_A, PIMVILLE), false, 'not in another branch');
+  assert.equal(canGrantRole(m, 'org_admin', HOME_A, SOWETO), false, 'managers don’t appoint managers');
   assert.equal(canGrantRole(m, 'org_owner', HOME_A), false);
   assert.equal(canGrantRole(m, 'ops', null), false, 'never a Memora role');
-  const owner = principalFrom('u2', [{ roles: ['org_owner'], orgId: HOME_A }]);
-  assert.equal(canGrantRole(owner, 'org_owner', HOME_A), true);
-  assert.equal(canGrantRole(owner, 'org_owner', HOME_B), false);
+});
+
+test('each funeral-home role only fits its own level', () => {
+  const admin = principalFrom('a', [{ roles: ['platform_admin'], orgId: null }]);
+  assert.equal(canGrantRole(admin, 'org_owner', HOME_A, SOWETO), false, 'owners are home-wide');
+  assert.equal(canGrantRole(admin, 'org_staff', HOME_A, null), false, 'arrangers belong to a branch');
+  assert.equal(canGrantRole(admin, 'org_admin', HOME_A, null), false, 'managers belong to a branch');
+  assert.equal(canGrantRole(admin, 'org_staff', HOME_A, SOWETO), true);
+});
+
+test('there are three funeral-home roles: owner, branch manager, arranger', () => {
+  assert.deepEqual(ALL_ROLES.filter((r) => ROLES[r].scope === 'org'), ['org_owner', 'org_admin', 'org_staff']);
 });
 
 test('being in two homes keeps each home’s roles apart', () => {
   const p = principalFrom('u1', [
     { roles: ['org_owner'], orgId: HOME_A },
-    { roles: ['org_staff'], orgId: HOME_B },
+    { roles: ['org_staff'], orgId: HOME_B, branchId: PIMVILLE },
   ]);
   assert.deepEqual(orgsOf(p).sort(), [HOME_A, HOME_B]);
   assert.equal(can(p, 'org.memorials.publish', HOME_A), true);
-  assert.equal(can(p, 'org.memorials.publish', HOME_B), false);
+  assert.equal(canIn(p, 'org.memorials.publish', HOME_B, PIMVILLE), true);
+  assert.equal(canIn(p, 'org.memorials.publish', HOME_B, SOWETO), false);
   assert.equal(can(p, 'org.billing.view', HOME_B), false);
-  assert.equal(canGrantRole(p, 'org_staff', HOME_B), false);
+  assert.equal(canGrantRole(p, 'org_staff', HOME_B, PIMVILLE), false);
 });
 
 test('without a home named, a funeral-home permission is not granted', () => {
@@ -175,8 +198,9 @@ test('without a home named, a funeral-home permission is not granted', () => {
 test('the roles the database lets edit a home’s memorials match the code', async () => {
   const { ORG_EDIT_ROLES } = await import('../src/lib/rbac.ts');
   const { readFileSync } = await import('node:fs');
-  const sql = readFileSync(new URL('../supabase/migrations/0011_memora_invites_home_editing.sql', import.meta.url), 'utf8');
-  const listed = [...(sql.match(/g\.roles && array\[([^\]]+)\]/)?.[1].matchAll(/'([a-z_]+)'/g) ?? [])].map((m) => m[1]);
+  const sql = readFileSync(new URL('../supabase/migrations/0012_memora_branches.sql', import.meta.url), 'utf8');
+  const fn = sql.slice(sql.indexOf('function public.memora_org_edits'));
+  const listed = [...(fn.match(/g\.roles && array\[([^\]]+)\]/)?.[1].matchAll(/'([a-z_]+)'/g) ?? [])].map((m) => m[1]);
   assert.deepEqual([...listed].sort(), [...ORG_EDIT_ROLES].sort());
 });
 

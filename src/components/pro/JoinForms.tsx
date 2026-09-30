@@ -54,7 +54,7 @@ export function StartFamilyMemorial({ token }: { token: string }) {
 export function SetUpHome({ token, name, phone }: { token: string; name: string; phone: string }) {
   const router = useRouter();
   const uid = useId();
-  const [v, setV] = useState({ name, contactName: '', contactPhone: phone, contactEmail: '', area: '', branches: '1' });
+  const [v, setV] = useState({ name, contactName: '', contactPhone: phone, contactEmail: '', area: '', branchName: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const field = (k: keyof typeof v, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
@@ -87,7 +87,7 @@ export function SetUpHome({ token, name, phone }: { token: string; name: string;
         {field('contactEmail', 'Office email (optional)', { type: 'email', autoComplete: 'email' })}
         {field('area', 'Area or town', { placeholder: 'e.g. Soweto, Johannesburg' })}
       </div>
-      {field('branches', 'How many branches?', { type: 'number', min: 1, max: 500, inputMode: 'numeric' })}
+      {field('branchName', 'Your first branch', { placeholder: 'e.g. Soweto (you can add more later)' })}
       {error && (
         <div className="note error" role="alert">
           <span>{error}</span>

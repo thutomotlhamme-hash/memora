@@ -28,17 +28,17 @@ export function ownerEmails(): string[] {
     .filter(Boolean);
 }
 
-type GroupRow = { roles: string[] | null; org_id: string | null; active: boolean | null };
+type GroupRow = { roles: string[] | null; org_id: string | null; branch_id: string | null; active: boolean | null };
 
 export async function loadPrincipal(admin: SupabaseClient, user: { id: string; email: string }): Promise<Principal> {
   const email = user.email.trim().toLowerCase();
   const [memberships, legacy] = await Promise.all([
-    admin.from('memora_group_members').select('memora_groups(roles, org_id, active)').eq('user_id', user.id),
+    admin.from('memora_group_members').select('memora_groups(roles, org_id, branch_id, active)').eq('user_id', user.id),
     admin.from('memora_admins').select('email').eq('email', email).maybeSingle(),
   ]);
   const groups: GroupGrant[] = ((memberships.data ?? []) as { memora_groups: GroupRow | GroupRow[] | null }[])
     .flatMap((m) => (Array.isArray(m.memora_groups) ? m.memora_groups : m.memora_groups ? [m.memora_groups] : []))
-    .map((g) => ({ roles: (g.roles ?? []) as Role[], orgId: g.org_id, active: g.active !== false }));
+    .map((g) => ({ roles: (g.roles ?? []) as Role[], orgId: g.org_id, branchId: g.branch_id ?? null, active: g.active !== false }));
   if (legacy.data) groups.push({ roles: ['ops'], orgId: null });
 
   const orgIds = [...new Set(groups.map((g) => g.orgId).filter((id): id is string => Boolean(id)))];

@@ -31,7 +31,8 @@ export const PERMISSIONS = {
   'org.memorials.edit': { scope: 'org', can: 'Edit the funeral home’s memorials' },
   'org.memorials.publish': { scope: 'org', can: 'Publish memorials (each one is billed)' },
   'org.runsheet': { scope: 'org', can: 'Get run-sheet links and run funerals on the day' },
-  'org.team': { scope: 'org', can: 'Add and remove the funeral home’s own staff' },
+  'org.team': { scope: 'org', can: 'Appoint and remove staff (a branch manager: arrangers in their own branch)' },
+  'org.branches': { scope: 'org', can: 'Add, rename and remove branches, and move memorials between them' },
   'org.branding': { scope: 'org', can: 'Change the funeral home’s name, logo and colour on memorials' },
   'org.billing.view': { scope: 'org', can: 'See the plan, usage and invoices' },
 } as const;
@@ -70,7 +71,7 @@ export const ROLES = {
     forWho: 'The person who signs up funeral homes and keeps things running.',
     summary: 'Onboards and looks after funeral homes and memorials day to day.',
     permissions: ['ops.view', 'orgs.manage', 'memorials.view_all', 'memorials.takedown', 'memorials.assign', 'gifts.manage', 'accounts.help', 'audit.view'],
-    allOrgs: ['org.view', 'org.memorials.edit', 'org.runsheet', 'org.team', 'org.branding'],
+    allOrgs: ['org.view', 'org.memorials.edit', 'org.runsheet', 'org.team', 'org.branches', 'org.branding'],
     cannot: ['Change plans, prices or invoices', 'Give anyone roles or change groups', 'Record refunds'],
   },
   support: {
@@ -101,44 +102,28 @@ export const ROLES = {
     cannot: ['Change anything'],
   },
   org_owner: {
-    label: 'Funeral home owner',
+    label: 'Owner',
     scope: 'org',
     forWho: 'The owner of the funeral home business.',
-    summary: 'Owns the funeral home’s Memora: team, branding, billing and every memorial.',
+    summary: 'Owns the funeral home’s Memora: branches, people, branding, billing and every memorial.',
     permissions: ORG_PERMISSIONS,
     cannot: ['See other funeral homes', 'Change the plan or prices (ask Memora)'],
   },
   org_admin: {
-    label: 'Funeral home manager',
+    label: 'Branch manager',
     scope: 'org',
-    forWho: 'The branch or office manager.',
-    summary: 'Runs the team and the memorials; sees the bill.',
-    permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet', 'org.team', 'org.branding', 'org.billing.view'],
-    cannot: ['See other funeral homes', 'Change the plan or prices'],
-  },
-  org_director: {
-    label: 'Funeral director',
-    scope: 'org',
-    forWho: 'The funeral director who conducts the service.',
-    summary: 'Creates, publishes and runs funerals.',
-    permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet'],
-    cannot: ['Add or remove staff', 'Change branding', 'See billing'],
+    forWho: 'The manager of one branch.',
+    summary: 'Runs a branch: its arrangers and its funerals.',
+    permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet', 'org.team'],
+    cannot: ['Add or remove branches', 'Appoint managers or owners', 'Work in other branches', 'Change branding', 'See billing'],
   },
   org_staff: {
-    label: 'Arrangements staff',
+    label: 'Arranger',
     scope: 'org',
-    forWho: 'The arrangements clerk who sits with the family.',
-    summary: 'Prepares memorials with families; a director publishes.',
-    permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit'],
-    cannot: ['Publish memorials', 'Run the day', 'Add staff', 'See billing'],
-  },
-  org_viewer: {
-    label: 'Viewer',
-    scope: 'org',
-    forWho: 'A receptionist or partner who only needs to look.',
-    summary: 'Sees the funeral home’s memorials, changes nothing.',
-    permissions: ['org.view'],
-    cannot: ['Change anything'],
+    forWho: 'The arranger who sits with the family at the branch.',
+    summary: 'Sits with families, then prepares, publishes and runs their funerals.',
+    permissions: ['org.view', 'org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet'],
+    cannot: ['Appoint or remove staff', 'Work in other branches', 'Change branding', 'See billing'],
   },
 } as const satisfies Record<string, RoleDef>;
 
@@ -146,15 +131,18 @@ export type Role = keyof typeof ROLES;
 
 /**
  * The funeral-home roles that may edit that home's memorials. The database
- * checks the same list (memora_org_edits in migration 0011): keep them in step.
+ * checks the same list (memora_org_edits in migration 0012): keep them in step.
  */
 export const ORG_EDIT_ROLES = (Object.keys(ROLES) as Role[]).filter((r) => ROLES[r].scope === 'org' && (ROLES[r].permissions as readonly Permission[]).includes('org.memorials.edit'));
 export const ALL_ROLES = Object.keys(ROLES) as Role[];
 export const isRole = (v: unknown): v is Role => typeof v === 'string' && v in ROLES;
 export const roleScope = (r: Role): Scope => ROLES[r].scope;
 
-/** A group as the access engine sees it: its roles, and the funeral home it belongs to (null = Memora itself). */
-export type GroupGrant = { roles: Role[]; orgId: string | null; active?: boolean };
+/**
+ * A group as the access engine sees it: its roles, the funeral home it belongs
+ * to (null = Memora itself), and the branch (null = the whole home).
+ */
+export type GroupGrant = { roles: Role[]; orgId: string | null; branchId?: string | null; active?: boolean };
 
 /** Everything one person may do, worked out once per request. */
 export type Principal = {
@@ -167,6 +155,10 @@ export type Principal = {
   roles: Set<Role>;
   /** Funeral-home roles held in each home. */
   orgRoles: Map<string, Set<Role>>;
+  /** Permissions held across a whole home (home-wide groups, e.g. owners). */
+  orgWide: Map<string, Set<Permission>>;
+  /** Permissions held in particular branches: home → branch → permissions. */
+  branches: Map<string, Map<string, Set<Permission>>>;
 };
 
 /**
@@ -175,8 +167,8 @@ export type Principal = {
  * misfiled group can never widen anyone's access. Disabled homes grant nothing.
  */
 export function principalFrom(userId: string, groups: GroupGrant[], opts: { owner?: boolean; disabledOrgs?: Set<string> } = {}): Principal {
-  const p: Principal = { userId, platform: new Set(), anyOrg: new Set(), orgs: new Map(), roles: new Set(), orgRoles: new Map() };
-  const grant = (role: Role, orgId: string | null) => {
+  const p: Principal = { userId, platform: new Set(), anyOrg: new Set(), orgs: new Map(), roles: new Set(), orgRoles: new Map(), orgWide: new Map(), branches: new Map() };
+  const grant = (role: Role, orgId: string | null, branchId: string | null = null) => {
     const def: RoleDef = ROLES[role];
     if (def.scope === 'platform' && orgId === null) {
       p.roles.add(role);
@@ -188,12 +180,23 @@ export function principalFrom(userId: string, groups: GroupGrant[], opts: { owne
       def.permissions.forEach((x) => set.add(x));
       p.orgs.set(orgId, set);
       p.orgRoles.set(orgId, (p.orgRoles.get(orgId) ?? new Set<Role>()).add(role));
+      if (branchId) {
+        const home = p.branches.get(orgId) ?? new Map<string, Set<Permission>>();
+        const b = home.get(branchId) ?? new Set<Permission>();
+        def.permissions.forEach((x) => b.add(x));
+        home.set(branchId, b);
+        p.branches.set(orgId, home);
+      } else {
+        const wide = p.orgWide.get(orgId) ?? new Set<Permission>();
+        def.permissions.forEach((x) => wide.add(x));
+        p.orgWide.set(orgId, wide);
+      }
     }
   };
   if (opts.owner) grant('platform_admin', null);
   for (const g of groups) {
     if (g.active === false) continue;
-    for (const r of g.roles) if (isRole(r)) grant(r, g.orgId);
+    for (const r of g.roles) if (isRole(r)) grant(r, g.orgId, g.branchId ?? null);
   }
   return p;
 }
@@ -219,22 +222,48 @@ export function roleGrants(role: Role): Permission[] {
 }
 
 /**
- * No one can hand out more than they have: a role may only be given by someone
- * who already holds every permission it grants. Only administrators create
- * administrators. Funeral-home roles need access.manage, or org.team inside
- * that home.
+ * Can this person do this in this branch? Home-wide roles (owners) and Memora's
+ * support roles count in every branch; branch roles only in their own branch.
+ * With no branch named, only home-wide permissions count.
  */
-export function canGrantRole(actor: Principal, role: Role, orgId: string | null): boolean {
+export function canIn(p: Principal | null, permission: Permission, orgId: string | null | undefined, branchId: string | null | undefined): boolean {
+  if (!p) return false;
+  if (PERMISSIONS[permission].scope === 'platform') return p.platform.has(permission);
+  if (p.anyOrg.has(permission)) return true;
+  if (!orgId) return false;
+  if (p.orgWide.get(orgId)?.has(permission)) return true;
+  return Boolean(branchId && p.branches.get(orgId)?.get(branchId)?.has(permission));
+}
+
+/** Which of a home's branches this person works in: all of them, or a list. */
+export function branchScope(p: Principal | null, orgId: string): 'all' | string[] {
+  if (!p) return [];
+  if (p.anyOrg.has('org.view') || p.orgWide.get(orgId)?.has('org.view')) return 'all';
+  return [...(p.branches.get(orgId)?.entries() ?? [])].filter(([, perms]) => perms.has('org.view')).map(([id]) => id);
+}
+
+/** Owners sit in home-wide groups; managers and arrangers in a branch's groups. */
+export const BRANCH_ROLES: Role[] = ['org_admin', 'org_staff'];
+
+/**
+ * No one can hand out more than they have. Only administrators make
+ * administrators. In a funeral home: only an owner makes an owner; an owner
+ * appoints branch managers; a branch manager appoints arrangers in their own
+ * branch. Memora's access managers can do any of it.
+ */
+export function canGrantRole(actor: Principal, role: Role, orgId: string | null, branchId: string | null = null): boolean {
   const def: RoleDef = ROLES[role];
   if (def.scope === 'platform') {
-    if (orgId !== null) return false;
+    if (orgId !== null || branchId !== null) return false;
     if (!can(actor, 'access.manage')) return false;
     if (role === 'platform_admin') return actor.roles.has('platform_admin');
     return roleGrants(role).every((perm) => (PERMISSIONS[perm].scope === 'platform' ? actor.platform.has(perm) : actor.anyOrg.has(perm) || actor.roles.has('platform_admin')));
   }
   if (!orgId) return false;
+  // Each role lives at its own level: owners home-wide, the others in a branch.
+  if (BRANCH_ROLES.includes(role) !== Boolean(branchId)) return false;
   if (can(actor, 'access.manage')) return true;
-  // Only an owner makes another owner.
-  if (role === 'org_owner') return actor.orgRoles.get(orgId)?.has('org_owner') ?? false;
-  return can(actor, 'org.team', orgId) && def.permissions.every((perm) => can(actor, perm, orgId));
+  if (role === 'org_owner') return (actor.orgRoles.get(orgId)?.has('org_owner') ?? false) && Boolean(actor.orgWide.get(orgId)?.has('org.team'));
+  if (role === 'org_admin') return canIn(actor, 'org.team', orgId, null);
+  return canIn(actor, 'org.team', orgId, branchId) && def.permissions.every((perm) => canIn(actor, perm, orgId, branchId));
 }

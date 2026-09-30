@@ -2,8 +2,8 @@ import Link from 'next/link';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtDate } from '@/lib/memorial';
 import { PRO_PLANS, formatMoney, periodOf, proInvoice, type ProPlan } from '@/lib/plans';
-import { ALL_ROLES, PERMISSIONS, ROLES, can, canGrantRole, roleGrants, type Principal, type Role } from '@/lib/rbac';
-import { loadAudit, loadGroups, loadInvoices, loadOrgs, type Group, type Org } from '@/lib/server/pro';
+import { ALL_ROLES, BRANCH_ROLES, PERMISSIONS, ROLES, can, canGrantRole, roleGrants, type Principal, type Role } from '@/lib/rbac';
+import { loadAudit, loadBranches, loadGroups, loadInvoices, loadOrgs, type Group, type Org } from '@/lib/server/pro';
 import { loadInvites } from '@/lib/server/invites';
 import { InviteList } from '@/components/pro/InviteList';
 import { ActionForm } from './ActionForm';
@@ -20,7 +20,7 @@ const STATUS_LABEL: Record<Org['status'], string> = { trial: 'Trial', active: 'A
 
 export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Principal }) {
   const manage = can(p, 'orgs.manage');
-  const [orgs, invites] = await Promise.all([loadOrgs(admin), manage ? loadInvites(admin, 'org') : Promise.resolve([])]);
+  const [orgs, invites, branches] = await Promise.all([loadOrgs(admin), manage ? loadInvites(admin, 'org') : Promise.resolve([]), loadBranches(admin)]);
   const billing = can(p, 'orgs.billing');
   return (
     <>
@@ -49,7 +49,7 @@ export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Princ
         <details className="card cc-add">
           <summary>
             <strong>+ Add a funeral home yourself</strong>
-            <span className="muted small">Starts in trial with its Owners, Managers, Directors and Arrangements groups ready.</span>
+            <span className="muted small">Starts in trial with its Owners group and a first branch (Managers and Arrangers) ready.</span>
           </summary>
           <ActionForm
             action="org.create"
@@ -100,6 +100,15 @@ export async function HomesPanel({ admin, p }: { admin: SupabaseClient; p: Princ
                   <div>
                     <span>Contract</span>
                     <strong>{o.contractStart ? `${when(o.contractStart)} → ${when(o.contractEnd)}` : 'Not set'}</strong>
+                  </div>
+                  <div>
+                    <span>Branches</span>
+                    <strong>
+                      {branches
+                        .filter((b) => b.orgId === o.id)
+                        .map((b) => b.name)
+                        .join(', ') || '—'}
+                    </strong>
                   </div>
                   <div>
                     <span>Contact</span>
@@ -267,8 +276,9 @@ export async function BillingPanel({ admin }: { admin: SupabaseClient }) {
 // ---------------------------------------------------------------------------
 
 function GroupCard({ g, p }: { g: Group; p: Principal }) {
-  const manage = g.roles.every((r) => canGrantRole(p, r, g.orgId));
-  const scopeRoles = ALL_ROLES.filter((r) => ROLES[r].scope === (g.orgId ? 'org' : 'platform'));
+  const manage = g.roles.every((r) => canGrantRole(p, r, g.orgId, g.branchId));
+  // Roles that fit where the group sits: Memora's own, home-wide (owners), or a branch's.
+  const scopeRoles = !g.orgId ? ALL_ROLES.filter((r) => ROLES[r].scope === 'platform') : g.branchId ? BRANCH_ROLES : (['org_owner'] as Role[]);
   return (
     <article className={`card cc-group${g.active ? '' : ' off'}`}>
       <header className="cc-group-head">
@@ -324,7 +334,7 @@ function GroupCard({ g, p }: { g: Group; p: Principal }) {
                   label: 'Roles',
                   type: 'multi',
                   value: g.roles,
-                  options: scopeRoles.map((r) => ({ value: r, label: ROLES[r].label, hint: ROLES[r].summary, disabled: !canGrantRole(p, r, g.orgId) })),
+                  options: scopeRoles.map((r) => ({ value: r, label: ROLES[r].label, hint: ROLES[r].summary, disabled: !canGrantRole(p, r, g.orgId, g.branchId) })),
                 },
                 { name: 'active', label: 'Group is on (off removes its roles from everyone in it)', type: 'checkbox', value: g.active },
               ]}
@@ -338,11 +348,10 @@ function GroupCard({ g, p }: { g: Group; p: Principal }) {
 }
 
 export async function AccessPanel({ admin, p }: { admin: SupabaseClient; p: Principal }) {
-  const [groups, orgs] = await Promise.all([loadGroups(admin), loadOrgs(admin)]);
+  const [groups, orgs, branches] = await Promise.all([loadGroups(admin), loadOrgs(admin), loadBranches(admin)]);
   const platform = groups.filter((g) => !g.orgId);
   const manage = can(p, 'access.manage');
   const platformRoles = ALL_ROLES.filter((r) => ROLES[r].scope === 'platform');
-  const orgRoles = ALL_ROLES.filter((r) => ROLES[r].scope === 'org');
   return (
     <>
       <p className="lede" style={{ marginTop: 0 }}>
@@ -375,34 +384,37 @@ export async function AccessPanel({ admin, p }: { admin: SupabaseClient; p: Prin
       </div>
 
       {orgs.map((o) => {
-        const og = groups.filter((g) => g.orgId === o.id);
+        const wide = groups.filter((g) => g.orgId === o.id && !g.branchId);
+        const bs = branches.filter((b) => b.orgId === o.id);
         return (
           <section key={o.id} id={`org-${o.id}`} className="cc-org-access">
-            <h2 className="h3 cc-h">
-              {o.name} <span className="muted small">· {STATUS_LABEL[o.status]}</span>
-            </h2>
+            <header className="cc-mem-head cc-h">
+              <h2 className="h3">
+                {o.name} <span className="muted small">· {STATUS_LABEL[o.status]} · {bs.length} branch{bs.length === 1 ? '' : 'es'}</span>
+              </h2>
+              <Link className="btn sm" href={`/pro/dashboard?home=${o.id}&tab=team`}>
+                Branches & people
+              </Link>
+            </header>
             <div className="cc-groups">
-              {og.map((g) => (
-                <GroupCard key={g.id} g={g} p={p} />
+              {wide.map((g) => (
+                <GroupCard key={g.id} g={{ ...g, name: `${g.name} · whole funeral home` }} p={p} />
               ))}
-              {manage && (
-                <details className="card cc-add">
-                  <summary>
-                    <strong>+ New group for {o.name}</strong>
-                  </summary>
-                  <ActionForm
-                    action="group.create"
-                    extra={{ orgId: o.id }}
-                    reset
-                    submit="Create group"
-                    fields={[
-                      { name: 'name', label: 'Name', type: 'text', placeholder: 'e.g. Soweto branch directors' },
-                      { name: 'roles', label: 'Roles', type: 'multi', options: orgRoles.map((r) => ({ value: r, label: ROLES[r].label, hint: ROLES[r].summary })) },
-                    ]}
-                  />
-                </details>
-              )}
             </div>
+            {bs.map((b) => (
+              <div key={b.id} className="cc-branch">
+                <h3 className="h4 cc-branch-name">
+                  {b.name} <span className="muted small">{b.area}</span>
+                </h3>
+                <div className="cc-groups">
+                  {groups
+                    .filter((g) => g.branchId === b.id)
+                    .map((g) => (
+                      <GroupCard key={g.id} g={g} p={p} />
+                    ))}
+                </div>
+              </div>
+            ))}
           </section>
         );
       })}

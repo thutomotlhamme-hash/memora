@@ -49,7 +49,7 @@ export const PRO_PLANS: Record<
     monthlyMinor: 0,
     perMemorialMinor: 149000,
     branches: 1,
-    features: ['Your branding on every memorial and keepsake', 'Funeral-home dashboard', 'Run-sheets for your directors'],
+    features: ['Your branding on every memorial and keepsake', 'Funeral-home dashboard', 'Run-sheets for your arrangers'],
   },
   pro: {
     name: 'Pro',
@@ -57,7 +57,7 @@ export const PRO_PLANS: Record<
     monthlyMinor: 650000,
     perMemorialMinor: 99900,
     branches: 1,
-    features: ['Everything in Pay-as-you-go', 'Team roles: owner, manager, director, arrangements staff', 'Tradition templates', 'Monthly report: funerals and guests reached', 'Priority WhatsApp support'],
+    features: ['Everything in Pay-as-you-go', 'Branches, with owner, branch manager and arranger roles', 'Tradition templates', 'Monthly report: funerals and guests reached', 'Priority WhatsApp support'],
   },
   pro_plus: {
     name: 'Pro Plus',

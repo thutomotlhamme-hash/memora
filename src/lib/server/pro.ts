@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { accountLabel, loginAddress } from '../account-id';
 import { slugify } from '../memorial';
 import { PRO_ONBOARDING_MINOR, PRO_PLANS, isProPlan, periodOf, proInvoice, type ProPlan } from '../plans';
-import { ALL_ROLES, ROLES, can, canGrantRole, isRole, type Permission, type Principal, type Role } from '../rbac';
+import { ALL_ROLES, ROLES, can, canGrantRole, canIn, isRole, type Permission, type Principal, type Role } from '../rbac';
 import { createInvite, revokeInvite } from './invites';
 import { refreshPublicPages } from './public-cache';
 
@@ -100,6 +100,7 @@ export interface Group {
   name: string;
   description: string;
   orgId: string | null;
+  branchId: string | null;
   roles: Role[];
   active: boolean;
   members: { userId: string; label: string; name: string; addedAt: string }[];
@@ -120,6 +121,7 @@ export async function loadGroups(admin: SupabaseClient, orgId?: string | null): 
     name: g.name,
     description: g.description,
     orgId: g.org_id,
+    branchId: g.branch_id ?? null,
     roles: ((g.roles ?? []) as string[]).filter(isRole),
     active: g.active,
     members: byGroup.get(g.id) ?? [],
@@ -205,13 +207,40 @@ async function uniqueSlug(admin: SupabaseClient, name: string): Promise<string> 
   return `${base}-${Date.now().toString(36)}`;
 }
 
-/** The starting groups every funeral home gets, so its people only need adding. */
-export const ORG_GROUPS: { name: string; roles: Role[]; description: string }[] = [
-  { name: 'Owners', roles: ['org_owner'], description: 'Own the funeral home’s Memora: team, branding, billing, every memorial.' },
-  { name: 'Managers', roles: ['org_admin'], description: 'Run the team and the memorials; see the bill.' },
-  { name: 'Directors', roles: ['org_director'], description: 'Create, publish and run funerals.' },
-  { name: 'Arrangements', roles: ['org_staff'], description: 'Prepare memorials with families; a director publishes.' },
+/** Every funeral home has one home-wide group: its owners. */
+export const OWNERS_GROUP = { name: 'Owners', roles: ['org_owner'] as Role[], description: 'Own the funeral home’s Memora: branches, people, branding, billing, every memorial.' };
+
+/** Every branch gets these two groups, so its people only need adding. */
+export const BRANCH_GROUPS: { name: string; roles: Role[]; description: string }[] = [
+  { name: 'Managers', roles: ['org_admin'], description: 'Run this branch: its arrangers and its funerals.' },
+  { name: 'Arrangers', roles: ['org_staff'], description: 'Sit with families, prepare, publish and run this branch’s funerals.' },
 ];
+
+export interface Branch {
+  id: string;
+  orgId: string;
+  name: string;
+  area: string;
+  memorials: number;
+}
+
+export async function loadBranches(admin: SupabaseClient, orgId?: string): Promise<Branch[]> {
+  let q = admin.from('memora_branches').select('*').order('created_at');
+  if (orgId) q = q.eq('org_id', orgId);
+  const [{ data }, { data: cases }] = await Promise.all([q, admin.from('memora_cases').select('branch_id').not('branch_id', 'is', null)]);
+  const counts = new Map<string, number>();
+  for (const c of (cases ?? []) as Row[]) counts.set(c.branch_id, (counts.get(c.branch_id) ?? 0) + 1);
+  return ((data ?? []) as Row[]).map((b) => ({ id: b.id, orgId: b.org_id, name: b.name, area: b.area, memorials: counts.get(b.id) ?? 0 }));
+}
+
+/** A branch with its Managers and Arrangers groups. */
+export async function createBranch(admin: SupabaseClient, orgId: string, name: string, area = ''): Promise<{ ok: true; id: string } | { ok: false; error: string; status: number }> {
+  if (name.length < 2) return { ok: false, error: 'Name the branch, for example “Soweto”.', status: 400 };
+  const { data, error } = await admin.from('memora_branches').insert({ org_id: orgId, name, area }).select('id').single();
+  if (error || !data) return { ok: false, error: error?.code === '23505' ? 'There’s already a branch with that name.' : 'Could not add the branch.', status: 409 };
+  await admin.from('memora_groups').insert(BRANCH_GROUPS.map((g) => ({ name: g.name, roles: g.roles, description: g.description, org_id: orgId, branch_id: data.id })));
+  return { ok: true, id: data.id as string };
+}
 
 /**
  * Adds a funeral home in trial with its starting groups. Used by the command
@@ -248,7 +277,9 @@ export async function createOrg(
     .select('id')
     .single();
   if (error || !data) return { ok: false, error: 'Could not add the funeral home.', status: 500 };
-  await admin.from('memora_groups').insert(ORG_GROUPS.map((g) => ({ name: g.name, roles: g.roles, description: g.description, org_id: data.id })));
+  await admin.from('memora_groups').insert({ ...OWNERS_GROUP, org_id: data.id });
+  const area = text(input.area, 120);
+  await createBranch(admin, data.id as string, text(input.branchName, 80) || (area ? area.split(',')[0].trim() : '') || 'Main branch', area);
   await log(admin, actorId, 'ORG_CREATED', { name, plan });
   return { ok: true, id: data.id as string, name, plan };
 }
@@ -264,11 +295,11 @@ const PERMISSION_FOR: Record<string, Permission> = {
 };
 
 export function isProAction(action: string): boolean {
-  return action in PERMISSION_FOR || action.startsWith('group.') || action.startsWith('invite.') || action === 'org.brand';
+  return action in PERMISSION_FOR || /^(group|invite|branch)\./.test(action) || action === 'org.brand' || action === 'memorial.setBranch';
 }
 
 /** What a funeral home's own people may do from their dashboard (each still permission-checked). */
-export const ORG_SELF_SERVICE = new Set(['group.addMember', 'group.removeMember', 'org.brand', 'invite.create', 'invite.revoke']);
+export const ORG_SELF_SERVICE = new Set(['group.addMember', 'group.removeMember', 'org.brand', 'invite.create', 'invite.revoke', 'branch.create', 'branch.rename', 'branch.delete', 'memorial.setBranch']);
 
 export async function performProAction(admin: SupabaseClient, actor: Principal, input: ProInput): Promise<ProResult> {
   const needed = PERMISSION_FOR[input.action];
@@ -361,7 +392,9 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     case 'org.assignMemorial': {
       if (!uuid(input.caseId)) return { ok: false, error: 'Memorial not found.', status: 404 };
       const orgId = uuid(input.orgId) ? input.orgId : null;
-      await admin.from('memora_cases').update({ org_id: orgId }).eq('id', input.caseId);
+      // Into a home: its first branch, so that branch's staff see it at once.
+      const { data: first } = orgId ? await admin.from('memora_branches').select('id').eq('org_id', orgId).order('created_at').limit(1).maybeSingle() : { data: null };
+      await admin.from('memora_cases').update({ org_id: orgId, branch_id: first?.id ?? null }).eq('id', input.caseId);
       await log(admin, actor.userId, 'MEMORIAL_ASSIGNED', { org: orgId ?? 'none' }, input.caseId);
       refreshPublicPages();
       return { ok: true, message: orgId ? 'Moved into the funeral home.' : 'Removed from the funeral home.' };
@@ -413,12 +446,19 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     // ---- Access: groups, roles and people ----
     case 'group.create': {
       const orgId = uuid(input.orgId) ? input.orgId : null;
+      const branchId = orgId && uuid(input.branchId) ? input.branchId : null;
+      if (branchId) {
+        const { data: b } = await admin.from('memora_branches').select('org_id').eq('id', branchId).maybeSingle();
+        if (b?.org_id !== orgId) return { ok: false, error: 'Branch not found.', status: 404 };
+      }
       const name = text(input.name, 80);
       const roles = (Array.isArray(input.roles) ? input.roles : []).filter(isRole);
       if (name.length < 2) return { ok: false, error: 'Name the group.', status: 400 };
       if (!roles.length) return { ok: false, error: 'Give the group at least one role.', status: 400 };
-      for (const r of roles) if (!canGrantRole(actor, r, orgId)) return deny(`You can’t give the ${ROLES[r].label} role${orgId ? ' in this funeral home' : ''}.`);
-      const { error } = await admin.from('memora_groups').insert({ name, roles, org_id: orgId, description: text(input.description, 300) });
+      for (const r of roles)
+        if (!canGrantRole(actor, r, orgId, branchId))
+          return deny(`You can’t give the ${ROLES[r].label} role ${ROLES[r].scope === 'org' ? (branchId ? 'in this branch' : 'home-wide (managers and arrangers belong to a branch)') : ''}.`);
+      const { error } = await admin.from('memora_groups').insert({ name, roles, org_id: orgId, branch_id: branchId, description: text(input.description, 300) });
       if (error) return { ok: false, error: error.code === '23505' ? 'A group with that name already exists.' : 'Could not create the group.', status: 409 };
       await log(admin, actor.userId, 'GROUP_CREATED', { name, roles, org: orgId ?? 'Memora' });
       return { ok: true, message: `Group “${name}” created. Add people to it.` };
@@ -432,7 +472,7 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       if (!g) return { ok: false, error: 'Group not found.', status: 404 };
       const current = ((g.roles ?? []) as string[]).filter(isRole);
       // Changing a group needs the right to give every role it holds (before and after).
-      const mayManage = (roles: Role[]) => roles.every((r) => canGrantRole(actor, r, g.org_id));
+      const mayManage = (roles: Role[]) => roles.every((r) => canGrantRole(actor, r, g.org_id, g.branch_id ?? null));
       if (!mayManage(current)) return deny('You can’t change a group that holds roles you can’t give.');
 
       if (input.action === 'group.update') {
@@ -465,6 +505,53 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       await admin.from('memora_group_members').delete().eq('group_id', g.id).eq('user_id', input.userId);
       await log(admin, actor.userId, 'MEMBER_REMOVED', { group: g.name, who: input.userId });
       return { ok: true, message: 'Removed. Their access changes on their next page.' };
+    }
+
+    // ---- Branches (owners, and Memora operations) ----
+    case 'branch.create': {
+      if (!uuid(input.orgId) || !canIn(actor, 'org.branches', input.orgId, null)) return deny('Only the funeral home’s owner can add branches.');
+      const out = await createBranch(admin, input.orgId, text(input.name, 80), text(input.area, 120));
+      if (!out.ok) return out;
+      await log(admin, actor.userId, 'BRANCH_ADDED', { org: input.orgId, branch: text(input.name, 80) });
+      return { ok: true, message: `${text(input.name, 80)} added, with its Managers and Arrangers groups. Appoint its people below.`, data: { id: out.id } };
+    }
+    case 'branch.rename':
+    case 'branch.delete': {
+      if (!uuid(input.id)) return { ok: false, error: 'Branch not found.', status: 404 };
+      const { data: b } = await admin.from('memora_branches').select('*').eq('id', input.id).maybeSingle();
+      if (!b || !canIn(actor, 'org.branches', b.org_id, null)) return deny('Only the funeral home’s owner can change branches.');
+      if (input.action === 'branch.rename') {
+        const name = text(input.name, 80);
+        if (name.length < 2) return { ok: false, error: 'Name the branch.', status: 400 };
+        const { error } = await admin.from('memora_branches').update({ name, area: typeof input.area === 'string' ? text(input.area, 120) : b.area }).eq('id', b.id);
+        if (error) return { ok: false, error: error.code === '23505' ? 'There’s already a branch with that name.' : 'Could not rename it.', status: 409 };
+        await log(admin, actor.userId, 'BRANCH_RENAMED', { from: b.name, to: name });
+        return { ok: true, message: 'Saved.' };
+      }
+      const { count } = await admin.from('memora_branches').select('id', { count: 'exact', head: true }).eq('org_id', b.org_id);
+      if ((count ?? 0) <= 1) return { ok: false, error: 'A funeral home needs at least one branch. Add another before removing this one.', status: 409 };
+      // Its memorials move to another branch rather than disappear from everyone's view.
+      const moveTo = uuid(input.moveTo) ? input.moveTo : null;
+      const { data: target } = moveTo
+        ? await admin.from('memora_branches').select('id,name').eq('id', moveTo).eq('org_id', b.org_id).neq('id', b.id).maybeSingle()
+        : await admin.from('memora_branches').select('id,name').eq('org_id', b.org_id).neq('id', b.id).order('created_at').limit(1).maybeSingle();
+      if (!target) return { ok: false, error: 'Choose the branch its memorials move to.', status: 400 };
+      await admin.from('memora_cases').update({ branch_id: target.id }).eq('branch_id', b.id);
+      await admin.from('memora_invites').update({ branch_id: target.id }).eq('branch_id', b.id);
+      await admin.from('memora_branches').delete().eq('id', b.id);
+      await log(admin, actor.userId, 'BRANCH_REMOVED', { branch: b.name, memorialsMovedTo: target.name });
+      return { ok: true, message: `${b.name} removed. Its people lost that branch’s roles; its memorials moved to ${target.name}.` };
+    }
+    case 'memorial.setBranch': {
+      if (!uuid(input.caseId) || !uuid(input.branchId)) return { ok: false, error: 'Memorial not found.', status: 404 };
+      const [{ data: c }, { data: b }] = await Promise.all([
+        admin.from('memora_cases').select('org_id').eq('id', input.caseId).maybeSingle(),
+        admin.from('memora_branches').select('org_id,name').eq('id', input.branchId).maybeSingle(),
+      ]);
+      if (!b || !c?.org_id || c.org_id !== b.org_id || !canIn(actor, 'org.branches', c.org_id, null)) return deny('Only the funeral home’s owner can move memorials between branches.');
+      await admin.from('memora_cases').update({ branch_id: input.branchId }).eq('id', input.caseId);
+      await log(admin, actor.userId, 'MEMORIAL_BRANCH_SET', { branch: b.name }, input.caseId);
+      return { ok: true, message: `Moved to ${b.name}.` };
     }
 
     // ---- Links: onboarding a funeral home, or a family starting under a home ----

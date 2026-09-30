@@ -4,7 +4,7 @@ import { PRO_ONBOARDING_MINOR, PRO_PLANS, formatMoney, type ProPlan } from '@/li
 
 export const metadata = {
   title: 'Memora Pro for funeral homes',
-  description: 'Your funeral home’s name on every memorial, programme and QR card. Live updates for guests on the day. Run-sheets for your directors.',
+  description: 'Your funeral home’s name on every memorial, programme and QR card. Live updates for guests on the day. Run-sheets for your arrangers.',
 };
 
 const ORDER: ProPlan[] = ['payg', 'pro', 'pro_plus', 'enterprise'];
@@ -22,7 +22,7 @@ export default function ProPage() {
             </h1>
             <p className="lede">
               Your name on every memorial, programme booklet and QR card. Live directions and “happening now” for every guest on the day. Run-sheets for
-              your directors. One dashboard for every funeral.
+              your arrangers. One dashboard for every funeral.
             </p>
             <div className="row" style={{ justifyContent: 'center', gap: 14 }}>
               <Link className="btn primary lg" href="/contact?topic=pro&message=We%27d%20like%20a%20demo%20of%20Memora%20Pro%20for%20our%20funeral%20home.">
@@ -39,8 +39,8 @@ export default function ProPage() {
           {[
             ['A profit line, not a cost', 'Include a Memora memorial in your packages and price it as the premium it is. Families feel the difference on the day.'],
             ['Your brand in every guest’s hand', 'Each funeral puts your name in front of hundreds of guests: on their phones, in the printed booklet and on the QR card at the door.'],
-            ['Fewer calls, calmer days', '“Where is it? What time?” answered for everyone, live. Your directors move the programme on from their phones and guests follow.'],
-            ['Your team, your rules', 'Owners, managers, directors and arrangements staff each see and do exactly what their role allows. Nothing more.'],
+            ['Fewer calls, calmer days', '“Where is it? What time?” answered for everyone, live. Your arrangers move the programme on from their phones and guests follow.'],
+            ['Your team, your rules', 'Owners run every branch, branch managers run theirs, arrangers sit with families and run the day. Each sees and does exactly what their role allows.'],
           ].map(([t, b]) => (
             <article key={t} className="card pro-why-card">
               <h2 className="h4">{t}</h2>

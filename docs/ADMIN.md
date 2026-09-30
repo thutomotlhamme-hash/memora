@@ -133,7 +133,7 @@ owner's number to its Owners group under Access.)
 - *Today*: funerals this week, drafts waiting to be published, family links.
 - *Funerals*: grouped into This week / Being prepared / Coming up / Done.
   Staff can open and edit any of the home's memorials, including ones a
-  family started. Directors publish (billed to the home) and get run-sheets.
+  family started. Arrangers and managers publish (billed to the home) and get run-sheets.
 - *Family links*: type "Khumalo family", send the link on WhatsApp. The
   family creates the memorial on their phone; it belongs to the home; the
   family pays nothing and asks the home to publish when it's ready.

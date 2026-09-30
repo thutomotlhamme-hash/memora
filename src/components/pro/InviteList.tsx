@@ -14,7 +14,7 @@ export function inviteMessage(i: Invite, from = 'Memora'): string {
 }
 
 /** Links that have been sent: who for, where they stand, and one tap to share again or switch off. */
-export function InviteList({ invites, endpoint, from, empty }: { invites: Invite[]; endpoint?: string; from?: string; empty: string }) {
+export function InviteList({ invites, endpoint, from, empty, branches }: { invites: Invite[]; endpoint?: string; from?: string; empty: string; branches?: Map<string, string> }) {
   if (!invites.length) return <p className="muted small">{empty}</p>;
   return (
     <ul className="invite-list">
@@ -25,6 +25,7 @@ export function InviteList({ invites, endpoint, from, empty }: { invites: Invite
             <span className="muted small">
               {' '}
               · {i.kind === 'org' && i.plan ? `${PRO_PLANS[i.plan].name} · ` : ''}
+              {i.branchId && branches?.get(i.branchId) ? `${branches.get(i.branchId)} · ` : ''}
               {i.state === 'used' ? `used ${day(i.usedAt)}${i.usedBy ? ` by ${i.usedBy}` : ''}${i.kind === 'org' && i.orgName ? ` · ${i.orgName}` : ''}` : i.state === 'open' ? `works until ${day(i.expiresAt)}` : `made ${day(i.createdAt)}`}
             </span>
           </div>

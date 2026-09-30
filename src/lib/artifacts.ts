@@ -44,10 +44,38 @@ const C = {
 const DISPLAY = '"Fraunces Variable", Georgia, "Times New Roman", serif';
 const SANS = '"Instrument Sans Variable", "Helvetica Neue", Arial, sans-serif';
 
+/** The funeral home behind a memorial: its name (and logo) go on the back of what's printed. */
+export interface PrintBrand {
+  name: string;
+  colour?: string;
+  logo?: { data: string; w: number; h: number } | null;
+}
+
 export interface ArtifactInput {
   draft: Draft;
   url: string;
   slug: string;
+  brand?: PrintBrand | null;
+}
+
+/** Turns a funeral home's logo into a PNG data URL the PDFs can embed. Without a usable logo, just the name prints. */
+export async function prepareBrand(b: { name: string; logoUrl?: string; colour?: string } | null | undefined): Promise<PrintBrand | null> {
+  if (!b?.name) return null;
+  const colour = b.colour && /^#[0-9a-f]{6}$/i.test(b.colour) ? b.colour : undefined;
+  const img = b.logoUrl ? await loadImage(b.logoUrl) : null;
+  if (!img || !img.naturalWidth) return { name: b.name, colour, logo: null };
+  const scale = Math.min(1, 900 / img.naturalWidth, 360 / img.naturalHeight);
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  c.getContext('2d')!.drawImage(img, 0, 0, w, h);
+  try {
+    return { name: b.name, colour, logo: { data: c.toDataURL('image/png'), w, h } };
+  } catch {
+    return { name: b.name, colour, logo: null }; // a logo from a site that doesn't allow it: the name still prints
+  }
 }
 
 const file = (slug: string, kind: string, ext: string) => `memora-${slug || 'memorial'}-${kind}.${ext}`;
@@ -564,7 +592,7 @@ export async function keepsakeCard({ draft, slug }: ArtifactInput) {
 }
 
 /** 4 × 5 in QR card at 300 dpi (1200 × 1500) for entrances, tables and programmes. */
-export async function qrCard({ draft, url, slug }: ArtifactInput) {
+export async function qrCard({ draft, url, slug, brand }: ArtifactInput) {
   await ensureFonts();
   const W = 1200;
   const H = 1500;
@@ -615,6 +643,11 @@ export async function qrCard({ draft, url, slug }: ArtifactInput) {
   ctx.fillStyle = C.dusk;
   ctx.font = `400 26px ${SANS}`;
   ctx.fillText(bare(url), W / 2, 1404);
+  if (brand) {
+    ctx.fillStyle = brand.colour ?? C.clay;
+    ctx.font = `600 19px ${SANS}`;
+    spaced(ctx, `ARRANGED WITH CARE BY ${brand.name.toUpperCase()}`, W / 2, 1462, 3);
+  }
   await download(c, file(slug, 'qr-card', 'png'));
 }
 
@@ -797,11 +830,13 @@ class Pdf {
   constructor(
     private name: string,
     private footerNote: string,
-    opts: { doc?: jsPDF; typeScale?: number } = {},
+    opts: { doc?: jsPDF; typeScale?: number; brand?: PrintBrand | null } = {},
   ) {
     this.doc = opts.doc ?? new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     this.k = opts.typeScale ?? 1;
+    this.brand = opts.brand ?? null;
   }
+  private brand: PrintBrand | null;
 
   async init() {
     const fonts = await loadPdfFonts();
@@ -1230,9 +1265,30 @@ class Pdf {
     this.y += 5.5;
     this.face('sans', 9, P.dusk);
     d.text(bare(url), PAGE_W / 2, this.y, { align: 'center' });
-    // A quiet maker's mark at the foot.
-    this.face('sans', 7.5, P.bloom);
-    d.text(this.footerNote, PAGE_W / 2, PAGE_H - 30, { align: 'center', charSpace: 0.6 });
+    // The back cover: the funeral home that arranged it (with its logo), then a quiet maker's mark.
+    if (this.brand) {
+      const b = this.brand;
+      const ink = b.colour ? rgb(b.colour) : P.clay;
+      let y = PAGE_H - 34;
+      if (b.logo) {
+        const maxW = 46;
+        const maxH = 16;
+        const s = Math.min(maxW / b.logo.w, maxH / b.logo.h);
+        const w = b.logo.w * s;
+        const h = b.logo.h * s;
+        d.addImage(b.logo.data, 'PNG', (PAGE_W - w) / 2, y - h - 6, w, h);
+      }
+      this.face('italic', 9.5, P.dusk);
+      d.text('Arranged with care by', PAGE_W / 2, y, { align: 'center' });
+      y += 5.2;
+      this.face('sansBold', 10, ink);
+      d.text(b.name, PAGE_W / 2, y, { align: 'center' });
+      this.face('sans', 6.5, P.bloom);
+      d.text(this.footerNote, PAGE_W / 2, PAGE_H - 16, { align: 'center', charSpace: 0.6 });
+    } else {
+      this.face('sans', 7.5, P.bloom);
+      d.text(this.footerNote, PAGE_W / 2, PAGE_H - 30, { align: 'center', charSpace: 0.6 });
+    }
   }
 
   save(filename: string) {
@@ -1271,8 +1327,8 @@ async function layoutProgramme(pdf: Pdf, draft: Draft, url: string, withStory = 
 }
 
 /** Printable order of service with the funeral journey. */
-export async function programmePdf({ draft, url, slug }: ArtifactInput) {
-  const pdf = await new Pdf(displayName(draft.person), 'MEMORA').init();
+export async function programmePdf({ draft, url, slug, brand }: ArtifactInput) {
+  const pdf = await new Pdf(displayName(draft.person), 'MEMORA', { brand }).init();
   await layoutProgramme(pdf, draft, url);
   pdf.save(file(slug, 'programme', 'pdf'));
 }
@@ -1283,9 +1339,9 @@ const A5_W = PAGE_W / Math.SQRT2; // 148.5 mm: an A5 page is an A4 page shrunk b
  * The programme as an A5 booklet to print at home: A4 sheets, two pages a side,
  * in fold order. Print double-sided (flip on the short edge), stack, fold in half.
  */
-export async function programmeBooklet({ draft, url, slug }: ArtifactInput) {
+export async function programmeBooklet({ draft, url, slug, brand }: ArtifactInput) {
   const rec = new Recorder(new jsPDF({ unit: 'mm', format: 'a4', compress: true }));
-  const pdf = await new Pdf(displayName(draft.person), 'MEMORA', { doc: rec as unknown as jsPDF, typeScale: 1.22 }).init();
+  const pdf = await new Pdf(displayName(draft.person), 'MEMORA', { doc: rec as unknown as jsPDF, typeScale: 1.22, brand }).init();
   await layoutProgramme(pdf, draft, url, true);
   pdf.finish();
 
@@ -1339,8 +1395,8 @@ export async function programmeBooklet({ draft, url, slug }: ArtifactInput) {
 }
 
 /** The complete keepsake: story, programme, journey and family message. */
-export async function keepsakePdf({ draft, url, slug }: ArtifactInput) {
-  const pdf = await new Pdf(displayName(draft.person), 'MEMORA').init();
+export async function keepsakePdf({ draft, url, slug, brand }: ArtifactInput) {
+  const pdf = await new Pdf(displayName(draft.person), 'MEMORA', { brand }).init();
   await pdf.cover(draft, 'A life remembered', serviceLine(draft));
   pdf.newPage();
   if (draft.story.obituary) {

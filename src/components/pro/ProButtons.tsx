@@ -6,42 +6,40 @@ import { CopyField } from '@/components/Share';
 import { useToast } from '@/components/Toast';
 import { createMemorial } from '@/lib/memorials-client';
 
-/** Starts a memorial in one of the home's branches (asks which, if there are several), then opens it. */
+/** Starts a memorial in one of the home's branches (a short menu when there are several), then opens it. */
 export function NewHomeMemorial({ orgId, branches }: { orgId: string; branches: { id: string; name: string }[] }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [branch, setBranch] = useState(branches[0]?.id ?? '');
   if (!branches.length) return null;
-  return (
-    <div className="row new-home-memorial" style={{ gap: 6 }}>
-      {branches.length > 1 && (
-        <select className="select" aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      )}
-      <button
-        className="btn primary"
-        type="button"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            const id = await createMemorial(undefined, orgId, branch);
-            router.push(`/memorials/${id}`);
-          } catch (err) {
-            toast(err instanceof Error ? err.message : 'Could not start the memorial.', 'error');
-            setBusy(false);
-          }
-        }}
-      >
-        {busy ? 'Starting…' : branches.length === 1 ? `+ New memorial · ${branches[0].name}` : '+ New memorial'}
+  const start = async (branch: string) => {
+    setBusy(true);
+    try {
+      const id = await createMemorial(undefined, orgId, branch);
+      router.push(`/memorials/${id}`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not start the memorial.', 'error');
+      setBusy(false);
+    }
+  };
+  if (branches.length === 1)
+    return (
+      <button className="btn primary" type="button" disabled={busy} onClick={() => start(branches[0].id)}>
+        {busy ? 'Starting…' : '+ New memorial'}
       </button>
-    </div>
+    );
+  return (
+    <details className="st-menu st-new">
+      <summary className="btn primary">{busy ? 'Starting…' : '+ New memorial'}</summary>
+      <div className="st-menu-list right">
+        <span className="st-menu-note">Which branch is it for?</span>
+        {branches.map((b) => (
+          <button key={b.id} type="button" className="st-menu-btn" disabled={busy} onClick={() => start(b.id)}>
+            {b.name}
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }
 

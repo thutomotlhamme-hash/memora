@@ -1,40 +1,30 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ActionForm } from '@/components/admin/ActionForm';
-import { AdminAction } from '@/components/admin/AdminAction';
-import { RoleCard } from '@/components/admin/CommandPanels';
 import { StatusScreen } from '@/components/MemorialView';
-import { InviteList } from '@/components/pro/InviteList';
-import { NewHomeMemorial, PublishForHome, RunSheetFor } from '@/components/pro/ProButtons';
 import { SiteHeader } from '@/components/SiteHeader';
+import { Studio, type Persona, type Stage, type StudioFuneral, type StudioTab } from '@/components/pro/studio/Studio';
 import { accountLabel } from '@/lib/account-id';
-import { fmtDate } from '@/lib/memorial';
-import { PRO_PLANS, formatMoney, proInvoice } from '@/lib/plans';
-import { ALL_ROLES, ROLES, branchScope, can, canGrantRole, canIn, orgsOf, principalFrom, type Permission, type Role } from '@/lib/rbac';
+import { branchScope, can, canIn, orgsOf, principalFrom, type Role } from '@/lib/rbac';
 import { getAccess } from '@/lib/server/access';
-import { loadAdminCases, type AdminCase } from '@/lib/server/admin';
+import { loadAdminCases } from '@/lib/server/admin';
 import { loadInvites } from '@/lib/server/invites';
-import { loadBranches, loadGroups, loadInvoices, loadOrgs, type Branch, type Group as TeamGroup } from '@/lib/server/pro';
+import { loadBranches, loadGroups, loadInvoices, loadOrgs } from '@/lib/server/pro';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Funeral home', robots: { index: false } };
 
-const SELF = '/api/pro/actions';
-
-/** The funeral home's own command centre. Each tab shows only to roles that may use it. */
-const TABS = [
-  ['today', 'Today', 'org.view'],
-  ['funerals', 'Funerals', 'org.view'],
-  ['families', 'Family links', 'org.memorials.create'],
-  ['team', 'Branches & people', 'org.view'],
-  ['roles', 'Who can do what', 'org.view'],
-  ['branding', 'Branding', 'org.branding'],
-  ['billing', 'Plan & invoices', 'org.billing.view'],
-] as const satisfies readonly (readonly [string, string, Permission])[];
-type Tab = (typeof TABS)[number][0];
-
-const ORG_ROLES = ALL_ROLES.filter((r) => ROLES[r].scope === 'org');
+const TABS: StudioTab[] = ['today', 'funerals', 'families', 'print', 'team', 'branding', 'billing', 'roles'];
+const TAB_PERM = {
+  today: 'org.view',
+  funerals: 'org.view',
+  families: 'org.memorials.create',
+  print: 'org.memorials.edit',
+  team: 'org.team',
+  branding: 'org.branding',
+  billing: 'org.billing.view',
+  roles: 'org.view',
+} as const;
 const saToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date());
 const addDays = (iso: string, n: number) => {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -42,22 +32,9 @@ const addDays = (iso: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-type Group = 'soon' | 'drafts' | 'upcoming' | 'past';
-const GROUP_TITLE: Record<Group, [string, string]> = {
-  soon: ['This week', 'Funerals in the next seven days.'],
-  drafts: ['Being prepared', 'Drafts, by families or your arrangers. An arranger or manager publishes them.'],
-  upcoming: ['Coming up', 'Published, with the funeral more than a week away.'],
-  past: ['Done', 'Funerals that have passed. Memorials stay up for the family.'],
-};
+type Row = Record<string, any>;
 
-function groupOf(c: AdminCase, today: string, weekEnd: string): Group {
-  const d = c.funeralDate;
-  if (c.status === 'ARCHIVED' || (d && d < today)) return 'past';
-  if (d && d <= weekEnd) return 'soon';
-  if (c.status === 'DRAFT') return 'drafts';
-  return 'upcoming';
-}
-
+/** The funeral home's workspace: loads what this person may see, then hands it to the Studio. */
 export default async function ProDashboard({ searchParams }: { searchParams: Promise<{ home?: string; tab?: string; welcome?: string; branch?: string; as?: string }> }) {
   const access = await getAccess();
   const admin = getAdminSupabase();
@@ -95,24 +72,33 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
   }
   const org = visiting ?? myOrgs.find((o) => o.id === sp.home) ?? myOrgs[0];
   if (!can(real, 'org.view', org.id)) redirect('/pro/dashboard');
-  const allBranches = await loadBranches(admin, org.id);
+  const branches = await loadBranches(admin, org.id);
 
-  // "See as": owners and Memora's team can preview exactly what each role sees here.
+  // "See as": owners and Memora's team can preview exactly what each role sees.
   const canPreview = support || canIn(real, 'org.branches', org.id, null);
   const previewOptions: { key: string; label: string; grant: { roles: Role[]; orgId: string; branchId: string | null } }[] = [
     { key: 'owner', label: 'Owner', grant: { roles: ['org_owner'], orgId: org.id, branchId: null } },
-    ...allBranches.flatMap((b) => [
+    ...branches.flatMap((b) => [
       { key: `manager:${b.id}`, label: `Manager · ${b.name}`, grant: { roles: ['org_admin'] as Role[], orgId: org.id, branchId: b.id } },
       { key: `arranger:${b.id}`, label: `Arranger · ${b.name}`, grant: { roles: ['org_staff'] as Role[], orgId: org.id, branchId: b.id } },
     ]),
   ];
   const preview = canPreview ? previewOptions.find((o) => o.key === sp.as) : undefined;
   const p = preview ? principalFrom(real.userId, [preview.grant]) : real;
-  const allOrgs = visiting ? [] : myOrgs;
-  const tabs = TABS.filter(([, , perm]) => can(p, perm, org.id));
-  const tab: Tab = (tabs.find(([t]) => t === sp.tab)?.[0] ?? 'today') as Tab;
-  const keep = preview ? `&as=${encodeURIComponent(preview.key)}` : '';
-  const href = (t: Tab) => `/pro/dashboard?home=${org.id}&tab=${t}${keep}`;
+
+  // What this person is here to do comes first.
+  const persona: Persona = canIn(p, 'org.branches', org.id, null)
+    ? 'owner'
+    : [...(p.branches.get(org.id)?.values() ?? [])].some((s) => s.has('org.team'))
+      ? 'manager'
+      : 'arranger';
+  const requested = TABS.find((t) => t === sp.tab) ?? 'today';
+  const tab: StudioTab = can(p, TAB_PERM[requested], org.id) ? requested : 'today';
+
+  const scope = branchScope(p, org.id);
+  const myBranches = scope === 'all' ? branches : branches.filter((b) => scope.includes(b.id));
+  const onlyBranch = myBranches.find((b) => b.id === sp.branch)?.id ?? null;
+  const inView = (branchId: string | null | undefined) => (onlyBranch ? branchId === onlyBranch : scope === 'all' || (branchId != null && scope.includes(branchId)));
 
   const [{ data: links }, cases, groups, invoices, families] = await Promise.all([
     admin.from('memora_cases').select('id,branch_id').eq('org_id', org.id),
@@ -121,506 +107,69 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
     can(p, 'org.billing.view', org.id) ? loadInvoices(admin, org.id) : Promise.resolve([]),
     can(p, 'org.memorials.create', org.id) ? loadInvites(admin, 'family', org.id) : Promise.resolve([]),
   ]);
-  // Branch staff work in their own branches; owners (and Memora's team) in all of them.
-  const scope = branchScope(p, org.id);
-  const myBranches = scope === 'all' ? allBranches : allBranches.filter((b) => scope.includes(b.id));
-  const branchName = new Map(allBranches.map((b) => [b.id, b.name]));
-  const onlyBranch = myBranches.find((b) => b.id === sp.branch)?.id ?? null;
-  const branchOf = new Map(((links ?? []) as { id: string; branch_id: string | null }[]).map((l) => [l.id, l.branch_id]));
-  const inView = (branchId: string | null | undefined) => (onlyBranch ? branchId === onlyBranch : scope === 'all' || (branchId != null && scope.includes(branchId)));
-  const memorials = cases.filter((c) => branchOf.has(c.id) && inView(branchOf.get(c.id)));
-  const canBranches = canIn(p, 'org.branches', org.id, null);
-  const createIn = myBranches.filter((b) => canIn(p, 'org.memorials.create', org.id, b.id));
-  const shownFamilies = families.filter((f) => inView(f.branchId));
+  const branchOf = new Map(((links ?? []) as Row[]).map((l) => [l.id as string, (l.branch_id as string | null) ?? null]));
+  const visible = cases.filter((c) => branchOf.has(c.id) && inView(branchOf.get(c.id)));
+  const { data: stops } = visible.length
+    ? await admin
+        .from('memora_stops')
+        .select('case_id,event_date,event_time,title,address_text,sort_order')
+        .in(
+          'case_id',
+          visible.map((c) => c.id),
+        )
+        .order('sort_order')
+    : { data: [] as Row[] };
+  const firstStop = new Map<string, Row>();
+  for (const s of (stops ?? []) as Row[]) if (!firstStop.has(s.case_id)) firstStop.set(s.case_id, s);
   const fromLink = new Map(families.filter((f) => f.caseId).map((f) => [f.caseId!, f.label]));
-  const edit = (branchId: string | null | undefined) => Boolean(p.orgWide.get(org.id)?.has('org.memorials.edit') || (branchId && p.branches.get(org.id)?.get(branchId)?.has('org.memorials.edit')));
-  const bill = proInvoice(org, org.publishedThisMonth, false);
-  const plan = PRO_PLANS[org.plan];
-  const live = org.status !== 'disabled';
-  const myRoles = [...(p.orgRoles.get(org.id) ?? [])] as Role[];
-  const myBranchNames = scope === 'all' ? '' : myBranches.map((b) => b.name).join(', ');
-  const platformRoles = [...p.roles].filter((r) => ROLES[r].scope === 'platform');
-  const youAre = preview
-    ? `Previewing ${preview.label}`
-    : myRoles.length
-      ? `${myRoles.map((r) => ROLES[r].label).join(', ')}${myBranchNames ? ` · ${myBranchNames}` : ''}`
-      : platformRoles.length
-        ? `Memora ${ROLES[platformRoles[0]].label} (support view)`
-        : 'Viewer';
 
   const today = saToday();
   const weekEnd = addDays(today, 7);
-  const grouped: Record<Group, AdminCase[]> = { soon: [], drafts: [], upcoming: [], past: [] };
-  for (const c of memorials) grouped[groupOf(c, today, weekEnd)].push(c);
-  const byDate = (a: AdminCase, b: AdminCase) => (a.funeralDate ?? '9999').localeCompare(b.funeralDate ?? '9999');
-  grouped.soon.sort(byDate);
-  grouped.upcoming.sort(byDate);
-  grouped.drafts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  grouped.past.sort((a, b) => byDate(b, a));
-  const waitingToPublish = memorials.filter((c) => c.status === 'DRAFT');
-  const openLinks = shownFamilies.filter((f) => f.state === 'open');
+  const stageOf = (status: string, date: string | null): Stage =>
+    status === 'ARCHIVED' || (date && date < today) ? 'past' : date && date <= weekEnd ? 'soon' : status === 'DRAFT' ? 'drafts' : 'upcoming';
+  const funerals: StudioFuneral[] = visible
+    .map((c) => {
+      const s = firstStop.get(c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        status: c.status as StudioFuneral['status'],
+        slug: c.slug,
+        funeralDate: c.funeralDate,
+        time: s?.event_time ? String(s.event_time).slice(0, 5) : '',
+        venue: s ? String(s.address_text || s.title || '').split(',')[0] : '',
+        branchId: branchOf.get(c.id) ?? null,
+        madeBy: accountLabel(c.ownerEmail) || '—',
+        own: c.ownerEmail.toLowerCase() === access.user.email.toLowerCase(),
+        family: fromLink.get(c.id) ?? null,
+        updatedAt: c.updatedAt,
+        stage: stageOf(c.status, c.funeralDate),
+      };
+    })
+    .sort((a, b) => (a.stage === 'past' && b.stage === 'past' ? (b.funeralDate ?? '').localeCompare(a.funeralDate ?? '') : (a.funeralDate ?? '9999').localeCompare(b.funeralDate ?? '9999')));
 
   return (
-    <>
-      <SiteHeader />
-      <main className="container">
-        {sp.welcome && (
-          <div className="note ok" style={{ marginTop: 24 }}>
-            <span>
-              <strong>Welcome to Memora Pro.</strong> {org.name} is set up and you’re its owner. Next: add your team, then send your first family a link.
-            </span>
-          </div>
-        )}
-        <div className="page-head">
-          <div className="pro-org-head">
-            {org.logoUrl ? <img src={org.logoUrl} alt="" /> : <span className="cc-org-mono" style={org.brandColour ? { background: org.brandColour } : undefined}>{org.name.slice(0, 1)}</span>}
-            <div>
-              <span className="eyebrow">
-                Memora Pro · {plan.name} plan{org.status === 'trial' ? ' · Trial' : org.status === 'disabled' ? ' · Switched off' : ''} · You: {youAre}
-              </span>
-              <h1 className="h1" style={{ marginTop: 6 }}>
-                {org.name}
-              </h1>
-            </div>
-          </div>
-          <div className="row" style={{ gap: 8 }}>
-            {visiting && (
-              <Link className="btn" href={`/admin?tab=homes#${org.id}`}>
-                ← Command centre
-              </Link>
-            )}
-            {live && createIn.length > 0 && <NewHomeMemorial orgId={org.id} branches={createIn.map((b) => ({ id: b.id, name: b.name }))} />}
-          </div>
-        </div>
-        {visiting && (
-          <div className="note support-note" style={{ marginBottom: 16 }}>
-            <span>
-              <strong>Support view.</strong> You’re looking at {org.name} as Memora’s team, not as one of its staff. Anything you change is written to the audit log.
-            </span>
-          </div>
-        )}
-        {canPreview && (
-          <nav className="row pro-homes preview-bar" aria-label="See as">
-            <span className="muted small">See as:</span>
-            <Link className={`chip${preview ? '' : ' on'}`} href={`/pro/dashboard?home=${org.id}&tab=${tab}`}>
-              {visiting ? 'Support (you)' : 'You'}
-            </Link>
-            {previewOptions.map((o) => (
-              <Link key={o.key} className={`chip${preview?.key === o.key ? ' on' : ''}`} href={`/pro/dashboard?home=${org.id}&tab=${tab}&as=${encodeURIComponent(o.key)}`}>
-                {o.label}
-              </Link>
-            ))}
-          </nav>
-        )}
-        {preview && (
-          <div className="note warn" style={{ marginBottom: 16 }}>
-            <span>
-              <strong>Preview: this is what a {preview.label} sees.</strong> Buttons are shown as they’d see them, but anything you press still uses your own access.
-            </span>
-          </div>
-        )}
-        {allOrgs.length > 1 && (
-          <nav className="row pro-homes" aria-label="Funeral homes">
-            {allOrgs.map((o) => (
-              <Link key={o.id} className={`chip${o.id === org.id ? ' on' : ''}`} href={`/pro/dashboard?home=${o.id}&tab=${tab}`}>
-                {o.name}
-              </Link>
-            ))}
-          </nav>
-        )}
-        {myBranches.length > 1 && (tab === 'today' || tab === 'funerals' || tab === 'families') && (
-          <nav className="row pro-homes" aria-label="Branches">
-            <Link className={`chip${onlyBranch ? '' : ' on'}`} href={href(tab)}>
-              {scope === 'all' ? 'All branches' : 'My branches'}
-            </Link>
-            {myBranches.map((b) => (
-              <Link key={b.id} className={`chip${onlyBranch === b.id ? ' on' : ''}`} href={`${href(tab)}&branch=${b.id}`}>
-                {b.name}
-              </Link>
-            ))}
-          </nav>
-        )}
-        {!live && (
-          <div className="note warn" style={{ marginBottom: 16 }}>
-            <span>This funeral home’s Memora is switched off. Published memorials stay up. Contact Memora to switch it back on.</span>
-          </div>
-        )}
-        <nav className="admin-tabs" aria-label="Funeral home sections">
-          {tabs.map(([t, label]) => (
-            <Link key={t} href={href(t)} aria-current={t === tab ? 'page' : undefined}>
-              {label}
-              {t === 'funerals' && grouped.soon.length > 0 && <span className="tab-count">{grouped.soon.length}</span>}
-            </Link>
-          ))}
-        </nav>
-
-        {tab === 'today' && (
-          <>
-            <div className="stat-row" style={{ marginBottom: 20 }}>
-              <div className="stat">
-                <span>Funerals this week</span>
-                <strong>{grouped.soon.length}</strong>
-              </div>
-              <div className="stat">
-                <span>Being prepared</span>
-                <strong>{waitingToPublish.length}</strong>
-              </div>
-              <div className="stat">
-                <span>Published this month</span>
-                <strong>{org.publishedThisMonth}</strong>
-              </div>
-              {can(p, 'org.billing.view', org.id) && (
-                <div className="stat">
-                  <span>This month so far (excl. VAT)</span>
-                  <strong>{org.status === 'trial' ? 'Trial' : formatMoney(bill.total)}</strong>
-                </div>
-              )}
-            </div>
-            <FuneralSection title="This week" hint="Funerals in the next seven days. Get the run-sheet link to run the day." rows={grouped.soon} empty="No funerals in the next seven days." />
-            {waitingToPublish.some((c) => canIn(p, 'org.memorials.publish', org.id, branchOf.get(c.id))) && (
-              <FuneralSection title="Waiting to be published" hint="Check each one, then publish. Publishing is billed to the funeral home." rows={waitingToPublish} empty="" />
-            )}
-            {can(p, 'org.memorials.create', org.id) && (
-              <section className="card" style={{ marginBottom: 20 }}>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div>
-                    <h2 className="h3">Family links</h2>
-                    <p className="small muted">{openLinks.length ? `${openLinks.length} sent and not used yet.` : 'Let a family fill in the memorial themselves, from their own phone.'}</p>
-                  </div>
-                  <Link className="btn" href={href('families')}>
-                    Send a family a link
-                  </Link>
-                </div>
-              </section>
-            )}
-          </>
-        )}
-
-        {tab === 'funerals' &&
-          (memorials.length === 0 ? (
-            <p className="muted">No memorials yet. Start one above, or send a family a link.</p>
-          ) : (
-            (['soon', 'drafts', 'upcoming', 'past'] as Group[]).map((g) => <FuneralSection key={g} title={GROUP_TITLE[g][0]} hint={GROUP_TITLE[g][1]} rows={grouped[g]} empty="" />)
-          ))}
-
-        {tab === 'families' && (
-          <>
-            <section className="card" style={{ marginBottom: 20 }}>
-              <h2 className="h3">Send a family a link</h2>
-              <p className="small muted">
-                The family opens it on their phone, makes an account with their number, and fills in the memorial: photo, story, programme. It belongs to {org.name}: your
-                branch’s arrangers can edit it, publish it and run the day. The family pays nothing. Each link works once, for 30 days.
-              </p>
-              {live && createIn.length > 0 && (
-                <ActionForm
-                  endpoint={SELF}
-                  action="invite.create"
-                  extra={{ kind: 'family', orgId: org.id, ...(createIn.length === 1 ? { branchId: createIn[0].id } : {}) }}
-                  reset
-                  compact
-                  submit="Make the link"
-                  fields={[
-                    { name: 'label', label: 'Who is it for?', type: 'text', required: true, placeholder: 'e.g. Khumalo family', hint: 'Only your team sees this.' },
-                    ...(createIn.length > 1
-                      ? [{ name: 'branchId', label: 'Branch', type: 'select' as const, value: onlyBranch ?? createIn[0].id, options: createIn.map((b) => ({ value: b.id, label: b.name })) }]
-                      : []),
-                  ]}
-                />
-              )}
-            </section>
-            <section className="card" style={{ marginBottom: 64 }}>
-              <h2 className="h3">Links you’ve sent</h2>
-              <InviteList invites={shownFamilies} endpoint={SELF} from={org.name} branches={branchName} empty="No links yet." />
-            </section>
-          </>
-        )}
-
-        {tab === 'team' && (
-          <section style={{ marginBottom: 64 }}>
-            <p className="small muted" style={{ marginTop: 0 }}>
-              Owners run the whole funeral home. Each branch has its managers and arrangers. People need a Memora account first (their cellphone number). See “Who can do
-              what” for each role.
-            </p>
-            <div className="cc-groups">
-              {groups
-                .filter((g) => !g.branchId)
-                .map((g) => (
-                  <GroupCard key={g.id} g={g} title={`${g.name} · whole funeral home`} />
-                ))}
-            </div>
-            <h2 className="h3 cc-h">
-              Branches <span className="muted small">{allBranches.length}</span>
-            </h2>
-            <div className="branch-list">
-              {(scope === 'all' ? allBranches : myBranches).map((b) => (
-                <BranchCard key={b.id} b={b} />
-              ))}
-            </div>
-            {canBranches && live && (
-              <details className="card cc-add" style={{ marginTop: 16 }}>
-                <summary>
-                  <strong>+ Add a branch</strong>
-                  <span className="muted small">It gets its own Managers and Arrangers groups.</span>
-                </summary>
-                <ActionForm
-                  endpoint={SELF}
-                  action="branch.create"
-                  extra={{ orgId: org.id }}
-                  reset
-                  submit="Add branch"
-                  fields={[
-                    { name: 'name', label: 'Branch name', type: 'text', required: true, placeholder: 'e.g. Pimville' },
-                    { name: 'area', label: 'Area or address', type: 'text', placeholder: 'e.g. 12 Koma Road, Pimville' },
-                  ]}
-                />
-              </details>
-            )}
-          </section>
-        )}
-
-        {tab === 'roles' && (
-          <section style={{ marginBottom: 64 }}>
-            <p className="small muted" style={{ marginTop: 0 }}>
-              Everyone in {org.name} gets a role through their group. A role is a set of things they can do, and anything not listed is not allowed. Nobody sees another funeral home.
-            </p>
-            <div className="cc-role-grid">
-              {ORG_ROLES.map((r) => (
-                <RoleCard key={r} role={r} yours={myRoles.includes(r)} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {tab === 'branding' && (
-          <section className="card" style={{ marginBottom: 64 }}>
-            <h2 className="h3">Branding</h2>
-            <p className="small muted">Your logo and colour appear on your memorials: “Arranged with care by {org.name}”.</p>
-            <ActionForm
-              endpoint={SELF}
-              action="org.brand"
-              extra={{ id: org.id }}
-              submit="Save branding"
-              fields={[
-                { name: 'logoUrl', label: 'Logo (https link to a PNG or SVG)', type: 'text', value: org.logoUrl },
-                { name: 'brandColour', label: 'Colour', type: 'text', value: org.brandColour, placeholder: '#5B3E8C' },
-              ]}
-            />
-          </section>
-        )}
-
-        {tab === 'billing' && (
-          <section className="card" style={{ marginBottom: 64 }}>
-            <h2 className="h3">Plan and invoices</h2>
-            <p className="small muted">
-              {plan.name} plan: {org.monthlyFeeMinor ? `${formatMoney(org.monthlyFeeMinor)} per month + ` : ''}
-              {formatMoney(org.perMemorialMinor)} per published memorial, excl. VAT.
-              {org.status === 'trial' ? ' You’re in your trial: nothing is billed yet.' : ''} To change plan, contact Memora.
-            </p>
-            {invoices.length === 0 ? (
-              <p className="muted small">No invoices yet.</p>
-            ) : (
-              invoices.map((i) => (
-                <div className="kv" key={i.id}>
-                  <span>{i.period}</span>
-                  <span>
-                    {formatMoney(i.amountMinor)} · {i.memorials} memorial{i.memorials === 1 ? '' : 's'} · <span className="muted">{i.status.toLowerCase()}</span>
-                  </span>
-                </div>
-              ))
-            )}
-          </section>
-        )}
-      </main>
-    </>
+    <Studio
+      p={p}
+      persona={persona}
+      org={org}
+      homes={visiting ? [] : myOrgs.map((o) => ({ id: o.id, name: o.name }))}
+      visiting={Boolean(visiting)}
+      canPreview={canPreview}
+      preview={preview ? { key: preview.key, label: preview.label } : null}
+      previewOptions={previewOptions.map(({ key, label }) => ({ key, label }))}
+      branches={branches}
+      myBranches={myBranches}
+      allBranchesInScope={scope === 'all'}
+      onlyBranch={onlyBranch}
+      funerals={funerals}
+      groups={groups}
+      invoices={invoices}
+      families={families.filter((f) => inView(f.branchId))}
+      user={{ id: access.user.id, firstName: (access.user.name || '').split(/\s+/)[0] || '' }}
+      tab={tab}
+      today={today}
+      welcome={Boolean(sp.welcome)}
+    />
   );
-
-  function GroupCard({ g, title }: { g: TeamGroup; title?: string }) {
-    const manage = live && g.roles.every((r) => canGrantRole(p, r, org.id, g.branchId));
-    return (
-      <article className="card cc-group">
-        <header className="cc-group-head">
-          <h3 className="h4">{title ?? g.name}</h3>
-          <div className="cc-roles">
-            {g.roles.map((r) => (
-              <span key={r} className="pill" title={ROLES[r].summary}>
-                {ROLES[r].label}
-              </span>
-            ))}
-          </div>
-        </header>
-        <p className="small muted">{g.description}</p>
-        <ul className="cc-members">
-          {g.members.length === 0 && <li className="muted small">No one yet.</li>}
-          {g.members.map((m) => (
-            <li key={m.userId}>
-              <span>
-                <strong>{m.name || m.label}</strong>
-                {m.name && <span className="muted small"> · {m.label}</span>}
-                {m.userId === access!.user.id && <span className="muted small"> · you</span>}
-              </span>
-              {manage && m.userId !== access!.user.id && (
-                <AdminAction endpoint={SELF} action="group.removeMember" extra={{ groupId: g.id, userId: m.userId }} label="Remove" variant="ghost" confirm={`Remove ${m.name || m.label} from ${g.name}?`} />
-              )}
-            </li>
-          ))}
-        </ul>
-        {manage && (
-          <ActionForm
-            endpoint={SELF}
-            action="group.addMember"
-            extra={{ groupId: g.id }}
-            compact
-            reset
-            submit="Appoint"
-            fields={[{ name: 'who', label: 'Their cellphone number', type: 'tel', placeholder: '072 123 4567', hint: 'They create a Memora account first.' }]}
-          />
-        )}
-      </article>
-    );
-  }
-
-  function BranchCard({ b }: { b: Branch }) {
-    const inBranch = groups.filter((g) => g.branchId === b.id);
-    const others = allBranches.filter((x) => x.id !== b.id);
-    return (
-      <section className="card branch-card" id={`branch-${b.id}`}>
-        <header className="cc-mem-head">
-          <div>
-            <h3 className="h3">{b.name}</h3>
-            <p className="small muted">
-              {[b.area, `${b.memorials} memorial${b.memorials === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
-            </p>
-          </div>
-          <div className="row" style={{ gap: 6 }}>
-            <Link className="btn sm" href={`${href('funerals')}&branch=${b.id}`}>
-              Its funerals
-            </Link>
-            {canBranches && live && others.length > 0 && (
-              <AdminAction
-                endpoint={SELF}
-                action="branch.delete"
-                id={b.id}
-                extra={{ moveTo: others[0].id }}
-                label="Remove branch"
-                variant="danger"
-                confirm={`Remove ${b.name}? Its managers and arrangers lose this branch, and its ${b.memorials} memorial${b.memorials === 1 ? '' : 's'} move to ${others[0].name}.`}
-              />
-            )}
-          </div>
-        </header>
-        {canBranches && live && (
-          <details className="cc-edit">
-            <summary>Rename or change the area</summary>
-            <ActionForm
-              endpoint={SELF}
-              action="branch.rename"
-              extra={{ id: b.id }}
-              compact
-              submit="Save"
-              fields={[
-                { name: 'name', label: 'Branch name', type: 'text', value: b.name },
-                { name: 'area', label: 'Area or address', type: 'text', value: b.area },
-              ]}
-            />
-          </details>
-        )}
-        <div className="cc-groups" style={{ marginTop: 12 }}>
-          {inBranch.map((g) => (
-            <GroupCard key={g.id} g={g} />
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  function FuneralSection({ title, hint, rows, empty }: { title: string; hint: string; rows: AdminCase[]; empty: string }) {
-    if (!rows.length && !empty) return null;
-    return (
-      <section className="card" style={{ marginBottom: 20 }}>
-        <h2 className="h3">
-          {title} <span className="muted small">{rows.length || ''}</span>
-        </h2>
-        <p className="small muted" style={{ margin: '4px 0 12px' }}>
-          {hint}
-        </p>
-        {rows.length === 0 ? (
-          <p className="muted small">{empty}</p>
-        ) : (
-          <div className="board-wrap">
-            <table className="board">
-              <thead>
-                <tr>
-                  <th>Memorial</th>
-                  <th>Funeral</th>
-                  <th>Status</th>
-                  <th>Made by</th>
-                  {allBranches.length > 1 && <th>Branch</th>}
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((c) => {
-                  const own = c.ownerEmail.toLowerCase() === access!.user.email.toLowerCase();
-                  const family = fromLink.get(c.id);
-                  const branch = branchOf.get(c.id) ?? null;
-                  return (
-                    <tr key={c.id}>
-                      <td>
-                        {c.name}
-                        <span className="sub">updated {fmtDate(c.updatedAt.slice(0, 10))}</span>
-                      </td>
-                      <td>
-                        {c.funeralDate ? fmtDate(c.funeralDate) : '—'}
-                        {c.funeralDate === today && <span className="sub">today</span>}
-                      </td>
-                      <td>{c.status === 'PUBLISHED' ? 'Live' : c.status === 'ARCHIVED' ? 'Closed' : 'Draft'}</td>
-                      <td>
-                        {own ? 'You' : family ? 'The family' : accountLabel(c.ownerEmail) || '—'}
-                        {family && <span className="sub">{family}</span>}
-                      </td>
-                      {allBranches.length > 1 && (
-                        <td>
-                          {canBranches && live ? (
-                            <div className="cc-assign">
-                              <ActionForm
-                                endpoint={SELF}
-                                action="memorial.setBranch"
-                                extra={{ caseId: c.id }}
-                                compact
-                                variant=""
-                                submit="Move"
-                                fields={[{ name: 'branchId', label: 'Branch', type: 'select', value: branch ?? '', options: allBranches.map((b) => ({ value: b.id, label: b.name })) }]}
-                              />
-                            </div>
-                          ) : (
-                            (branchName.get(branch ?? '') ?? '—')
-                          )}
-                        </td>
-                      )}
-                      <td>
-                        <div className="row" style={{ gap: 6 }}>
-                          {(own || edit(branch)) && (
-                            <Link className="btn sm" href={`/memorials/${c.id}`}>
-                              {c.status === 'DRAFT' ? 'Open' : 'Edit'}
-                            </Link>
-                          )}
-                          {c.status === 'PUBLISHED' && c.slug && (
-                            <a className="btn sm" href={`/m/${c.slug}`} target="_blank" rel="noopener noreferrer">
-                              View ↗
-                            </a>
-                          )}
-                          {c.status === 'DRAFT' && live && canIn(p, 'org.memorials.publish', org.id, branch) && <PublishForHome caseId={c.id} />}
-                          {c.status === 'PUBLISHED' && live && canIn(p, 'org.runsheet', org.id, branch) && <RunSheetFor caseId={c.id} />}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    );
-  }
 }

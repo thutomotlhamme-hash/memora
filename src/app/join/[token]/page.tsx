@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { StatusScreen } from '@/components/MemorialView';
 import { JoinAccount, SetUpHome, StartFamilyMemorial } from '@/components/pro/JoinForms';
 import { SiteHeader } from '@/components/SiteHeader';
+import { BrandMark } from '@/components/Brand';
+import { Constellation } from '@/components/pro/studio/Constellation';
 import { accountLabel, isPhoneLogin } from '@/lib/account-id';
 import { PRO_PLANS } from '@/lib/plans';
 import { openInvite } from '@/lib/server/invites';
@@ -63,57 +65,86 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
     );
   }
   const plan = PRO_PLANS[invite.plan ?? 'pro'];
+  // A family link wears the funeral home's own logo and colour.
+  const { data: home } = family && invite.orgId && admin ? await admin.from('memora_orgs').select('logo_url,brand_colour').eq('id', invite.orgId).maybeSingle() : { data: null };
+  const accent = home?.brand_colour && /^#[0-9a-f]{6}$/i.test(home.brand_colour) ? (home.brand_colour as string) : undefined;
+  const who = invite.label.replace(/^the\s+/i, '');
+  const step = user ? 2 : 1;
 
   return (
-    <>
-      <SiteHeader hideCreate />
-      <main className="container join-wrap">
-        <section className="card join-card">
-          <span className="eyebrow">{family ? invite.orgName : `Memora Pro · ${plan.name} plan`}</span>
-          <h1 className="h2" style={{ marginTop: 8 }}>
-            {family ? `A memorial for the ${invite.label.replace(/^the\s+/i, '')}` : 'Set up your funeral home on Memora'}
-          </h1>
-          {family ? (
-            <ul className="join-steps">
-              <li>
-                <strong>You</strong> add your loved one’s details, photo, story and the programme.
-              </li>
-              <li>
-                <strong>{invite.orgName}</strong> checks it, can help edit it, publishes it and runs it on the day.
-              </li>
-              <li>
-                <strong>Nothing to pay.</strong> The funeral home covers Memora.
-              </li>
-            </ul>
-          ) : (
-            <ul className="join-steps">
-              <li>Tell us your funeral home’s details. You become its owner on Memora.</li>
-              <li>You start in a free trial. Add your branches, branch managers and arrangers from your dashboard.</li>
-              <li>
-                Then send families a link, or make memorials yourselves. {plan.name}: {plan.monthlyMinor ? `R${(plan.monthlyMinor / 100).toLocaleString('en-ZA')} a month + ` : ''}R
-                {(plan.perMemorialMinor / 100).toLocaleString('en-ZA')} per published memorial, excl. VAT, once the trial ends.
-              </li>
-            </ul>
-          )}
+    <main className="join" style={accent ? ({ ['--home' as string]: accent } as React.CSSProperties) : undefined}>
+      <aside className="join-stage">
+        <Constellation seed={who.length * 5 + 11} count={80} />
+        <Link href="/" className="join-mark" aria-label="Memora">
+          <BrandMark size={26} /> <span>Memora</span>
+        </Link>
+        <div className="join-stage-copy">
+          {family && home?.logo_url ? <img className="join-home-logo" src={home.logo_url} alt={invite.orgName} /> : null}
+          <span className="st-spark">{family ? invite.orgName : `Memora Pro · ${plan.name} plan`}</span>
+          <h1>{family ? `A memorial for the ${who}.` : 'Welcome to Memora Pro.'}</h1>
+          <p>
+            {family
+              ? `${invite.orgName} has asked you to tell your loved one’s story. It takes about fifteen minutes, from your phone.`
+              : 'Your funeral home, your branding, on every memorial and printed programme. Set up takes two minutes.'}
+          </p>
+          <ol className="join-path">
+            {family ? (
+              <>
+                <li>
+                  <b>You</b> add the photo, their story and the programme.
+                </li>
+                <li>
+                  <b>{invite.orgName}</b> checks it, publishes it and runs the day.
+                </li>
+                <li>
+                  <b>Nothing to pay.</b> The funeral home covers Memora.
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <b>Your details.</b> You become the owner of your funeral home on Memora.
+                </li>
+                <li>
+                  <b>Your team.</b> Add branches, managers and arrangers from your dashboard.
+                </li>
+                <li>
+                  <b>Your first family.</b> Send a link, or start the memorial yourself. Free trial first; then {plan.monthlyMinor ? `R${(plan.monthlyMinor / 100).toLocaleString('en-ZA')} a month + ` : ''}R
+                  {(plan.perMemorialMinor / 100).toLocaleString('en-ZA')} per memorial, excl. VAT.
+                </li>
+              </>
+            )}
+          </ol>
+        </div>
+      </aside>
 
+      <section className="join-panel">
+        <div className="join-panel-inner">
+          <div className="join-progress" aria-label={`Step ${step} of 2`}>
+            <span className={step >= 1 ? 'on' : ''} />
+            <span className={step >= 2 ? 'on' : ''} />
+          </div>
+          <span className="st-eyebrow">Step {step} of 2</span>
+          <h2>{step === 1 ? 'Your Memora account' : family ? 'Start the memorial' : 'Your funeral home'}</h2>
           {!user ? (
             <>
-              <p className="small muted" style={{ margin: '16px 0 8px' }}>
-                First, your Memora account. Use your cellphone number; it’s how you’ll log in.
-              </p>
+              <p className="join-help">Use your cellphone number; it’s how you’ll log in. Nothing is sent to your phone.</p>
               <JoinAccount cta={family ? 'Continue to the memorial' : 'Continue to set up'} />
             </>
           ) : (
             <>
-              <p className="small muted" style={{ margin: '16px 0 12px' }}>
-                Signed in as {accountLabel(user.email)}.{' '}
-                <Link href={`/account?next=/join/${token}`}>Not you?</Link>
+              <p className="join-help">
+                Signed in as {accountLabel(user.email)}. <Link href={`/account?next=/join/${token}`}>Not you?</Link>
               </p>
-              {family ? <StartFamilyMemorial token={decodeURIComponent(token)} /> : <SetUpHome token={decodeURIComponent(token)} name={invite.label} phone={isPhoneLogin(user.email) ? accountLabel(user.email) : ''} />}
+              {family ? (
+                <StartFamilyMemorial token={decodeURIComponent(token)} />
+              ) : (
+                <SetUpHome token={decodeURIComponent(token)} name={invite.label} phone={isPhoneLogin(user.email) ? accountLabel(user.email) : ''} />
+              )}
             </>
           )}
-        </section>
-      </main>
-    </>
+        </div>
+      </section>
+    </main>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useOrigin } from '@/lib/hooks';
 import * as A from '@/lib/artifacts';
 import { displayName, lifeDates, type Draft } from '@/lib/memorial';
@@ -138,8 +138,19 @@ const ITEMS: Item[] = [
   },
 ];
 
-export function ArtifactStudio({ draft, slug, caseId }: { draft: Draft; slug: string; caseId: string }) {
+export function ArtifactStudio({
+  draft,
+  slug,
+  caseId,
+  brand,
+}: {
+  draft: Draft;
+  slug: string;
+  caseId: string;
+  brand?: { name: string; logoUrl: string; colour: string } | null;
+}) {
   const toast = useToast();
+  const prepared = useRef<Promise<A.PrintBrand | null> | null>(null);
   const origin = useOrigin();
   const [busy, setBusy] = useState('');
   const url = `${origin}/m/${slug}`;
@@ -154,7 +165,10 @@ export function ArtifactStudio({ draft, slug, caseId }: { draft: Draft; slug: st
           <h1 className="h1" style={{ margin: '10px 0 10px' }}>
             Everything to share, from one memorial.
           </h1>
-          <p className="lede">Each download is made fresh from the live memorial, so a changed time or corrected name is always current.</p>
+          <p className="lede">
+            Each download is made fresh from the live memorial, so a changed time or corrected name is always current.
+            {brand ? ` Printed items carry ${brand.name}’s name${brand.logoUrl ? ' and logo' : ''} on the back.` : ''}
+          </p>
         </div>
         <Link className="btn" href={`/memorials/${caseId}?step=publish`}>
           ← Back to memorial
@@ -175,7 +189,8 @@ export function ArtifactStudio({ draft, slug, caseId }: { draft: Draft; slug: st
                 onClick={async () => {
                   setBusy(item.key);
                   try {
-                    await item.run({ draft, url, slug });
+                    prepared.current ??= A.prepareBrand(brand);
+                    await item.run({ draft, url, slug, brand: await prepared.current });
                     toast(`${item.title} downloaded.`);
                   } catch (err) {
                     toast(err instanceof Error ? err.message : 'Could not create this download.', 'error');

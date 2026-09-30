@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { GuestImport, NewMemorialButton } from '@/components/Dashboard';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
+import { UnveilingPrompt } from '@/components/UnveilingPrompt';
 import { fmtDate } from '@/lib/memorial';
+import { publicYear } from '@/lib/plans';
+import { getAdminSupabase } from '@/lib/supabase/admin';
 import { listOwnedCases } from '@/lib/server/cases';
 import { getServerSupabase, getSessionUser } from '@/lib/supabase/server';
 
@@ -22,6 +25,22 @@ export default async function MemorialsPage({ searchParams }: { searchParams: Pr
   const user = await getSessionUser(supabase);
   if (!supabase || !user) redirect('/account/login?next=/memorials');
   const [cases, { new: wantsNew }] = await Promise.all([listOwnedCases(supabase, user.id), searchParams]);
+  // Memorials whose first year is ending: the unveiling is usually around now.
+  const now = new Date();
+  const years = new Map(cases.map((c) => [c.id, c.status === 'PUBLISHED' ? publicYear(c.publishedAt, c.archiveAt, now) : null]));
+  const ending = cases.filter((c) => ['unveiling_soon', 'last_days'].includes(years.get(c.id)?.phase ?? ''));
+  const admin = ending.length ? getAdminSupabase() : null;
+  const { data: asked } = admin
+    ? await admin
+        .from('memora_event_interest')
+        .select('case_id')
+        .eq('kind', 'unveiling')
+        .in(
+          'case_id',
+          ending.map((c) => c.id),
+        )
+    : { data: [] as { case_id: string }[] };
+  const askedIds = new Set((asked ?? []).map((a) => a.case_id as string));
 
   return (
     <>
@@ -38,6 +57,10 @@ export default async function MemorialsPage({ searchParams }: { searchParams: Pr
         </div>
 
         <GuestImport />
+
+        {ending.map((c) => (
+          <UnveilingPrompt key={c.id} caseId={c.id} name={c.name.split(' ')[0]} daysLeft={years.get(c.id)!.daysLeft} until={years.get(c.id)!.until} asked={askedIds.has(c.id)} />
+        ))}
 
         {cases.length === 0 ? (
           <div className="empty" style={{ marginBottom: 80 }}>
@@ -57,6 +80,16 @@ export default async function MemorialsPage({ searchParams }: { searchParams: Pr
                   <p className="small muted" style={{ margin: '4px 0 0' }}>
                     {c.funeralDate ? `Funeral ${fmtDate(c.funeralDate)}` : c.passingDate ? `Passed ${fmtDate(c.passingDate)}` : 'Details still to add'}
                   </p>
+                  {years.get(c.id) && years.get(c.id)!.phase !== 'ended' && (
+                    <div className="year-timer" aria-label={`Public for ${years.get(c.id)!.daysLeft} more days`}>
+                      <span className="year-bar">
+                        <span style={{ width: `${Math.round(years.get(c.id)!.elapsed * 100)}%` }} />
+                      </span>
+                      <span className="tiny muted">
+                        Public until {fmtDate(years.get(c.id)!.until)} · {years.get(c.id)!.daysLeft} days
+                      </span>
+                    </div>
+                  )}
                 </div>
               </Link>
             ))}

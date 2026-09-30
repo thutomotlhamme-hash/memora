@@ -39,6 +39,10 @@ export interface StudioFuneral {
   family: string | null;
   updatedAt: string;
   stage: Stage;
+  /** Days until the memorial's first public year ends (published memorials only). */
+  yearDaysLeft: number | null;
+  /** The family has asked to hear about the unveiling. */
+  unveilingAsked: boolean;
 }
 
 export interface StudioData {
@@ -245,6 +249,39 @@ export function Studio(d: StudioData) {
 
   // ---------------------------------------------------------------- Today
 
+  /** Families whose memorial's first year is ending: the unveiling is usually now. */
+  function FirstYears() {
+    const ending = d.funerals.filter((f) => f.yearDaysLeft !== null && f.yearDaysLeft > 0 && f.yearDaysLeft <= 90).sort((a, b) => a.yearDaysLeft! - b.yearDaysLeft!);
+    if (!ending.length) return null;
+    return (
+      <section className="st-sec">
+        <header className="st-sec-head">
+          <h2>First years ending</h2>
+          <span className="st-sub">Most families unveil the tombstone around now. A good moment to call them.</span>
+        </header>
+        <div className="st-list">
+          {ending.slice(0, 8).map((f) => (
+            <div key={f.id} className="st-row">
+              <span className="st-row-main">
+                <strong>{f.name}</strong>
+                <small>
+                  Public for {f.yearDaysLeft} more day{f.yearDaysLeft === 1 ? '' : 's'}
+                  {f.branchId && d.branches.length > 1 ? ` · ${d.branches.find((b) => b.id === f.branchId)?.name ?? ''}` : ''}
+                </small>
+              </span>
+              {f.unveilingAsked && <span className="st-pill ok">Asked about the unveiling</span>}
+              {f.slug && (
+                <Link className="btn sm" href={`/m/${f.slug}`}>
+                  Open
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   function Today() {
     const next = d.funerals.filter((f) => f.funeralDate && f.funeralDate >= d.today && f.status !== 'ARCHIVED').sort((a, b) => (a.funeralDate! + a.time).localeCompare(b.funeralDate! + b.time))[0];
     const drafts = d.funerals.filter((f) => f.status === 'DRAFT');
@@ -327,6 +364,8 @@ export function Studio(d: StudioData) {
             </div>
           </section>
         )}
+
+        <FirstYears />
 
         {persona === 'owner' && d.branches.length > 0 && <BranchesAtAGlance />}
         {persona === 'manager' && <MyArrangers />}
@@ -1190,7 +1229,7 @@ function HomeMark({ org }: { org: Org }) {
   );
 }
 
-function Widget({ label, value, note }: { label: string; value: number | string; note: string }) {
+export function Widget({ label, value, note }: { label: string; value: number | string; note: string }) {
   return (
     <div className="st-widget">
       <span>{label}</span>
@@ -1200,7 +1239,7 @@ function Widget({ label, value, note }: { label: string; value: number | string;
   );
 }
 
-function Banner({ tone, children }: { tone: 'info' | 'warn' | 'ok'; children: React.ReactNode }) {
+export function Banner({ tone, children }: { tone: 'info' | 'warn' | 'ok'; children: React.ReactNode }) {
   return (
     <div className={`st-banner ${tone}`} role="status">
       <span>{children}</span>

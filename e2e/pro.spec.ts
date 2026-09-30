@@ -92,7 +92,7 @@ test.describe('Access: signed out means no way in', () => {
   test('the access check answers "nothing" to a stranger', async ({ request }) => {
     const res = await request.get('/api/account/me');
     expect(res.ok()).toBe(true);
-    expect(await res.json()).toEqual({ signedIn: false, team: false, pro: false });
+    expect(await res.json()).toEqual({ signedIn: false, team: false, pro: false, group: false });
   });
 
   test('a funeral home’s dashboard link for a specific home still needs a login', async ({ page }) => {
@@ -195,5 +195,45 @@ test.describe('Onboarding and family links', () => {
   test('the memorials board filters can’t be opened by address', async ({ page }) => {
     await page.goto('/admin?tab=memorials&status=draft');
     await expect(page.locator('.cc-mem-section')).toHaveCount(0);
+  });
+});
+
+test.describe('Memora Enterprise: the group layer', () => {
+  test('the group control centre never shows to someone signed out', async ({ page }) => {
+    await page.goto('/pro/group');
+    await expect(page.getByText(/Not switched on yet|Log in|log in/).first()).toBeVisible();
+    await expect(page.getByText('Needs attention')).toHaveCount(0);
+  });
+
+  test('group actions, reports and templates refuse anyone without access', async ({ request, baseURL }) => {
+    const headers = { origin: baseURL! };
+    const acct = '00000000-0000-0000-0000-000000000000';
+    for (const action of ['account.brand', 'region.create', 'branch.bulk', 'people.bulk', 'template.save', 'apikey.create']) {
+      const res = await request.post('/api/group/actions', { data: { action, accountId: acct }, headers });
+      expect([401, 403, 503], action).toContain(res.status());
+    }
+    const provision = await request.post('/api/admin/actions', { data: { action: 'account.provision', name: 'Sneaky Group', structure: 'A > B > C' }, headers });
+    expect([401, 403, 404]).toContain(provision.status());
+    const contract = await request.post('/api/admin/actions', { data: { action: 'account.contract', accountId: acct, monthly: '1' }, headers });
+    expect([401, 403, 404]).toContain(contract.status());
+    const csv = await request.get(`/api/group/report?account=${acct}`);
+    expect([401, 403, 503]).toContain(csv.status());
+    const templates = await request.get(`/api/memorials/${acct}/templates`);
+    expect([200, 401, 404]).toContain(templates.status());
+    if (templates.status() === 200) expect((await templates.json()).templates).toEqual([]);
+    const logo = await request.post('/api/pro/logo', { multipart: { accountId: acct }, headers });
+    expect([401, 403, 503]).toContain(logo.status());
+  });
+
+  test('a group invite link that isn’t real says so', async ({ page }) => {
+    await page.goto('/join/not-a-real-token');
+    await expect(page.getByText(/isn’t working|Not switched on/).first()).toBeVisible();
+  });
+});
+
+test.describe('The first year and the unveiling', () => {
+  test('asking about the unveiling needs the family to be signed in', async ({ request, baseURL }) => {
+    const res = await request.post('/api/memorials/00000000-0000-0000-0000-000000000000/unveiling', { data: {}, headers: { origin: baseURL! } });
+    expect([401, 403, 404, 503]).toContain(res.status());
   });
 });

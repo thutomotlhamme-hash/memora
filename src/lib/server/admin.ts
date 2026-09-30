@@ -9,6 +9,7 @@ import { PRODUCT } from '../plans';
 import { can, type Permission, type Principal } from '../rbac';
 import { createResetLink, findAccountId, guardAccount, revokeResetLinks, setSuspended } from './accounts';
 import { isProAction, performProAction } from './pro';
+import { ENTERPRISE_ACTIONS, performEnterpriseAction } from './enterprise';
 import { loadPrincipal } from './access';
 import { accountLabel, isPhoneLogin, loginAddress } from '../account-id';
 import { ownerEmails } from './admin-auth';
@@ -202,6 +203,7 @@ const ACTION_PERMISSION: Record<string, Permission> = {
 };
 
 export async function performAdminAction(admin: SupabaseClient, actor: { id: string; email: string }, principal: Principal, input: AdminActionInput): Promise<Result> {
+  if (ENTERPRISE_ACTIONS.has(input.action)) return performEnterpriseAction(admin, principal, input);
   if (isProAction(input.action)) return performProAction(admin, principal, input);
   const needed = ACTION_PERMISSION[input.action];
   if (!needed) return { ok: false, error: 'Unknown action.', status: 400 };

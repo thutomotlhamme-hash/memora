@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { accountLabel, isPhoneLogin } from '../account-id';
 import { siteUrl } from '../config';
 import { PRO_PLANS, isProPlan, type ProPlan } from '../plans';
-import { can, canIn, type Principal } from '../rbac';
+import { can, canAccount, canIn, type Principal } from '../rbac';
 import { linkSecret, signGiftToken, verifyGiftToken } from './links';
 import { createOrg, log, type ProInput, type ProResult } from './pro';
 
@@ -15,7 +15,7 @@ import { createOrg, log, type ProInput, type ProResult } from './pro';
 //           it belongs to the home, and the home's staff can edit, publish and run it.
 // Each link works once, can be revoked, and expires.
 
-export type InviteKind = 'org' | 'family';
+export type InviteKind = 'org' | 'family' | 'account';
 export type InviteState = 'open' | 'used' | 'expired' | 'revoked';
 
 export interface Invite {
@@ -24,6 +24,10 @@ export interface Invite {
   orgId: string | null;
   orgName: string;
   branchId: string | null;
+  /** Enterprise invites: the group, and the team they join. */
+  accountId: string | null;
+  accountName: string;
+  groupName: string;
   plan: ProPlan | null;
   label: string;
   createdAt: string;
@@ -35,7 +39,7 @@ export interface Invite {
   url: string;
 }
 
-const DAYS: Record<InviteKind, number> = { org: 14, family: 30 };
+const DAYS: Record<InviteKind, number> = { org: 14, family: 30, account: 14 };
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
 const text = (v: unknown, max = 120) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 type Row = Record<string, any>;
@@ -57,6 +61,9 @@ function toInvite(r: Row, labels: Map<string, string>): Invite {
     orgId: r.org_id,
     orgName: org?.name ?? '',
     branchId: r.branch_id ?? null,
+    accountId: r.account_id ?? null,
+    accountName: ((Array.isArray(r.memora_accounts) ? r.memora_accounts[0] : r.memora_accounts) as Row | null)?.name ?? '',
+    groupName: ((Array.isArray(r.memora_groups) ? r.memora_groups[0] : r.memora_groups) as Row | null)?.name ?? '',
     plan: isProPlan(r.plan) ? r.plan : null,
     label: r.label ?? '',
     createdAt: r.created_at,
@@ -125,7 +132,7 @@ export async function revokeInvite(admin: SupabaseClient, actor: Principal, inpu
   if (!uuid(input.id)) return { ok: false, error: 'Link not found.', status: 404 };
   const { data: r } = await admin.from('memora_invites').select('*').eq('id', input.id).maybeSingle();
   if (!r) return { ok: false, error: 'Link not found.', status: 404 };
-  const allowed = r.kind === 'org' ? can(actor, 'orgs.manage') : canIn(actor, 'org.memorials.create', r.org_id, r.branch_id);
+  const allowed = r.kind === 'org' ? can(actor, 'orgs.manage') : r.kind === 'account' ? canAccount(actor, 'group.people', r.account_id) : canIn(actor, 'org.memorials.create', r.org_id, r.branch_id);
   if (!allowed) return { ok: false, error: 'You don’t have permission to do that.', status: 403 };
   if (r.used_at) return { ok: false, error: 'That link has already been used.', status: 409 };
   await admin.from('memora_invites').update({ revoked_at: new Date().toISOString() }).eq('id', r.id);
@@ -136,18 +143,19 @@ export async function revokeInvite(admin: SupabaseClient, actor: Principal, inpu
 export type OpenedInvite =
   | { state: 'invalid' }
   | { state: 'used' | 'expired' | 'revoked'; invite: Invite }
-  | { state: 'open'; invite: Invite; orgStatus: string | null };
+  | { state: 'open'; invite: Invite; orgStatus: string | null; accountStatus?: string | null };
 
 /** What a link leads to. Never throws; a bad link is just "invalid". */
 export async function openInvite(admin: SupabaseClient, token: string): Promise<OpenedInvite> {
   const id = verifyGiftToken('invite', token);
   if (!id) return { state: 'invalid' };
-  const { data: r } = await admin.from('memora_invites').select('*, memora_orgs(name,status)').eq('id', id).maybeSingle();
+  const { data: r } = await admin.from('memora_invites').select('*, memora_orgs(name,status), memora_accounts(name,status), memora_groups(name)').eq('id', id).maybeSingle();
   if (!r) return { state: 'invalid' };
   const invite = toInvite(r, new Map());
   if (invite.state !== 'open') return { state: invite.state, invite };
   const org = (Array.isArray(r.memora_orgs) ? r.memora_orgs[0] : r.memora_orgs) as Row | null;
-  return { state: 'open', invite, orgStatus: org?.status ?? null };
+  const acc = (Array.isArray(r.memora_accounts) ? r.memora_accounts[0] : r.memora_accounts) as Row | null;
+  return { state: 'open', invite, orgStatus: org?.status ?? null, accountStatus: acc?.status ?? null };
 }
 
 type Accepted = { ok: true; redirect: string } | { ok: false; error: string; status: number };
@@ -182,6 +190,19 @@ export async function acceptInvite(
       .select('id');
     return Boolean(data?.length);
   };
+
+  if (invite.kind === 'account') {
+    // Joining an Enterprise group's team (e.g. its first administrators).
+    if (opened.accountStatus === 'suspended' || opened.accountStatus === 'closed') return { ok: false, error: 'This group’s Memora is switched off. Contact Memora.', status: 403 };
+    const { data: inv } = await admin.from('memora_invites').select('group_id,account_id').eq('id', invite.id).maybeSingle();
+    if (!inv?.group_id) return { ok: false, error: 'This link isn’t valid. Ask for a new one.', status: 404 };
+    if (!(await claim({}))) return { ok: false, error: 'This link has just been used. Ask for a new one.', status: 409 };
+    await admin.from('memora_group_members').upsert({ group_id: inv.group_id, user_id: user.id, added_by: user.id }, { onConflict: 'group_id,user_id', ignoreDuplicates: true });
+    await admin
+      .from('memora_activity_log')
+      .insert({ actor_user_id: user.id, action: 'ADMIN_MEMBER_JOINED', metadata: { group: invite.groupName, who: accountLabel(user.email) }, account_id: inv.account_id });
+    return { ok: true, redirect: `/pro/group?account=${inv.account_id}&welcome=1` };
+  }
 
   if (invite.kind === 'family') {
     if (opened.orgStatus === 'disabled') return { ok: false, error: 'This funeral home’s Memora is switched off. Contact the funeral home.', status: 403 };

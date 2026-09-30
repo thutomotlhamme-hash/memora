@@ -14,7 +14,7 @@ import { JourneyTimeline, ProgrammeTimeline } from './MemorialTimelines';
  * With `live`, the funeral-day parts follow the coordinator's run-sheet.
  */
 /** A funeral home's branding, when the memorial belongs to one. */
-export type HomeBrand = { name: string; logoUrl: string; brandColour: string } | null;
+export type HomeBrand = { name: string; logoUrl: string; brandColour: string; footer?: string } | null;
 
 export function MemorialView({
   draft,
@@ -50,6 +50,7 @@ export function MemorialView({
           {brand.logoUrl && <img src={brand.logoUrl} alt="" />}
           <span>
             Arranged with care by <strong>{brand.name}</strong>
+            {brand.footer ? <small className="m-brand-footer">{brand.footer}</small> : null}
           </span>
         </div>
       )}

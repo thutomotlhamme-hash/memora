@@ -18,7 +18,7 @@ async function join(token: string, details: Record<string, string> = {}): Promis
 }
 
 /** A family starting their memorial under the funeral home: one tap. */
-export function StartFamilyMemorial({ token }: { token: string }) {
+export function StartFamilyMemorial({ token, label = 'Start the memorial', busyLabel = 'Starting…' }: { token: string; label?: string; busyLabel?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -44,7 +44,7 @@ export function StartFamilyMemorial({ token }: { token: string }) {
           }
         }}
       >
-        {busy ? 'Starting…' : 'Start the memorial'}
+        {busy ? busyLabel : label}
       </button>
     </>
   );

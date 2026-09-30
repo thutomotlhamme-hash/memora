@@ -7,6 +7,8 @@ import { PRO_PLANS, billableUsage, isProPlan, periodOf, proInvoice, type ProPlan
 import { ALL_ROLES, ROLES, can, canGrantRole, canIn, isRole, type Permission, type Principal, type Role } from '../rbac';
 import { createInvite, revokeInvite } from './invites';
 import { refreshPublicPages } from './public-cache';
+import { generateAccountInvoices } from './enterprise';
+import { lockedParts, type BrandPart } from '../enterprise';
 
 type Row = Record<string, any>;
 export type ProInput = Record<string, unknown> & { action: string };
@@ -115,14 +117,17 @@ export interface Group {
   description: string;
   orgId: string | null;
   branchId: string | null;
+  accountId: string | null;
+  regionId: string | null;
   roles: Role[];
   active: boolean;
   members: { userId: string; label: string; name: string; addedAt: string }[];
 }
 
-export async function loadGroups(admin: SupabaseClient, orgId?: string | null): Promise<Group[]> {
+export async function loadGroups(admin: SupabaseClient, orgId?: string | null, accountId?: string): Promise<Group[]> {
   let q = admin.from('memora_groups').select('*').order('name');
-  if (orgId !== undefined) q = orgId === null ? q.is('org_id', null) : q.eq('org_id', orgId);
+  if (accountId) q = q.eq('account_id', accountId);
+  else if (orgId !== undefined) q = orgId === null ? q.is('org_id', null).is('account_id', null) : q.eq('org_id', orgId);
   const [{ data: groups }, { data: people }] = await Promise.all([q, admin.rpc('memora_group_people')]);
   const byGroup = new Map<string, Group['members']>();
   for (const p of (people ?? []) as Row[]) {
@@ -136,6 +141,8 @@ export async function loadGroups(admin: SupabaseClient, orgId?: string | null): 
     description: g.description,
     orgId: g.org_id,
     branchId: g.branch_id ?? null,
+    accountId: g.account_id ?? null,
+    regionId: g.region_id ?? null,
     roles: ((g.roles ?? []) as string[]).filter(isRole),
     active: g.active,
     members: byGroup.get(g.id) ?? [],
@@ -208,8 +215,13 @@ export async function loadAudit(admin: SupabaseClient, limit = 150): Promise<{ a
 // Writing
 // ---------------------------------------------------------------------------
 
-export async function log(admin: SupabaseClient, actorId: string, action: string, metadata: Record<string, unknown>, caseId: string | null = null) {
-  await admin.from('memora_activity_log').insert({ case_id: caseId, actor_user_id: actorId, action: `ADMIN_${action}`, metadata });
+/** One audit entry: who did what, to what (and in which group and home, so each group sees its own). */
+export async function log(admin: SupabaseClient, actorId: string, action: string, metadata: Record<string, unknown>, caseId: string | null = null, scope: { accountId?: string | null; orgId?: string | null } = {}) {
+  let orgId = scope.orgId ?? (typeof metadata.org === 'string' && /^[0-9a-f-]{36}$/i.test(metadata.org) ? metadata.org : null);
+  let accountId = scope.accountId ?? null;
+  if (!orgId && caseId) orgId = ((await admin.from('memora_cases').select('org_id').eq('id', caseId).maybeSingle()).data?.org_id as string | undefined) ?? null;
+  if (!accountId && orgId) accountId = ((await admin.from('memora_orgs').select('account_id').eq('id', orgId).maybeSingle()).data?.account_id as string | undefined) ?? null;
+  await admin.from('memora_activity_log').insert({ case_id: caseId, actor_user_id: actorId, action: `ADMIN_${action}`, metadata, org_id: orgId, account_id: accountId });
 }
 
 async function findAccount(admin: SupabaseClient, who: string): Promise<{ id: string; email: string } | null> {
@@ -220,11 +232,11 @@ async function findAccount(admin: SupabaseClient, who: string): Promise<{ id: st
   return row?.id ? { id: String(row.id), email: String(row.email) } : null;
 }
 
-async function uniqueSlug(admin: SupabaseClient, name: string): Promise<string> {
+export async function uniqueSlug(admin: SupabaseClient, name: string, table: 'memora_orgs' | 'memora_accounts' = 'memora_orgs'): Promise<string> {
   const base = (slugify(name) || 'funeral-home').slice(0, 50);
   for (let i = 0; i < 20; i++) {
     const slug = i === 0 ? base : `${base}-${i + 1}`;
-    const { data } = await admin.from('memora_orgs').select('id').eq('slug', slug).maybeSingle();
+    const { data } = await admin.from(table).select('id').eq('slug', slug).maybeSingle();
     if (!data) return slug;
   }
   return `${base}-${Date.now().toString(36)}`;
@@ -373,8 +385,14 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       const colour = text(input.brandColour, 7);
       if (logo && !/^https:\/\//.test(logo)) return { ok: false, error: 'The logo must be an https:// link.', status: 400 };
       if (colour && !/^#[0-9a-fA-F]{6}$/.test(colour)) return { ok: false, error: 'Use a colour like #5B3E8C.', status: 400 };
+      // In a group with brand governance, head office's locked parts can't be changed here.
+      const { data: cur } = await admin.from('memora_orgs').select('logo_url,brand_colour,memora_accounts(brand_locks,modules)').eq('id', input.id).maybeSingle();
+      const acc = (Array.isArray(cur?.memora_accounts) ? cur?.memora_accounts[0] : cur?.memora_accounts) as { brand_locks?: string[]; modules?: string[] } | null | undefined;
+      const locks = acc?.modules?.includes('brand_governance') ? ((acc.brand_locks ?? []) as BrandPart[]) : [];
+      const blocked = cur ? lockedParts({ logoUrl: logo, brandColour: colour }, { logoUrl: cur.logo_url, brandColour: cur.brand_colour }, locks) : [];
+      if (blocked.length) return { ok: false, error: `Your group sets the ${blocked.join(' and ')} for every home. Ask head office to change it.`, status: 403 };
       await admin.from('memora_orgs').update({ logo_url: logo, brand_colour: colour, updated_at: now }).eq('id', input.id);
-      await log(admin, actor.userId, 'ORG_BRANDING', { org: input.id });
+      await log(admin, actor.userId, 'ORG_BRANDING', { org: input.id, before: { logo: cur?.logo_url ? 'set' : 'none', colour: cur?.brand_colour ?? '' }, after: { logo: logo ? 'set' : 'none', colour } });
       refreshPublicPages();
       return { ok: true, message: 'Branding saved. It shows on your memorials straight away.' };
     }
@@ -443,7 +461,8 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     // ---- Billing ----
     case 'invoice.generate': {
       const period = typeof input.period === 'string' && /^\d{4}-\d{2}$/.test(input.period) ? input.period : periodOf();
-      const { data: orgs } = await admin.from('memora_orgs').select('*').neq('status', 'disabled');
+      // Homes in an Enterprise group are billed once, through the group's contract.
+      const { data: orgs } = await admin.from('memora_orgs').select('*').neq('status', 'disabled').is('account_id', null);
       const [usage, adjustments] = await Promise.all([usageFor(admin, period), adjustmentsFor(admin, period)]);
       const { data: existing } = await admin.from('memora_org_invoices').select('org_id,period,status');
       // Onboarding goes on a home's first invoice; re-making this month's draft keeps it there.
@@ -475,8 +494,15 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
         );
         made++;
       }
-      await log(admin, actor.userId, 'INVOICES_GENERATED', { period, invoices: made });
-      return { ok: true, message: made ? `${made} draft invoice${made === 1 ? '' : 's'} for ${period}. Homes in trial aren’t billed.` : 'No active funeral homes to bill.' };
+      const groups = await generateAccountInvoices(admin, period, now);
+      await log(admin, actor.userId, 'INVOICES_GENERATED', { period, invoices: made, groupInvoices: groups });
+      return {
+        ok: true,
+        message:
+          made || groups
+            ? `${made} funeral-home draft${made === 1 ? '' : 's'}${groups ? ` and ${groups} Enterprise draft${groups === 1 ? '' : 's'}` : ''} for ${period}. Homes in trial aren’t billed.`
+            : 'No active funeral homes or groups to bill.',
+      };
     }
     case 'billing.adjust': {
       if (!uuid(input.orgId)) return { ok: false, error: 'Funeral home not found.', status: 404 };
@@ -505,6 +531,12 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     case 'group.create': {
       const orgId = uuid(input.orgId) ? input.orgId : null;
       const branchId = orgId && uuid(input.branchId) ? input.branchId : null;
+      const accountId = !orgId && uuid(input.accountId) ? input.accountId : null;
+      const regionId = accountId && uuid(input.regionId) ? input.regionId : null;
+      if (regionId) {
+        const { data: r } = await admin.from('memora_regions').select('account_id').eq('id', regionId).maybeSingle();
+        if (r?.account_id !== accountId) return { ok: false, error: 'Region not found.', status: 404 };
+      }
       if (branchId) {
         const { data: b } = await admin.from('memora_branches').select('org_id').eq('id', branchId).maybeSingle();
         if (b?.org_id !== orgId) return { ok: false, error: 'Branch not found.', status: 404 };
@@ -514,11 +546,11 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       if (name.length < 2) return { ok: false, error: 'Name the group.', status: 400 };
       if (!roles.length) return { ok: false, error: 'Give the group at least one role.', status: 400 };
       for (const r of roles)
-        if (!canGrantRole(actor, r, orgId, branchId))
+        if (!canGrantRole(actor, r, orgId, branchId, { accountId, regionId }))
           return deny(`You can’t give the ${ROLES[r].label} role ${ROLES[r].scope === 'org' ? (branchId ? 'in this branch' : 'home-wide (managers and arrangers belong to a branch)') : ''}.`);
-      const { error } = await admin.from('memora_groups').insert({ name, roles, org_id: orgId, branch_id: branchId, description: text(input.description, 300) });
+      const { error } = await admin.from('memora_groups').insert({ name, roles, org_id: orgId, branch_id: branchId, account_id: accountId, region_id: regionId, description: text(input.description, 300) });
       if (error) return { ok: false, error: error.code === '23505' ? 'A group with that name already exists.' : 'Could not create the group.', status: 409 };
-      await log(admin, actor.userId, 'GROUP_CREATED', { name, roles, org: orgId ?? 'Memora' });
+      await log(admin, actor.userId, 'GROUP_CREATED', { name, roles, org: orgId ?? (accountId ? 'group' : 'Memora') }, null, { accountId, orgId });
       return { ok: true, message: `Group “${name}” created. Add people to it.` };
     }
     case 'group.update':
@@ -530,7 +562,8 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       if (!g) return { ok: false, error: 'Group not found.', status: 404 };
       const current = ((g.roles ?? []) as string[]).filter(isRole);
       // Changing a group needs the right to give every role it holds (before and after).
-      const mayManage = (roles: Role[]) => roles.every((r) => canGrantRole(actor, r, g.org_id, g.branch_id ?? null));
+      const mayManage = (roles: Role[]) => roles.every((r) => canGrantRole(actor, r, g.org_id, g.branch_id ?? null, { accountId: g.account_id ?? null, regionId: g.region_id ?? null }));
+      const scope = { accountId: (g.account_id as string | null) ?? null, orgId: (g.org_id as string | null) ?? null };
       if (!mayManage(current)) return deny('You can’t change a group that holds roles you can’t give.');
 
       if (input.action === 'group.update') {
@@ -542,12 +575,12 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
         if (typeof input.description === 'string') patch.description = text(input.description, 300);
         if (typeof input.active === 'boolean') patch.active = input.active;
         await admin.from('memora_groups').update(patch).eq('id', g.id);
-        await log(admin, actor.userId, 'GROUP_UPDATED', { group: g.name, roles, active: patch.active ?? g.active });
+        await log(admin, actor.userId, 'GROUP_UPDATED', { group: g.name, before: { roles: current, active: g.active }, after: { roles, active: patch.active ?? g.active } }, null, scope);
         return { ok: true, message: 'Group saved. Members’ access changes on their next page.' };
       }
       if (input.action === 'group.delete') {
         await admin.from('memora_groups').delete().eq('id', g.id);
-        await log(admin, actor.userId, 'GROUP_DELETED', { group: g.name });
+        await log(admin, actor.userId, 'GROUP_DELETED', { group: g.name, roles: current }, null, scope);
         return { ok: true, message: `Deleted “${g.name}”. Its members lost its roles.` };
       }
       if (input.action === 'group.addMember') {
@@ -555,13 +588,14 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
         if (!account) return { ok: false, error: 'No account uses that number or email. Ask them to create their Memora account first.', status: 404 };
         const { error } = await admin.from('memora_group_members').insert({ group_id: g.id, user_id: account.id, added_by: actor.userId });
         if (error) return { ok: false, error: error.code === '23505' ? 'Already in this group.' : 'Could not add them.', status: 409 };
-        await log(admin, actor.userId, 'MEMBER_ADDED', { group: g.name, who: accountLabel(account.email) });
+        await log(admin, actor.userId, 'MEMBER_ADDED', { group: g.name, roles: current, who: accountLabel(account.email) }, null, scope);
         return { ok: true, message: `Added ${accountLabel(account.email)} to ${g.name}.` };
       }
       if (!uuid(input.userId)) return { ok: false, error: 'Person not found.', status: 404 };
       if (input.userId === actor.userId && current.includes('platform_admin')) return { ok: false, error: 'You can’t remove yourself from the administrators.', status: 400 };
       await admin.from('memora_group_members').delete().eq('group_id', g.id).eq('user_id', input.userId);
-      await log(admin, actor.userId, 'MEMBER_REMOVED', { group: g.name, who: input.userId });
+      const { data: gone } = await admin.auth.admin.getUserById(input.userId);
+      await log(admin, actor.userId, 'MEMBER_REMOVED', { group: g.name, roles: current, who: gone?.user?.email ? accountLabel(gone.user.email) : input.userId }, null, scope);
       return { ok: true, message: 'Removed. Their access changes on their next page.' };
     }
 
@@ -569,10 +603,18 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
     case 'branch.create': {
       if (!uuid(input.orgId) || !canIn(actor, 'org.branches', input.orgId, null)) return deny('Only the funeral home’s owner can add branches.');
       const [{ data: home }, { count: have }] = await Promise.all([
-        admin.from('memora_orgs').select('branches,plan').eq('id', input.orgId).maybeSingle(),
+        admin.from('memora_orgs').select('branches,plan,account_id,memora_accounts(branch_allowance)').eq('id', input.orgId).maybeSingle(),
         admin.from('memora_branches').select('id', { count: 'exact', head: true }).eq('org_id', input.orgId),
       ]);
-      if (home && (have ?? 0) >= home.branches)
+      const group = (Array.isArray(home?.memora_accounts) ? home?.memora_accounts[0] : home?.memora_accounts) as { branch_allowance: number | null } | null | undefined;
+      if (home?.account_id) {
+        // A group's homes share the branch allowance in its contract.
+        if (group?.branch_allowance) {
+          const { data: homes } = await admin.from('memora_orgs').select('id').eq('account_id', home.account_id);
+          const { count: all } = await admin.from('memora_branches').select('id', { count: 'exact', head: true }).in('org_id', ((homes ?? []) as Row[]).map((h) => h.id));
+          if ((all ?? 0) >= group.branch_allowance) return { ok: false, error: `The group’s agreement covers ${group.branch_allowance} branches. Talk to Memora to add more.`, status: 409 };
+        }
+      } else if (home && (have ?? 0) >= home.branches)
         return { ok: false, error: `Your plan includes ${home.branches} branch${home.branches === 1 ? '' : 'es'}. Talk to Memora to add more.`, status: 409 };
       const out = await createBranch(admin, input.orgId, text(input.name, 80), text(input.area, 120));
       if (!out.ok) return out;

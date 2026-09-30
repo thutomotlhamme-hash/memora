@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { readiness, slugify, type CaseMeta, type Draft } from '../memorial';
+import { resolveBrand, type BrandPart } from '../enterprise';
 import { archiveDate, periodOf } from '../plans';
 import { loadCaseById } from './cases';
 import { refreshPublicPages } from './public-cache';
@@ -10,7 +11,7 @@ import { refreshPublicPages } from './public-cache';
 // on them through their roles, not through owning them, so these helpers run
 // with the service role after the caller has checked the permission.
 
-export type OrgBrand = { id: string; name: string; logoUrl: string; brandColour: string };
+export type OrgBrand = { id: string; name: string; logoUrl: string; brandColour: string; footer: string };
 
 /** The funeral home a memorial belongs to, and whether that home can still act. */
 export async function caseOrg(admin: SupabaseClient, caseId: string): Promise<{ orgId: string; branchId: string | null; status: string } | null> {
@@ -20,12 +21,27 @@ export async function caseOrg(admin: SupabaseClient, caseId: string): Promise<{ 
   return { orgId: data.org_id as string, branchId: (data.branch_id as string | null) ?? null, status: (org as { status?: string } | null)?.status ?? 'disabled' };
 }
 
-/** Branding for guests' pages; none when the home is disabled. */
+/**
+ * Branding for guests' pages; none when the home is disabled or its group is
+ * suspended. In an Enterprise group, the group's locked brand parts win.
+ */
 export async function orgBrand(admin: SupabaseClient, caseId: string): Promise<OrgBrand | null> {
-  const { data } = await admin.from('memora_cases').select('memora_orgs(id,name,logo_url,brand_colour,status)').eq('id', caseId).maybeSingle();
-  const o = (Array.isArray(data?.memora_orgs) ? data?.memora_orgs[0] : data?.memora_orgs) as Record<string, string> | null | undefined;
+  const { data } = await admin
+    .from('memora_cases')
+    .select('memora_orgs(id,name,logo_url,brand_colour,status,memora_accounts(logo_url,brand_colour,brand_footer,brand_locks,status,modules))')
+    .eq('id', caseId)
+    .maybeSingle();
+  const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+  const o = one(data?.memora_orgs as Record<string, any> | Record<string, any>[] | null);
   if (!o || o.status === 'disabled') return null;
-  return { id: o.id, name: o.name, logoUrl: o.logo_url, brandColour: o.brand_colour };
+  const g = one(o.memora_accounts as Record<string, any> | Record<string, any>[] | null);
+  if (g && (g.status === 'suspended' || g.status === 'closed')) return null;
+  const governed = g && ((g.modules ?? []) as string[]).includes('brand_governance');
+  const b = resolveBrand(
+    { name: o.name, logoUrl: o.logo_url, brandColour: o.brand_colour },
+    g ? { logoUrl: g.logo_url, brandColour: g.brand_colour, footer: g.brand_footer ?? '', locks: governed ? ((g.brand_locks ?? []) as BrandPart[]) : [] } : null,
+  );
+  return { id: o.id, name: b.name, logoUrl: b.logoUrl, brandColour: b.brandColour, footer: b.footer };
 }
 
 /**

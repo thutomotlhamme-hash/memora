@@ -11,7 +11,10 @@ export type Field =
   | { name: string; label: string; type: 'text' | 'tel' | 'email' | 'date' | 'money'; value?: string; placeholder?: string; required?: boolean; hint?: string }
   | { name: string; label: string; type: 'select'; value?: string; options: { value: string; label: string }[]; hint?: string }
   | { name: string; label: string; type: 'checkbox'; value?: boolean; hint?: string }
-  | { name: string; label: string; type: 'multi'; value?: string[]; options: { value: string; label: string; hint?: string; disabled?: boolean }[]; hint?: string };
+  | { name: string; label: string; type: 'multi'; value?: string[]; options: { value: string; label: string; hint?: string; disabled?: boolean }[]; hint?: string }
+  | { name: string; label: string; type: 'textarea'; value?: string; placeholder?: string; required?: boolean; hint?: string; rows?: number }
+  /** A step heading inside a long form (not a field). */
+  | { name: string; label: string; type: 'heading'; hint?: string };
 
 export function ActionForm({
   action,
@@ -38,7 +41,9 @@ export function ActionForm({
   const uid = useId();
   const router = useRouter();
   const toast = useToast();
-  const initial = () => Object.fromEntries(fields.map((f) => [f.name, f.value ?? (f.type === 'multi' ? [] : f.type === 'checkbox' ? false : '')])) as Record<string, unknown>;
+  const initial = () =>
+    Object.fromEntries(fields.filter((f) => f.type !== 'heading').map((f) => [f.name, ('value' in f ? f.value : undefined) ?? (f.type === 'multi' ? [] : f.type === 'checkbox' ? false : '')])) as Record<string, unknown>;
+  const [secret, setSecret] = useState('');
   const [values, setValues] = useState<Record<string, unknown>>(initial);
   const [busy, setBusy] = useState(false);
   const set = (name: string, v: unknown) => setValues((s) => ({ ...s, [name]: v }));
@@ -61,12 +66,48 @@ export function ActionForm({
         toast(out?.message || out?.error || (ok ? 'Done.' : 'That didn’t work.'), ok ? 'info' : 'error');
         if (ok) {
           if (reset) setValues(initial());
-          router.refresh();
+          if (typeof out?.secret === 'string') setSecret(out.secret);
+          if (typeof out?.redirect === 'string' && out.redirect.startsWith('/')) router.push(out.redirect);
+          else router.refresh();
         }
       }}
     >
+      {secret && (
+        <div className="note ok af-secret" role="status">
+          <span>
+            <strong>Copy this key now. It won’t be shown again.</strong>
+            <code>{secret}</code>
+          </span>
+          <button type="button" className="btn sm" onClick={() => navigator.clipboard.writeText(secret).then(() => toast('Key copied.'))}>
+            Copy
+          </button>
+        </div>
+      )}
       {fields.map((f) => {
         const id = `${uid}-${f.name}`;
+        if (f.type === 'heading')
+          return (
+            <div key={f.name} className="af-heading">
+              <strong>{f.label}</strong>
+              {f.hint && <span>{f.hint}</span>}
+            </div>
+          );
+        if (f.type === 'textarea')
+          return (
+            <div className="field af-wide" key={f.name}>
+              <label htmlFor={id}>{f.label}</label>
+              <textarea
+                id={id}
+                className="input textarea"
+                rows={f.rows ?? 4}
+                value={String(values[f.name] ?? '')}
+                placeholder={f.placeholder}
+                required={f.required}
+                onChange={(e) => set(f.name, e.target.value)}
+              />
+              {f.hint && <span className="hint">{f.hint}</span>}
+            </div>
+          );
         if (f.type === 'checkbox')
           return (
             <label key={f.name} className="af-check">

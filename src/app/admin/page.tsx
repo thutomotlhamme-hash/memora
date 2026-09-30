@@ -11,6 +11,7 @@ import { PRO_PLANS, formatMoney } from '@/lib/plans';
 import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, setupChecks, teamInviteText, teamJoinText } from '@/lib/server/admin';
 import { getAdminAccess } from '@/lib/server/admin-auth';
 import { AccessPanel, AssignHome, AuditPanel, BillingPanel, HomesPanel } from '@/components/admin/CommandPanels';
+import { EnterprisePanel } from '@/components/admin/EnterprisePanel';
 import { PeoplePanel } from '@/components/admin/PeoplePanel';
 import { ROLES, can, type Permission } from '@/lib/rbac';
 import { loadOrgs } from '@/lib/server/pro';
@@ -24,6 +25,7 @@ export const metadata = { title: 'Command centre', robots: { index: false } };
 const TABS = [
   ['overview', 'Needs attention', 'ops.view'],
   ['homes', 'Funeral homes', 'ops.view'],
+  ['enterprise', 'Enterprise', 'ops.view'],
   ['memorials', 'Memorials', 'memorials.view_all'],
   ['gifts', 'Gifts', 'gifts.manage'],
   ['payments', 'Payments', 'orders.manage'],
@@ -38,7 +40,7 @@ const wa = (digits: string, text: string) => `https://wa.me/${digits}?text=${enc
 const when = (iso: string | null | undefined) => (iso ? fmtDate(String(iso).slice(0, 10)) : '—');
 const inDays = (d: number | null) => (d == null ? '' : d < 0 ? 'passed' : d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`);
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; status?: string; q?: string; id?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; status?: string; q?: string; id?: string; bp?: string }> }) {
   const access = await getAdminAccess();
 
   // ---- Unhappy paths: every visitor gets a clear, safe answer. ----
@@ -112,6 +114,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {tab === 'memorials' && (await renderMemorials())}
         {tab === 'payments' && (await renderPayments())}
         {tab === 'homes' && <HomesPanel admin={admin} p={p} />}
+        {tab === 'enterprise' && <EnterprisePanel admin={admin} p={p} bp={(await searchParams).bp} />}
         {tab === 'people' && <PeoplePanel admin={admin} p={p} q={(await searchParams).q} id={(await searchParams).id} />}
         {tab === 'billing' && <BillingPanel admin={admin} />}
         {tab === 'access' && (
@@ -127,6 +130,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   async function renderOverview() {
     const o = await loadOverview(admin);
+    // Families asking about the unveiling: the first customers for Memora's events.
+    const { data: unveil } = await admin
+      .from('memora_event_interest')
+      .select('case_id,kind,planned_for,created_at,memora_cases(slug,archive_at,memora_people(first_name,last_name,preferred_name))')
+      .order('created_at', { ascending: false })
+      .limit(40);
+    const unveilings = ((unveil ?? []) as Record<string, any>[]).map((r) => {
+      const c = Array.isArray(r.memora_cases) ? r.memora_cases[0] : r.memora_cases;
+      const pp = c ? (Array.isArray(c.memora_people) ? c.memora_people[0] : c.memora_people) : null;
+      return { id: `${r.case_id}-${r.kind}`, kind: r.kind as string, plannedFor: r.planned_for as string | null, name: [pp?.preferred_name || pp?.first_name, pp?.last_name].filter(Boolean).join(' ') || 'A memorial', slug: c?.slug as string | null, until: c?.archive_at as string | null };
+    });
     const nothing = !o.urgent.length && !o.paidNotPublished.length && !o.stuckOrders.length && !o.stuckGifts.length && !o.giftsNotStarted.length;
     const setup = setupChecks();
     const missing = setup.filter((c) => !c.ok && !c.needed.startsWith('Optional'));
@@ -214,6 +228,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span className="row">
                 <strong>{g.buyer_name}</strong> <span className="muted">for {g.recipient_name}</span>
                 <AdminAction action="gift.recheck" id={g.id} label="Check with Yoco" />
+              </span>
+            </div>
+          ))}
+        </Section>
+        <Section title="Families asking about the unveiling" hint="They want to hear when unveiling pages are ready. The first customers for events." show={unveilings.length > 0}>
+          {unveilings.map((u) => (
+            <div className="kv" key={u.id}>
+              <span>{u.plannedFor ? `Unveiling ${fmtDate(u.plannedFor)}` : 'Date not set'}</span>
+              <span>
+                <strong>{u.name}</strong> <span className="muted">· {u.kind === 'extend' ? 'wants another year' : 'unveiling'} · public until {when(u.until)}</span>
+                {u.slug && <Link href={`/m/${u.slug}`}> Open →</Link>}
               </span>
             </div>
           ))}

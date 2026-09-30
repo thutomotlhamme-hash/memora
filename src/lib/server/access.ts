@@ -3,7 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cache } from 'react';
 import { normaliseCellphone, phoneLoginEmail } from '../account-id';
-import { principalFrom, type GroupGrant, type Principal, type Role } from '../rbac';
+import { principalFrom, type GroupGrant, type Principal, type Role, type Structure } from '../rbac';
 import { getAdminSupabase } from '../supabase/admin';
 import { getSessionUser, type SessionUser } from '../supabase/server';
 
@@ -28,26 +28,44 @@ export function ownerEmails(): string[] {
     .filter(Boolean);
 }
 
-type GroupRow = { roles: string[] | null; org_id: string | null; branch_id: string | null; active: boolean | null };
+type GroupRow = { roles: string[] | null; org_id: string | null; branch_id: string | null; account_id: string | null; region_id: string | null; active: boolean | null };
 
 export async function loadPrincipal(admin: SupabaseClient, user: { id: string; email: string }): Promise<Principal> {
   const email = user.email.trim().toLowerCase();
   const [memberships, legacy] = await Promise.all([
-    admin.from('memora_group_members').select('memora_groups(roles, org_id, branch_id, active)').eq('user_id', user.id),
+    admin.from('memora_group_members').select('memora_groups(roles, org_id, branch_id, account_id, region_id, active)').eq('user_id', user.id),
     admin.from('memora_admins').select('email').eq('email', email).maybeSingle(),
   ]);
   const groups: GroupGrant[] = ((memberships.data ?? []) as { memora_groups: GroupRow | GroupRow[] | null }[])
     .flatMap((m) => (Array.isArray(m.memora_groups) ? m.memora_groups : m.memora_groups ? [m.memora_groups] : []))
-    .map((g) => ({ roles: (g.roles ?? []) as Role[], orgId: g.org_id, branchId: g.branch_id ?? null, active: g.active !== false }));
+    .map((g) => ({ roles: (g.roles ?? []) as Role[], orgId: g.org_id, branchId: g.branch_id ?? null, accountId: g.account_id ?? null, regionId: g.region_id ?? null, active: g.active !== false }));
   if (legacy.data) groups.push({ roles: ['ops'], orgId: null });
 
-  const orgIds = [...new Set(groups.map((g) => g.orgId).filter((id): id is string => Boolean(id)))];
+  // Enterprise groups: which homes and branches their roles reach.
+  const accountIds = [...new Set(groups.map((g) => g.accountId).filter((id): id is string => Boolean(id)))];
+  const regionIds = [...new Set(groups.map((g) => g.regionId).filter((id): id is string => Boolean(id)))];
+  const [accounts, groupOrgs, regionBranches] = await Promise.all([
+    accountIds.length ? admin.from('memora_accounts').select('id,status').in('id', accountIds) : Promise.resolve({ data: [] as { id: string; status: string }[] }),
+    accountIds.length ? admin.from('memora_orgs').select('id,account_id').in('account_id', accountIds) : Promise.resolve({ data: [] as { id: string; account_id: string }[] }),
+    regionIds.length ? admin.from('memora_branches').select('id,org_id,region_id').in('region_id', regionIds) : Promise.resolve({ data: [] as { id: string; org_id: string; region_id: string }[] }),
+  ]);
+  const structure: Structure = { accountOrgs: new Map(), regionBranches: new Map(), inactiveAccounts: new Set() };
+  for (const a of (accounts.data ?? []) as { id: string; status: string }[]) if (a.status === 'suspended' || a.status === 'closed') structure.inactiveAccounts!.add(a.id);
+  for (const o of (groupOrgs.data ?? []) as { id: string; account_id: string }[]) structure.accountOrgs.set(o.account_id, [...(structure.accountOrgs.get(o.account_id) ?? []), o.id]);
+  for (const b of (regionBranches.data ?? []) as { id: string; org_id: string; region_id: string }[])
+    structure.regionBranches.set(b.region_id, [...(structure.regionBranches.get(b.region_id) ?? []), { orgId: b.org_id, branchId: b.id }]);
+
+  const orgIds = [...new Set([...groups.map((g) => g.orgId), ...[...structure.accountOrgs.values()].flat()].filter((id): id is string => Boolean(id)))];
   const disabledOrgs = new Set<string>();
   if (orgIds.length) {
-    const { data } = await admin.from('memora_orgs').select('id').in('id', orgIds).eq('status', 'disabled');
-    (data ?? []).forEach((o) => disabledOrgs.add(o.id as string));
+    // A disabled home, or any home of a suspended or closed group, grants nothing. Published memorials stay up.
+    const { data } = await admin.from('memora_orgs').select('id,status,memora_accounts(status)').in('id', orgIds);
+    for (const o of (data ?? []) as { id: string; status: string; memora_accounts: { status: string } | { status: string }[] | null }[]) {
+      const acc = Array.isArray(o.memora_accounts) ? o.memora_accounts[0] : o.memora_accounts;
+      if (o.status === 'disabled' || acc?.status === 'suspended' || acc?.status === 'closed') disabledOrgs.add(o.id);
+    }
   }
-  return principalFrom(user.id, groups, { owner: ownerEmails().includes(email), disabledOrgs });
+  return principalFrom(user.id, groups, { owner: ownerEmails().includes(email), disabledOrgs, structure });
 }
 
 /** The signed-in person and what they may do; null when signed out or Supabase isn't configured. */

@@ -4,6 +4,7 @@ import { StatusScreen } from '@/components/MemorialView';
 import { SiteHeader } from '@/components/SiteHeader';
 import { Studio, type Persona, type Stage, type StudioFuneral, type StudioTab } from '@/components/pro/studio/Studio';
 import { accountLabel } from '@/lib/account-id';
+import { publicYear } from '@/lib/plans';
 import { branchScope, can, canIn, orgsOf, principalFrom, type Role } from '@/lib/rbac';
 import { getAccess } from '@/lib/server/access';
 import { loadAdminCases } from '@/lib/server/admin';
@@ -119,6 +120,17 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
         )
         .order('sort_order')
     : { data: [] as Row[] };
+  const { data: interest } = visible.length
+    ? await admin
+        .from('memora_event_interest')
+        .select('case_id')
+        .eq('kind', 'unveiling')
+        .in(
+          'case_id',
+          visible.map((c) => c.id),
+        )
+    : { data: [] as Row[] };
+  const asked = new Set(((interest ?? []) as Row[]).map((r) => r.case_id as string));
   const firstStop = new Map<string, Row>();
   for (const s of (stops ?? []) as Row[]) if (!firstStop.has(s.case_id)) firstStop.set(s.case_id, s);
   const fromLink = new Map(families.filter((f) => f.caseId).map((f) => [f.caseId!, f.label]));
@@ -144,6 +156,8 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
         family: fromLink.get(c.id) ?? null,
         updatedAt: c.updatedAt,
         stage: stageOf(c.status, c.funeralDate),
+        yearDaysLeft: c.status === 'PUBLISHED' ? (publicYear(c.publishedAt ?? null, c.archiveAt ?? null)?.daysLeft ?? null) : null,
+        unveilingAsked: asked.has(c.id),
       };
     })
     .sort((a, b) => (a.stage === 'past' && b.stage === 'past' ? (b.funeralDate ?? '').localeCompare(a.funeralDate ?? '') : (a.funeralDate ?? '9999').localeCompare(b.funeralDate ?? '9999')));

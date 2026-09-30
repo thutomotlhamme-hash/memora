@@ -105,3 +105,19 @@ test('billing months run on South African time', () => {
   assert.equal(periodOf(new Date('2026-09-30T21:30:00Z')), '2026-09');
   assert.deepEqual(periodRange('2026-10'), ['2026-09-30T22:00:00.000Z', '2026-10-31T22:00:00.000Z']);
 });
+
+test('the first year: public for 365 days, the unveiling window at the end', async () => {
+  const { publicYear } = await import('../src/lib/plans.ts');
+  const pub = '2026-01-10T10:00:00Z';
+  const end = '2027-01-10T10:00:00Z';
+  assert.equal(publicYear(null, end), null, 'drafts have no year yet');
+  assert.equal(publicYear(pub, end, new Date('2026-03-01T10:00:00Z'))!.phase, 'first_months');
+  const soon = publicYear(pub, end, new Date('2026-11-01T10:00:00Z'))!;
+  assert.equal(soon.phase, 'unveiling_soon');
+  assert.equal(soon.daysLeft, 70);
+  assert.equal(publicYear(pub, end, new Date('2027-01-01T10:00:00Z'))!.phase, 'last_days');
+  const over = publicYear(pub, end, new Date('2027-02-01T10:00:00Z'))!;
+  assert.equal(over.phase, 'ended');
+  assert.equal(over.daysLeft, 0);
+  assert.equal(over.elapsed, 1);
+});

@@ -22,6 +22,7 @@ import {
 import { ReleaseControl } from './ReleaseControl';
 import { RunSheetLink } from './RunSheetLink';
 import { VigilTemplate } from './VigilTemplate';
+import { HomeProgrammeTemplates, HomeWording } from './HomeTemplates';
 import { PanelFoot, type Nav, type Update } from './shared';
 
 const blankItem = (part: ProgrammePart = 'service'): ProgrammeItem => ({ id: '', part, type: part === 'graveside' ? 'committal' : part === 'vigil' ? 'hymn' : 'prayer', time: '', title: '', presenter: '', detail: '' });
@@ -97,6 +98,7 @@ export function StoryStep({ draft, update, nav, caseId }: { draft: Draft; update
           <span className="hint">
             {obituaryLength < MIN_STORY_LENGTH ? 'A few meaningful sentences are enough to publish.' : `${story.obituary.trim().split(/\s+/).length} words`}. Leave a blank line between paragraphs.
           </span>
+          {caseId && !story.obituary.trim() && <HomeWording caseId={caseId} name={displayName(draft.person, 'your loved one')} onUse={(t) => setStory('obituary', t)} />}
         </div>
         <div className="field">
           <label htmlFor="familyMessage">A message from the family</label>
@@ -172,6 +174,11 @@ export function StoryStep({ draft, update, nav, caseId }: { draft: Draft; update
                           name={displayName(draft.person, 'your loved one')}
                           onUse={(vigil) => setItems((items) => sortByPart([...items.filter((i) => partOf(i) !== 'vigil'), ...vigil]))}
                         />
+                      ) : part.id === 'service' && caseId && programme.items.length === 0 ? (
+                        <>
+                          <HomeProgrammeTemplates caseId={caseId} onUse={(made) => setItems(() => sortByPart(made))} />
+                          <div className="empty-line">Or add the first part below.</div>
+                        </>
                       ) : (
                         <div className="empty-line">Nothing here yet. Add the first part below.</div>
                       ))}

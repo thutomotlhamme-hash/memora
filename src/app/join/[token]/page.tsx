@@ -56,6 +56,7 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
 
   const { invite } = opened;
   const family = invite.kind === 'family';
+  const joining = invite.kind === 'account';
   if (family && opened.orgStatus === 'disabled') {
     return (
       <>
@@ -80,15 +81,29 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
         </Link>
         <div className="join-stage-copy">
           {family && home?.logo_url ? <img className="join-home-logo" src={home.logo_url} alt={invite.orgName} /> : null}
-          <span className="st-spark">{family ? invite.orgName : `Memora Pro · ${plan.name} plan`}</span>
-          <h1>{family ? `A memorial for the ${who}.` : 'Welcome to Memora Pro.'}</h1>
+          <span className="st-spark">{joining ? `${invite.accountName} · Memora Enterprise` : family ? invite.orgName : `Memora Pro · ${plan.name} plan`}</span>
+          <h1>{joining ? `Welcome to ${invite.accountName}.` : family ? `A memorial for the ${who}.` : 'Welcome to Memora Pro.'}</h1>
           <p>
-            {family
+            {joining
+              ? `You’ve been asked to join ${invite.accountName} on Memora, in ${invite.groupName}. Sign in with your cellphone number and you’re in.`
+              : family
               ? `${invite.orgName} has asked you to tell your loved one’s story. It takes about fifteen minutes, from your phone.`
               : 'Your funeral home, your branding, on every memorial and printed programme. Set up takes two minutes.'}
           </p>
           <ol className="join-path">
-            {family ? (
+            {joining ? (
+              <>
+                <li>
+                  <b>Your account.</b> Your cellphone number is how you log in.
+                </li>
+                <li>
+                  <b>Your role.</b> {invite.groupName}: you see exactly what that role allows.
+                </li>
+                <li>
+                  <b>The group.</b> Funerals, branches and reports, from one place.
+                </li>
+              </>
+            ) : family ? (
               <>
                 <li>
                   <b>You</b> add the photo, their story and the programme.
@@ -129,18 +144,20 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
             <span className={step >= 2 ? 'on' : ''} />
           </div>
           <span className="st-eyebrow">Step {step} of 2</span>
-          <h2>{step === 1 ? 'Your Memora account' : family ? 'Start the memorial' : 'Your funeral home'}</h2>
+          <h2>{step === 1 ? 'Your Memora account' : joining ? `Join ${invite.accountName}` : family ? 'Start the memorial' : 'Your funeral home'}</h2>
           {!user ? (
             <>
               <p className="join-help">Use your cellphone number; it’s how you’ll log in. Nothing is sent to your phone.</p>
-              <JoinAccount cta={family ? 'Continue to the memorial' : 'Continue to set up'} />
+              <JoinAccount cta={joining ? 'Continue' : family ? 'Continue to the memorial' : 'Continue to set up'} />
             </>
           ) : (
             <>
               <p className="join-help">
                 Signed in as {accountLabel(user.email)}. <Link href={`/account?next=/join/${token}`}>Not you?</Link>
               </p>
-              {family ? (
+              {joining ? (
+                <StartFamilyMemorial token={decodeURIComponent(token)} label={`Join ${invite.groupName}`} busyLabel="Joining…" />
+              ) : family ? (
                 <StartFamilyMemorial token={decodeURIComponent(token)} />
               ) : (
                 <SetUpHome token={decodeURIComponent(token)} name={invite.label} phone={isPhoneLogin(user.email) ? accountLabel(user.email) : ''} />

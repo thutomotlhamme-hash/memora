@@ -7,7 +7,7 @@ import { getBrowserSupabase } from '@/lib/supabase/client';
 // The signed-in part of the header, worked out in the browser so the pages
 // around it can be served straight from the CDN instead of rendered per visit.
 
-type State = { known: boolean; userId: string | null; team: boolean; pro: boolean };
+type State = { known: boolean; userId: string | null; team: boolean; pro: boolean; group?: boolean };
 let state: State = { known: false, userId: null, team: false, pro: false };
 const listeners = new Set<() => void>();
 let started = false;
@@ -17,7 +17,7 @@ function set(next: Partial<State>) {
   listeners.forEach((l) => l());
 }
 
-type Access = { team: boolean; pro: boolean };
+type Access = { team: boolean; pro: boolean; group?: boolean };
 const keyFor = (userId: string) => `memora:access:${userId}`;
 
 function cachedAccess(userId: string): Access | null {
@@ -38,7 +38,7 @@ async function freshAccess(userId: string): Promise<Access | null> {
   const res = await fetch('/api/account/me', { cache: 'no-store' }).catch(() => null);
   const body = res?.ok ? await res.json().catch(() => null) : null;
   if (!body) return null;
-  const out = { team: Boolean(body.team), pro: Boolean(body.pro) };
+  const out = { team: Boolean(body.team), pro: Boolean(body.pro), group: Boolean(body.group) };
   try {
     sessionStorage.setItem(keyFor(userId), JSON.stringify(out));
   } catch {
@@ -84,6 +84,11 @@ export function HeaderAccount({ hideCreate }: { hideCreate: boolean }) {
         {s.team && (
           <Link className="btn ghost" href="/admin">
             Command centre
+          </Link>
+        )}
+        {s.group && (
+          <Link className="btn ghost" href="/pro/group">
+            Group
           </Link>
         )}
         {s.pro && (

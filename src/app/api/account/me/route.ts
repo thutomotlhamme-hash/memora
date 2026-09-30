@@ -1,4 +1,4 @@
-import { can, orgsOf } from '@/lib/rbac';
+import { accountsOf, can, orgsOf } from '@/lib/rbac';
 import { getAccess } from '@/lib/server/access';
 import { json } from '@/lib/server/http';
 
@@ -6,5 +6,5 @@ import { json } from '@/lib/server/http';
 export async function GET() {
   const access = await getAccess();
   const p = access?.principal ?? null;
-  return json({ signedIn: Boolean(access), team: can(p, 'ops.view'), pro: orgsOf(p).length > 0 });
+  return json({ signedIn: Boolean(access), team: can(p, 'ops.view'), pro: orgsOf(p).length > 0, group: accountsOf(p).length > 0 });
 }

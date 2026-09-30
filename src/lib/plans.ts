@@ -224,3 +224,25 @@ export function billableUsage(rows: Publication[], period: string): Map<string, 
   for (const r of first.values()) if (periodOf(new Date(r.publishedAt!)) === period) out.set(r.orgId, (out.get(r.orgId) ?? 0) + 1);
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// The first year: a memorial stays public until its archive date, a year after
+// publishing, so it is there for the tombstone unveiling. The last months are
+// when families plan the unveiling, and when Memora (and their funeral home)
+// can help with the next event.
+// ---------------------------------------------------------------------------
+
+export const UNVEILING_WINDOW_DAYS = 90;
+
+export type YearPhase = 'first_months' | 'unveiling_soon' | 'last_days' | 'ended';
+
+export function publicYear(publishedAt: string | null, archiveAt: string | null, now = new Date()): { phase: YearPhase; daysLeft: number; elapsed: number; until: string } | null {
+  if (!publishedAt || !archiveAt) return null;
+  const start = new Date(publishedAt).getTime();
+  const end = new Date(archiveAt).getTime();
+  const total = Math.max(1, end - start);
+  const daysLeft = Math.ceil((end - now.getTime()) / 86_400_000);
+  const elapsed = Math.min(1, Math.max(0, (now.getTime() - start) / total));
+  const phase: YearPhase = daysLeft <= 0 ? 'ended' : daysLeft <= 14 ? 'last_days' : daysLeft <= UNVEILING_WINDOW_DAYS ? 'unveiling_soon' : 'first_months';
+  return { phase, daysLeft: Math.max(0, daysLeft), elapsed, until: archiveAt.slice(0, 10) };
+}

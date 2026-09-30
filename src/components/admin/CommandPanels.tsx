@@ -382,7 +382,7 @@ function GroupCard({ g, p }: { g: Group; p: Principal }) {
 
 export async function AccessPanel({ admin, p }: { admin: SupabaseClient; p: Principal }) {
   const [groups, orgs, branches] = await Promise.all([loadGroups(admin), loadOrgs(admin), loadBranches(admin)]);
-  const platform = groups.filter((g) => !g.orgId);
+  const platform = groups.filter((g) => !g.orgId && !g.accountId);
   const manage = can(p, 'access.manage');
   const platformRoles = ALL_ROLES.filter((r) => ROLES[r].scope === 'platform');
   return (

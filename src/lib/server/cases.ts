@@ -140,13 +140,14 @@ export interface CaseSummary {
   portraitUrl: string;
   updatedAt: string;
   archiveAt: string | null;
+  publishedAt: string | null;
 }
 
 /** The memorials this person made. (A funeral home's staff see the home's memorials on its dashboard.) */
 export async function listOwnedCases(client: SupabaseClient, userId: string): Promise<CaseSummary[]> {
   const { data: cases, error } = await client
     .from('memora_cases')
-    .select('id,status,slug,updated_at,archive_at,memora_people(first_name,last_name,preferred_name,passing_date,portrait_path),memora_stops(event_date,sort_order)')
+    .select('id,status,slug,updated_at,archive_at,published_at,memora_people(first_name,last_name,preferred_name,passing_date,portrait_path),memora_stops(event_date,sort_order)')
     .eq('owner_id', userId)
     .order('updated_at', { ascending: false })
     .limit(50);
@@ -165,6 +166,7 @@ export async function listOwnedCases(client: SupabaseClient, userId: string): Pr
         portraitUrl: await signedUrl(client, p.portrait_path, 900),
         updatedAt: c.updated_at,
         archiveAt: c.archive_at ?? null,
+        publishedAt: c.published_at ?? null,
       };
     }),
   );

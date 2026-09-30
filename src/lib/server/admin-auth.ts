@@ -6,7 +6,7 @@ import { getSessionUser, type SessionUser } from '../supabase/server';
 import { loadPrincipal, ownerEmails } from './access';
 
 // Who may open the command centre: anyone whose roles grant ops.view.
-// The owners in MEMORA_ADMIN_EMAILS always can. Access requires the account's
+// The owners in MEMORA_ADMIN_PHONES / MEMORA_ADMIN_EMAILS always can. Access requires the account's
 // sign-in address to be confirmed, so a look-alike sign-up never gets in.
 
 export { ownerEmails };

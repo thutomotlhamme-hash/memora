@@ -59,7 +59,7 @@ export const ROLES = {
     summary: 'Runs Memora. Everything, everywhere.',
     permissions: PLATFORM_PERMISSIONS,
     allOrgs: ORG_PERMISSIONS,
-    cannot: ['Remove the owners set in the server settings (MEMORA_ADMIN_EMAILS)'],
+    cannot: ['Remove the owners set in the server settings (MEMORA_ADMIN_PHONES)'],
   },
   ops: {
     label: 'Operations',

@@ -38,3 +38,107 @@ test.describe('Memora Pro and the command centre', () => {
     expect([401, 403]).toContain(notAllowed.status());
   });
 });
+
+test.describe('Memora Pro: the offer', () => {
+  test('prices are clear: VAT, the onboarding fee, and Enterprise is quoted', async ({ page }) => {
+    await page.goto('/pro');
+    await expect(page.getByText(/Prices exclude VAT/)).toBeVisible();
+    await expect(page.getByText(/onboarding R9\s?500/)).toBeVisible();
+    await expect(page.locator('.pro-plan').last().getByRole('link')).toHaveText('Talk to us');
+    for (const plan of await page.locator('.pro-plan').all()) {
+      await expect(plan.getByRole('link')).toHaveAttribute('href', /\/contact\?topic=pro/);
+    }
+  });
+
+  test('asking for a demo arrives at the contact form ready to send', async ({ page }) => {
+    await page.goto('/pro');
+    await page.getByRole('link', { name: /demo/i }).first().click();
+    await expect(page).toHaveURL(/\/contact\?topic=pro/);
+    await expect(page.locator('#c-topic')).toHaveValue('pro');
+    await expect(page.locator('#c-message')).toHaveValue(/Memora Pro/);
+  });
+
+  test('funeral homes can find Pro from any page', async ({ page }) => {
+    await page.goto('/contact');
+    await page.locator('.site-footer').getByRole('link', { name: 'For funeral homes' }).click();
+    await expect(page).toHaveURL(/\/pro$/);
+  });
+
+  test('the Pro page never scrolls sideways on a phone', async ({ page }) => {
+    await page.goto('/pro');
+    await page.mouse.wheel(0, 4000);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+});
+
+test.describe('Access: signed out means no way in', () => {
+  test('the header offers log in, never the command centre or a funeral home', async ({ page }) => {
+    await page.goto('/pro');
+    const header = page.locator('.site-header');
+    await expect(header.getByRole('link', { name: 'Log in' })).toBeVisible();
+    await expect(header.getByRole('link', { name: 'Command centre' })).toHaveCount(0);
+    await expect(header.getByRole('link', { name: 'Funeral home' })).toHaveCount(0);
+  });
+
+  test('the access check answers "nothing" to a stranger', async ({ request }) => {
+    const res = await request.get('/api/account/me');
+    expect(res.ok()).toBe(true);
+    expect(await res.json()).toEqual({ signedIn: false, team: false, pro: false });
+  });
+
+  test('a funeral home’s dashboard link for a specific home still needs a login', async ({ page }) => {
+    await page.goto('/pro/dashboard?home=00000000-0000-0000-0000-00000000000a');
+    await expect(page.getByText(/Not switched on yet|Log in|log in/).first()).toBeVisible();
+    await expect(page.locator('.cc-groups')).toHaveCount(0);
+    await expect(page.getByText('Plan and invoices')).toHaveCount(0);
+  });
+
+  test('command-centre tabs cannot be opened by address', async ({ page }) => {
+    for (const tab of ['homes', 'billing', 'access', 'audit']) {
+      await page.goto(`/admin?tab=${tab}`);
+      await expect(page.getByText(/isn’t set up yet|Log in|log in/).first()).toBeVisible();
+      await expect(page.locator('.cc-groups, .cc-org-mono')).toHaveCount(0);
+    }
+  });
+
+  test('starting a memorial for a funeral home needs a signed-in director', async ({ request, baseURL }) => {
+    const res = await request.post('/api/memorials', { data: { orgId: '00000000-0000-0000-0000-00000000000a' }, headers: { origin: baseURL! } });
+    expect(res.status()).toBeGreaterThanOrEqual(400);
+    expect(res.status()).toBeLessThan(500);
+    expect((await res.json()).error).toBeTruthy();
+  });
+
+  test('publishing or running a home’s funeral needs a signed-in director', async ({ request, baseURL }) => {
+    const id = '00000000-0000-0000-0000-00000000000c';
+    for (const path of [`/api/memorials/${id}/publish`, `/api/memorials/${id}/run-link`]) {
+      const res = await request.post(path, { data: {}, headers: { origin: baseURL! } });
+      expect(res.status(), path).toBeGreaterThanOrEqual(400);
+      expect(res.status(), path).toBeLessThan(500);
+      expect((await res.json()).error, path).toBeTruthy();
+    }
+  });
+
+  test('funeral-home actions refuse cross-site requests and anything outside self-service', async ({ request, baseURL }) => {
+    const evil = await request.post('/api/pro/actions', { data: { action: 'group.addMember', groupId: 'x', who: '0721234567' }, headers: { origin: 'https://evil.example' } });
+    expect(evil.status()).toBe(403);
+    expect((await evil.json()).error).toMatch(/refused/i);
+    for (const action of ['org.create', 'org.setStatus', 'invoice.generate', 'group.create', 'group.delete', 'account.resetPassword']) {
+      const res = await request.post('/api/pro/actions', { data: { action }, headers: { origin: baseURL! } });
+      expect([401, 403], action).toContain(res.status());
+    }
+  });
+
+  test('command-centre actions refuse cross-site requests', async ({ request }) => {
+    const res = await request.post('/api/admin/actions', { data: { action: 'group.addMember', groupId: 'x', who: 'a@b.co' }, headers: { origin: 'https://evil.example' } });
+    expect([403, 404]).toContain(res.status());
+  });
+});
+
+test.describe('Branding', () => {
+  test('a family’s own memorial carries no funeral-home branding', async ({ page }) => {
+    await page.goto('/m/preview?demo=1');
+    await expect(page.getByText('Naledi Magumba').first()).toBeVisible();
+    await expect(page.getByText('Arranged with care by')).toHaveCount(0);
+  });
+});

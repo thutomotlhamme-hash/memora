@@ -285,7 +285,7 @@ function GroupCard({ g, p }: { g: Group; p: Principal }) {
             compact
             reset
             submit="Add person"
-            fields={[{ name: 'who', label: 'Their cellphone number or email', type: 'text', placeholder: '072 123 4567', hint: 'They need a Memora account first.' }]}
+            fields={[{ name: 'who', label: 'Their cellphone number', type: 'text', placeholder: '072 123 4567', hint: 'They need a Memora account first.' }]}
           />
           <details className="cc-edit">
             <summary>Change roles or switch off</summary>

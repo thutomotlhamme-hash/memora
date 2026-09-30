@@ -2,19 +2,29 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cache } from 'react';
+import { normaliseCellphone, phoneLoginEmail } from '../account-id';
 import { principalFrom, type GroupGrant, type Principal, type Role } from '../rbac';
 import { getAdminSupabase } from '../supabase/admin';
 import { getSessionUser, type SessionUser } from '../supabase/server';
 
 // Works out what a signed-in person may do, once per request:
-//   the owners in MEMORA_ADMIN_EMAILS are administrators (they can't be locked out);
+//   the owners in MEMORA_ADMIN_PHONES / MEMORA_ADMIN_EMAILS (numbers or emails) are administrators
+//   (they can't be locked out);
 //   everyone else gets the roles of the groups they're in (memora_groups);
 //   people on the older Team list (memora_admins) keep Operations access.
 
+/** The owners' sign-in addresses. A cellphone number means that number's account. */
 export function ownerEmails(): string[] {
-  return (process.env.MEMORA_ADMIN_EMAILS ?? '')
+  return [process.env.MEMORA_ADMIN_PHONES, process.env.MEMORA_ADMIN_EMAILS]
+    .join(',')
     .split(',')
     .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+    .map((e) => {
+      if (e.includes('@')) return e;
+      const digits = normaliseCellphone(e);
+      return digits ? phoneLoginEmail(digits) : '';
+    })
     .filter(Boolean);
 }
 

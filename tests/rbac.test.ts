@@ -100,3 +100,74 @@ test('Pro pricing never undercuts families, and invoices add up', async () => {
   assert.equal(proInvoice({ ...org, onboardingPaid: true }, 0, true).total, 650000);
   assert.equal(proInvoice(org, 3, false).onboarding, 0);
 });
+
+test('finance bills funeral homes but cannot run them or change memorials', () => {
+  const f = principalFrom('u1', [{ roles: ['finance'], orgId: null }]);
+  assert.equal(can(f, 'ops.view'), true);
+  assert.equal(can(f, 'orgs.billing'), true);
+  assert.equal(can(f, 'org.billing.view', HOME_A), true, 'finance sees every home’s bill');
+  assert.equal(can(f, 'orgs.manage'), false);
+  assert.equal(can(f, 'memorials.takedown'), false);
+  assert.equal(can(f, 'org.memorials.edit', HOME_A), false);
+  assert.equal(can(f, 'access.manage'), false);
+});
+
+test('an auditor can look everywhere and change nothing', () => {
+  const a = principalFrom('u1', [{ roles: ['auditor'], orgId: null }]);
+  assert.equal(can(a, 'audit.view'), true);
+  assert.equal(can(a, 'org.view', HOME_B), true);
+  for (const perm of ['orgs.manage', 'orgs.billing', 'memorials.takedown', 'memorials.assign', 'gifts.manage', 'orders.manage', 'accounts.help', 'access.manage'] as const) {
+    assert.equal(can(a, perm), false, perm);
+  }
+  for (const perm of ['org.memorials.create', 'org.memorials.publish', 'org.team', 'org.branding'] as const) assert.equal(can(a, perm, HOME_A), false, perm);
+});
+
+test('operations run homes and memorials but cannot hand out roles', () => {
+  const o = principalFrom('u1', [{ roles: ['ops'], orgId: null }]);
+  assert.equal(can(o, 'orgs.manage'), true);
+  assert.equal(can(o, 'memorials.takedown'), true);
+  assert.equal(can(o, 'access.manage'), false);
+  assert.equal(canGrantRole(o, 'support', null), false);
+  assert.equal(canGrantRole(o, 'platform_admin', null), false);
+  assert.equal(can(o, 'org.memorials.publish', HOME_A), false, 'publishing stays with the home’s directors');
+});
+
+test('a viewer in a funeral home can only look', () => {
+  const v = principalFrom('u1', [{ roles: ['org_viewer'], orgId: HOME_A }]);
+  assert.equal(can(v, 'org.view', HOME_A), true);
+  for (const perm of ['org.memorials.create', 'org.memorials.edit', 'org.memorials.publish', 'org.runsheet', 'org.team', 'org.branding', 'org.billing.view'] as const) {
+    assert.equal(can(v, perm, HOME_A), false, perm);
+  }
+  assert.equal(canGrantRole(v, 'org_viewer', HOME_A), false);
+});
+
+test('a manager builds the team in their own home only, and never above themselves', () => {
+  const m = principalFrom('u1', [{ roles: ['org_admin'], orgId: HOME_A }]);
+  assert.equal(canGrantRole(m, 'org_staff', HOME_A), true);
+  assert.equal(canGrantRole(m, 'org_director', HOME_A), true);
+  assert.equal(canGrantRole(m, 'org_staff', HOME_B), false, 'not in another home');
+  assert.equal(canGrantRole(m, 'org_owner', HOME_A), false);
+  assert.equal(canGrantRole(m, 'ops', null), false, 'never a Memora role');
+  const owner = principalFrom('u2', [{ roles: ['org_owner'], orgId: HOME_A }]);
+  assert.equal(canGrantRole(owner, 'org_owner', HOME_A), true);
+  assert.equal(canGrantRole(owner, 'org_owner', HOME_B), false);
+});
+
+test('being in two homes keeps each home’s roles apart', () => {
+  const p = principalFrom('u1', [
+    { roles: ['org_owner'], orgId: HOME_A },
+    { roles: ['org_staff'], orgId: HOME_B },
+  ]);
+  assert.deepEqual(orgsOf(p).sort(), [HOME_A, HOME_B]);
+  assert.equal(can(p, 'org.memorials.publish', HOME_A), true);
+  assert.equal(can(p, 'org.memorials.publish', HOME_B), false);
+  assert.equal(can(p, 'org.billing.view', HOME_B), false);
+  assert.equal(canGrantRole(p, 'org_staff', HOME_B), false);
+});
+
+test('without a home named, a funeral-home permission is not granted', () => {
+  const d = principalFrom('u1', [{ roles: ['org_owner'], orgId: HOME_A }]);
+  assert.equal(can(d, 'org.view'), false);
+  assert.equal(can(null, 'org.view', HOME_A), false);
+  assert.equal(can(null, 'ops.view'), false);
+});

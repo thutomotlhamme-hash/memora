@@ -52,3 +52,32 @@ test('wrong number, wrong password, links that lead nowhere', async ({ page }) =
   await expect(page.locator('.note.error')).toContainText(/couldn’t reach Memora/);
   await page.waitForTimeout(2500);
 });
+
+test('Memora Pro on the live site, and the doors that stay shut', async ({ page, request }) => {
+  test.setTimeout(3 * 60_000);
+
+  await page.goto('/pro');
+  await say(page, null, 'Memora Pro: what a funeral home pays');
+  await expect(page.locator('.pro-plan')).toHaveCount(4);
+  await page.locator('.pro-plan.featured').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(3000);
+
+  await page.locator('.pro-plan.featured').getByRole('link').click();
+  await say(page, null, 'A funeral home asks to get started');
+  await expect(page.locator('#c-topic')).toHaveValue('pro');
+  await page.waitForTimeout(2500);
+
+  // Opened without logging in, both lead to the login and nothing else.
+  await page.goto('/admin');
+  await say(page, null, 'The command centre, without logging in');
+  await expect(page.getByText('Running Memora')).toHaveCount(0);
+  await page.waitForTimeout(2500);
+
+  await page.goto('/pro/dashboard');
+  await say(page, null, 'A funeral home dashboard, without logging in');
+  await expect(page.locator('table.board')).toHaveCount(0);
+  await page.waitForTimeout(2500);
+
+  const me = await request.get('/api/account/me');
+  expect(await me.json()).toMatchObject({ team: false, pro: false });
+});

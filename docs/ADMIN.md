@@ -6,7 +6,7 @@ Admins are identified by a **confirmed email address**. Not a phone number, and 
 
 | Role | How they get it | What they can do |
 | --- | --- | --- |
-| **Owner** | Their email is in `MEMORA_ADMIN_EMAILS` in Netlify (comma-separated). Only changeable in Netlify, so nobody can lock the owner out from inside the app. | Everything, including adding and removing staff |
+| **Owner** | Their cellphone number is in `MEMORA_ADMIN_PHONES` in Netlify (comma-separated, e.g. `0721234567,0829876543`). Email owners can go in `MEMORA_ADMIN_EMAILS`. Only changeable in Netlify, so nobody can lock the owner out from inside the app. | Everything, including adding and removing staff |
 | **Staff** | An owner adds their email on **/admin → Team** | Everything except changing the team |
 
 For access, the person must be **signed in** with that exact email **and have confirmed it** from their inbox. Every page load and every action checks this again, so removing someone takes effect immediately.
@@ -49,9 +49,9 @@ Every admin action is recorded in `memora_activity_log` with who did it and why.
 | Funeral in 3 days, memorial not ready | | Needs attention lists them first. Contact the family today. |
 | Someone who should be an admin sees "This account isn't on the team" | Signed in with a different email | They must sign in with the email you added, or you add the email they're using. |
 | "Confirm your email first" | They never clicked the confirmation email | They check spam, or sign up again to get a fresh email. |
-| "Admin isn't set up yet" | `MEMORA_ADMIN_EMAILS` or `SUPABASE_SECRET_KEY` is missing in Netlify | Add both and redeploy. |
+| "Admin isn't set up yet" | `MEMORA_ADMIN_PHONES` or `SUPABASE_SECRET_KEY` is missing in Netlify | Add both and redeploy. |
 | A staff member leaves | | Team → **Remove**. Access stops immediately. |
-| The owner leaves or changes email | | Change `MEMORA_ADMIN_EMAILS` in Netlify and redeploy. |
+| The owner leaves or changes number | | Change `MEMORA_ADMIN_PHONES` in Netlify and redeploy. |
 
 ## The funeral-day coordinator (run-sheet)
 
@@ -110,7 +110,7 @@ and can't, is on Command centre → Access, and in `src/lib/rbac.ts`.
   Groups ready to use: Memora Administrators, Operations, Support, Finance.
 - **Funeral home roles:** Owner, Manager, Director, Arrangements staff,
   Viewer. They only ever apply inside that funeral home.
-- The owners in `MEMORA_ADMIN_EMAILS` are always administrators. People on
+- The owners in `MEMORA_ADMIN_PHONES` (or `MEMORA_ADMIN_EMAILS`) are always administrators. People on
   the earlier Team list keep Operations access until moved into a group.
 - No one can give a role with more than they have. Only administrators make
   administrators; only a funeral home's owner makes another owner. Only an

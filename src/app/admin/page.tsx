@@ -46,7 +46,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <StatusScreen
         eyebrow="Admin"
         title="Admin isn’t set up yet."
-        body="Add MEMORA_ADMIN_EMAILS (your email) and SUPABASE_SECRET_KEY in Netlify → Environment variables, then redeploy."
+        body="Add MEMORA_ADMIN_PHONES (your cellphone number) and SUPABASE_SECRET_KEY in Netlify → Environment variables, then redeploy."
       />
     );
   }
@@ -64,7 +64,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <StatusScreen
         eyebrow="Admin"
         title="This account isn’t on the team."
-        body={`You’re signed in as ${accountLabel(access.email)}. If you should have access, send an owner that number or email so they can add it on Admin → Team.`}
+        body={`You’re signed in as ${accountLabel(access.email)}. If you should have access, send an owner that number so they can add you to a group under Command centre → Access.`}
         action={
           <Link className="btn" href="/account">
             Switch account
@@ -463,7 +463,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <div className="kv" key={e}>
               <span>Owner</span>
               <span>
-                {e} <span className="muted small">· set in Netlify</span>
+                {accountLabel(e)} <span className="muted small">· set in Netlify</span>
               </span>
             </div>
           ))}

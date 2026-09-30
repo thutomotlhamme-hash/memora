@@ -35,7 +35,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
       <StatusScreen
         eyebrow="Memora Pro"
         title="You’re not part of a funeral home yet."
-        body={`You’re signed in as ${accountLabel(access.user.email)}. Ask your funeral home’s owner or manager to add this number or email to their team.`}
+        body={`You’re signed in as ${accountLabel(access.user.email)}. Ask your funeral home’s owner or manager to add this number to their team.`}
         action={
           <Link className="btn" href="/pro">
             About Memora Pro
@@ -210,7 +210,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
                       compact
                       reset
                       submit="Add"
-                      fields={[{ name: 'who', label: 'Cellphone number or email', type: 'text', placeholder: '072 123 4567', hint: 'They create a Memora account first.' }]}
+                      fields={[{ name: 'who', label: 'Their cellphone number', type: 'text', placeholder: '072 123 4567', hint: 'They create a Memora account first.' }]}
                     />
                   )}
                 </article>

@@ -1451,3 +1451,5 @@ a.chip { display: inline-flex; align-items: center; gap: 6px; text-decoration: n
 .cc-branch { margin: 12px 0 0 0; padding-left: 14px; border-left: 3px solid var(--mist); }
 .cc-branch-name { margin: 16px 0 8px; }
 .new-home-memorial .select { min-height: 44px; width: auto; }
+.preview-bar { align-items: center; }
+.support-note { background: var(--mist); }

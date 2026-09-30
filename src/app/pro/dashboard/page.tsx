@@ -10,7 +10,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { accountLabel } from '@/lib/account-id';
 import { fmtDate } from '@/lib/memorial';
 import { PRO_PLANS, formatMoney, proInvoice } from '@/lib/plans';
-import { ALL_ROLES, ROLES, branchScope, can, canGrantRole, canIn, orgsOf, type Permission, type Role } from '@/lib/rbac';
+import { ALL_ROLES, ROLES, branchScope, can, canGrantRole, canIn, orgsOf, principalFrom, type Permission, type Role } from '@/lib/rbac';
 import { getAccess } from '@/lib/server/access';
 import { loadAdminCases, type AdminCase } from '@/lib/server/admin';
 import { loadInvites } from '@/lib/server/invites';
@@ -58,47 +58,68 @@ function groupOf(c: AdminCase, today: string, weekEnd: string): Group {
   return 'upcoming';
 }
 
-export default async function ProDashboard({ searchParams }: { searchParams: Promise<{ home?: string; tab?: string; welcome?: string; branch?: string }> }) {
+export default async function ProDashboard({ searchParams }: { searchParams: Promise<{ home?: string; tab?: string; welcome?: string; branch?: string; as?: string }> }) {
   const access = await getAccess();
   const admin = getAdminSupabase();
   if (!admin) return <StatusScreen eyebrow="Memora Pro" title="Not switched on yet." body="The site owner needs to finish setup." />;
   if (!access) redirect('/account/login?next=/pro/dashboard');
-  const p = access.principal;
+  const real = access.principal;
+  const sp = await searchParams;
 
-  // Staff see their own homes; Memora's team can open any home to help.
-  const mine = orgsOf(p);
-  const allOrgs = p.anyOrg.has('org.view') ? await loadOrgs(admin) : await loadOrgs(admin, mine);
-  if (!allOrgs.length) {
+  // "Funeral home" is for the homes you belong to. Memora's team can still open
+  // any home from the command centre (?home=…), clearly marked as a support view.
+  const mine = orgsOf(real);
+  const support = real.anyOrg.has('org.view');
+  const myOrgs = await loadOrgs(admin, mine);
+  const visiting = sp.home && !mine.includes(sp.home) && support ? (await loadOrgs(admin, [sp.home]))[0] : undefined;
+  if (!myOrgs.length && !visiting) {
     return (
       <>
         <SiteHeader />
         <StatusScreen
           eyebrow="Memora Pro"
-          title="You’re not part of a funeral home yet."
-          body={`You’re signed in as ${accountLabel(access.user.email)}. Ask your funeral home’s owner or manager to add this number to their team.`}
+          title={support ? 'You’re not in a funeral home yourself.' : 'You’re not part of a funeral home yet.'}
+          body={
+            support
+              ? 'To help a funeral home, open it from the command centre. To run your own, add your number to its Owners group.'
+              : `You’re signed in as ${accountLabel(access.user.email)}. Ask your funeral home’s owner or manager to add this number to their team.`
+          }
           action={
-            <Link className="btn" href="/pro">
-              About Memora Pro
+            <Link className="btn" href={support ? '/admin?tab=homes' : '/pro'}>
+              {support ? 'Funeral homes in the command centre' : 'About Memora Pro'}
             </Link>
           }
         />
       </>
     );
   }
-  const sp = await searchParams;
-  const org = allOrgs.find((o) => o.id === sp.home) ?? allOrgs.find((o) => mine.includes(o.id)) ?? allOrgs[0];
-  if (!can(p, 'org.view', org.id)) redirect('/pro/dashboard');
+  const org = visiting ?? myOrgs.find((o) => o.id === sp.home) ?? myOrgs[0];
+  if (!can(real, 'org.view', org.id)) redirect('/pro/dashboard');
+  const allBranches = await loadBranches(admin, org.id);
+
+  // "See as": owners and Memora's team can preview exactly what each role sees here.
+  const canPreview = support || canIn(real, 'org.branches', org.id, null);
+  const previewOptions: { key: string; label: string; grant: { roles: Role[]; orgId: string; branchId: string | null } }[] = [
+    { key: 'owner', label: 'Owner', grant: { roles: ['org_owner'], orgId: org.id, branchId: null } },
+    ...allBranches.flatMap((b) => [
+      { key: `manager:${b.id}`, label: `Manager · ${b.name}`, grant: { roles: ['org_admin'] as Role[], orgId: org.id, branchId: b.id } },
+      { key: `arranger:${b.id}`, label: `Arranger · ${b.name}`, grant: { roles: ['org_staff'] as Role[], orgId: org.id, branchId: b.id } },
+    ]),
+  ];
+  const preview = canPreview ? previewOptions.find((o) => o.key === sp.as) : undefined;
+  const p = preview ? principalFrom(real.userId, [preview.grant]) : real;
+  const allOrgs = visiting ? [] : myOrgs;
   const tabs = TABS.filter(([, , perm]) => can(p, perm, org.id));
   const tab: Tab = (tabs.find(([t]) => t === sp.tab)?.[0] ?? 'today') as Tab;
-  const href = (t: Tab) => `/pro/dashboard?home=${org.id}&tab=${t}`;
+  const keep = preview ? `&as=${encodeURIComponent(preview.key)}` : '';
+  const href = (t: Tab) => `/pro/dashboard?home=${org.id}&tab=${t}${keep}`;
 
-  const [{ data: links }, cases, groups, invoices, families, allBranches] = await Promise.all([
+  const [{ data: links }, cases, groups, invoices, families] = await Promise.all([
     admin.from('memora_cases').select('id,branch_id').eq('org_id', org.id),
     loadAdminCases(admin),
     loadGroups(admin, org.id),
     can(p, 'org.billing.view', org.id) ? loadInvoices(admin, org.id) : Promise.resolve([]),
     can(p, 'org.memorials.create', org.id) ? loadInvites(admin, 'family', org.id) : Promise.resolve([]),
-    loadBranches(admin, org.id),
   ]);
   // Branch staff work in their own branches; owners (and Memora's team) in all of them.
   const scope = branchScope(p, org.id);
@@ -119,7 +140,13 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
   const myRoles = [...(p.orgRoles.get(org.id) ?? [])] as Role[];
   const myBranchNames = scope === 'all' ? '' : myBranches.map((b) => b.name).join(', ');
   const platformRoles = [...p.roles].filter((r) => ROLES[r].scope === 'platform');
-  const youAre = myRoles.length ? `${myRoles.map((r) => ROLES[r].label).join(', ')}${myBranchNames ? ` · ${myBranchNames}` : ''}` : platformRoles.length ? `Memora ${ROLES[platformRoles[0]].label}` : 'Viewer';
+  const youAre = preview
+    ? `Previewing ${preview.label}`
+    : myRoles.length
+      ? `${myRoles.map((r) => ROLES[r].label).join(', ')}${myBranchNames ? ` · ${myBranchNames}` : ''}`
+      : platformRoles.length
+        ? `Memora ${ROLES[platformRoles[0]].label} (support view)`
+        : 'Viewer';
 
   const today = saToday();
   const weekEnd = addDays(today, 7);
@@ -157,7 +184,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
             </div>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            {can(p, 'ops.view') && (
+            {visiting && (
               <Link className="btn" href={`/admin?tab=homes#${org.id}`}>
                 ← Command centre
               </Link>
@@ -165,6 +192,33 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
             {live && createIn.length > 0 && <NewHomeMemorial orgId={org.id} branches={createIn.map((b) => ({ id: b.id, name: b.name }))} />}
           </div>
         </div>
+        {visiting && (
+          <div className="note support-note" style={{ marginBottom: 16 }}>
+            <span>
+              <strong>Support view.</strong> You’re looking at {org.name} as Memora’s team, not as one of its staff. Anything you change is written to the audit log.
+            </span>
+          </div>
+        )}
+        {canPreview && (
+          <nav className="row pro-homes preview-bar" aria-label="See as">
+            <span className="muted small">See as:</span>
+            <Link className={`chip${preview ? '' : ' on'}`} href={`/pro/dashboard?home=${org.id}&tab=${tab}`}>
+              {visiting ? 'Support (you)' : 'You'}
+            </Link>
+            {previewOptions.map((o) => (
+              <Link key={o.key} className={`chip${preview?.key === o.key ? ' on' : ''}`} href={`/pro/dashboard?home=${org.id}&tab=${tab}&as=${encodeURIComponent(o.key)}`}>
+                {o.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+        {preview && (
+          <div className="note warn" style={{ marginBottom: 16 }}>
+            <span>
+              <strong>Preview: this is what a {preview.label} sees.</strong> Buttons are shown as they’d see them, but anything you press still uses your own access.
+            </span>
+          </div>
+        )}
         {allOrgs.length > 1 && (
           <nav className="row pro-homes" aria-label="Funeral homes">
             {allOrgs.map((o) => (

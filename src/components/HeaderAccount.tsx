@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { NotificationBell } from './NotificationBell';
+import { MenuGuard } from './pro/MenuGuard';
 import { useEffect, useSyncExternalStore } from 'react';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
@@ -79,33 +80,41 @@ export function HeaderAccount({ hideCreate }: { hideCreate: boolean }) {
   useEffect(start, []);
 
   if (!s.known) return <span className="nav-pending" aria-hidden="true" />;
-  if (s.userId)
+  if (s.userId) {
+    const more = [
+      s.team && { href: '/admin', label: 'Command centre' },
+      s.group && { href: '/pro/group', label: 'Group' },
+      s.pro && { href: '/pro/dashboard', label: 'Funeral home' },
+      { href: '/account', label: 'Account' },
+    ].filter((l): l is { href: string; label: string } => Boolean(l));
     return (
       <>
-        {s.team && (
-          <Link className="btn ghost" href="/admin">
-            Command centre
-          </Link>
-        )}
-        {s.group && (
-          <Link className="btn ghost" href="/pro/group">
-            Group
-          </Link>
-        )}
-        {s.pro && (
-          <Link className="btn ghost" href="/pro/dashboard">
-            Funeral home
-          </Link>
-        )}
+        <MenuGuard />
+        {/* Wide screens: every link in the bar. Phones: the same links behind one Menu button. */}
+        <span className="nav-wide">
+          {more.map((l) => (
+            <Link key={l.href} className="btn ghost" href={l.href}>
+              {l.label}
+            </Link>
+          ))}
+        </span>
         <NotificationBell />
-        <Link className="btn ghost" href="/account">
-          Account
-        </Link>
+        <details className="st-menu nav-more">
+          <summary>Menu</summary>
+          <div className="st-menu-list right">
+            {more.map((l) => (
+              <Link key={l.href} href={l.href}>
+                {l.label}
+              </Link>
+            ))}
+          </div>
+        </details>
         <Link className="btn primary" href="/memorials">
           My memorials
         </Link>
       </>
     );
+  }
   return (
     <>
       <Link className="btn ghost" href="/account/login">

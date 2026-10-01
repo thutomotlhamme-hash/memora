@@ -59,3 +59,46 @@ Sibusiso Cele.
 5. As yourself: Command centre → Memorials (grouped by home, our team, and
    families), Funeral homes (onboarding links), Access (by branch), Billing,
    Audit log.
+
+## Motheo Funeral Group (Enterprise, active)
+
+A group with two regions, three homes and five branches. You (062 568 3235) are one of its
+group administrators, so **Group** shows in your header and `/pro/group` opens it.
+
+| Person | Number | Role | Sees |
+|---|---|---|---|
+| Thandi Motheo | 062 568 3120 | Group administrator | The whole group, its configuration, every home |
+| Lerato Dube | 062 568 3121 | Regional manager, Gauteng | Pretoria Central, Centurion, Soweto only |
+| Karabo Sithebe | 062 568 3122 | Finance | Contract, usage, invoices; no memorials |
+| Palesa Nthite | 062 568 3123 | Brand and marketing | Master brand and templates |
+| Neo Mabuza | 062 568 3124 | Reporting and audit | Read-only reports and audit log |
+| Tshepo Maseko | 062 568 3125 | Branch manager, Pretoria Central | That branch |
+| Dineo Phiri | 062 568 3126 | Arranger, Pretoria Central | That branch; sees head office's templates |
+| Boitumelo Kgosi | 062 568 3127 | Arranger, Mahikeng | That branch; sees only the all-branch template |
+| Refilwe Molapo | 062 568 3128 | A family (Motsamai) | Their memorial, started from a family link |
+
+What's in it:
+- **Structure:**
+  - Gauteng: Motheo Pretoria (Pretoria Central, Centurion) and Motheo Soweto (Soweto).
+  - North West: Motheo North West (Mahikeng, and Rustenburg, which is switched off).
+- **Funerals:**
+  - one today;
+  - two this week;
+  - a Mahikeng memorial **not yet published with the funeral in two days** (it shows under
+    Needs attention);
+  - one done;
+  - one whose **first year is ending**, where the family asked about the unveiling.
+- **Brand and templates:** the brand locks the colour and footer. Templates:
+  - "Funeral service" for every branch;
+  - "Zion Christian Church service" for Gauteng only;
+  - an obituary opening.
+- **Billing and the rest:**
+  - last month's invoice is paid, with onboarding;
+  - an invite is waiting for a new finance clerk;
+  - there's an audit trail with before and after.
+
+## First years ending
+
+Agnes Mofokeng (Letsatsi, Soweto) and Ditiro Seleke (Motheo, Mahikeng) were published about
+ten months ago. Their homes see them under **First years ending**, and both families have
+asked about the unveiling (command centre → Needs attention).

@@ -433,7 +433,7 @@ function Published({ draft, meta, caseId, nav }: { draft: Draft; meta: CaseMeta;
         <Link className="ks-strip" href={`/memorials/${caseId}/artifacts`} aria-label="Cards, programme and keepsake">
           <span className="ks-strip-head">
             <span className="eyebrow plain">Ready to share and print</span>
-            <strong>Cards, programme & keepsake →</strong>
+            <strong>See all 8 →</strong>
           </span>
           <span className="ks-strip-row">
             <KeepsakeThumb kind="announcement" draft={draft} url={url} width={300} alt="Announcement card" />

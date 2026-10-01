@@ -272,6 +272,8 @@ test.describe('Notifications', () => {
     expect(await res.json()).toEqual({ items: [], unread: 0 });
     const mark = await request.post('/api/notifications', { data: { id: 'all' }, headers: { origin: baseURL! } });
     expect([401, 403]).toContain(mark.status());
+    const keepsake = await request.get('/api/memorials/00000000-0000-0000-0000-000000000000/keepsake');
+    expect([401, 404]).toContain(keepsake.status());
     const ready = await request.post('/api/memorials/00000000-0000-0000-0000-000000000000/ready', { headers: { origin: baseURL! } });
     expect([401, 403, 404, 503]).toContain(ready.status());
   });

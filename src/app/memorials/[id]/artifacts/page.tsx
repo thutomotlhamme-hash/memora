@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { ArtifactStudio } from '@/components/ArtifactStudio';
 import { StatusScreen } from '@/components/MemorialView';
 import { SiteHeader } from '@/components/SiteHeader';
+import { publicYear } from '@/lib/plans';
 import { loadOwnedCase } from '@/lib/server/cases';
 import { orgBrand } from '@/lib/server/org-cases';
 import { getAdminSupabase } from '@/lib/supabase/admin';
@@ -17,7 +18,8 @@ export default async function ArtifactsPage({ params }: { params: Promise<{ id: 
   if (!supabase || !user) redirect(`/account/login?next=/memorials/${id}/artifacts`);
   const loaded = await loadOwnedCase(supabase, id);
   if (!loaded) notFound();
-  if (loaded.meta.status !== 'PUBLISHED' || !loaded.meta.slug) {
+  // Once published, keepsakes stay available, also after the memorial's public year (or a takedown).
+  if (loaded.meta.status === 'DRAFT' || !loaded.meta.slug) {
     return (
       <StatusScreen
         eyebrow="Cards & keepsakes"
@@ -37,7 +39,13 @@ export default async function ArtifactsPage({ params }: { params: Promise<{ id: 
   return (
     <>
       <SiteHeader />
-      <ArtifactStudio draft={loaded.draft} slug={loaded.meta.slug} caseId={id} brand={home ? { name: home.name, logoUrl: home.logoUrl, colour: home.brandColour } : null} />
+      <ArtifactStudio
+        draft={loaded.draft}
+        slug={loaded.meta.slug}
+        caseId={id}
+        brand={home ? { name: home.name, logoUrl: home.logoUrl, colour: home.brandColour } : null}
+        privateNow={loaded.meta.status === 'ARCHIVED' || publicYear(loaded.meta.publishedAt, loaded.meta.archiveAt)?.phase === 'ended'}
+      />
     </>
   );
 }

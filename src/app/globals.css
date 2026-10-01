@@ -236,8 +236,8 @@ body:has(.editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-grid, .gift
 
 /* ---------------------------------------------------------------- Site header */
 
-.site-header { position: sticky; top: 0; z-index: 40; background: rgba(251, 250, 248, 0.94); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid rgba(0, 0, 0, 0.06); transition: background-color 0.5s var(--ease); }
-body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-grid, .gift-layout, .page-head) .site-header { background: rgba(242, 238, 247, 0.95); }
+.site-header { position: sticky; top: 0; z-index: 40; background: rgba(251, 250, 248, 0.97); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid rgba(0, 0, 0, 0.06); transition: background-color 0.5s var(--ease); }
+body:has(.run-page, .editor, .memorial-grid, .admin-tabs, .auth-wrap, .artifact-grid, .gift-layout, .page-head) .site-header { background: #f2eef7; }
 .site-header.static { position: relative; }
 .site-header .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; }
 .brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: inherit; }
@@ -2241,7 +2241,21 @@ body:has(.sl-map) .proc-card { display: none; }
 .ks-strip { display: grid; gap: 14px; margin-top: 22px; padding: 18px 18px 0; border-radius: var(--r-lg); background: var(--paper-2); color: inherit; text-decoration: none; overflow: hidden; }
 .ks-strip-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .ks-strip-head strong { font-size: 15px; color: var(--clay-ink); }
-.ks-strip-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end; height: 132px; }
-.ks-strip .ks-thumb { width: 100%; transform: translateY(18px); }
-.ks-strip:hover .ks-thumb { transform: translateY(8px); }
+.ks-strip-head { position: relative; z-index: 1; }
+.ks-strip-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; height: 150px; overflow: hidden; padding-top: 4px; }
+.ks-strip .ks-thumb { width: 100%; transform: translateY(6px); }
+.ks-strip:hover .ks-thumb { transform: translateY(0); }
 @media (max-width: 560px) { .ks-strip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ks-strip-row > :nth-child(4) { display: none; } }
+
+/* Past funerals: their programmes, as small covers */
+.past-ks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+.past-ks { display: grid; gap: 10px; align-content: start; color: inherit; text-decoration: none; }
+.past-ks-frame { display: flex; justify-content: center; align-items: flex-start; height: 190px; padding: 18px 16px 0; border-radius: 20px; background: var(--card); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+.past-ks-frame .ks-thumb { width: 82%; }
+.past-ks:hover .ks-thumb { transform: translateY(-2px); }
+.past-ks-text { display: grid; gap: 2px; padding: 0 4px; }
+.past-ks-text strong { font-size: 14.5px; font-weight: 600; }
+.past-ks-text small { font-size: 12.5px; color: var(--muted); }
+.past-ks-plain { display: grid; align-content: start; justify-items: center; gap: 6px; padding: 26px 10px 0; text-align: center; border: 1px solid var(--bloom, #c9b8e8); }
+.past-ks-plain small { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay); }
+.past-ks-plain b { font-family: var(--display); font-weight: 400; font-size: 17px; line-height: 1.15; }

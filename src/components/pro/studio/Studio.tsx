@@ -6,6 +6,7 @@ import { Brand } from '@/components/Brand';
 import { InviteList } from '@/components/pro/InviteList';
 import { NotificationBell } from '@/components/NotificationBell';
 import { NewHomeMemorial, PublishForHome, RunSheetFor } from '@/components/pro/ProButtons';
+import { PastKeepsake } from '@/components/pro/PastKeepsake';
 import { PRO_PLANS, formatMoney, proInvoice } from '@/lib/plans';
 import { ALL_ROLES, ROLES, can, canGrantRole, canIn, type Permission, type Principal, type Role } from '@/lib/rbac';
 import type { Invite } from '@/lib/server/invites';
@@ -836,9 +837,9 @@ export function Studio(d: StudioData) {
               {f.status === 'DRAFT' ? 'Open' : 'Edit'}
             </Link>
           )}
-          {f.status === 'PUBLISHED' && canEdit && (
+          {(f.status === 'PUBLISHED' || (f.status === 'ARCHIVED' && f.slug)) && canEdit && (
             <Link className="btn sm" href={`/memorials/${f.id}/artifacts`}>
-              Print
+              {f.stage === 'past' ? 'Keepsakes' : 'Print'}
             </Link>
           )}
           {f.status === 'PUBLISHED' && f.slug && (
@@ -917,6 +918,10 @@ export function Studio(d: StudioData) {
   function Print() {
     const printable = d.funerals.filter((f) => f.status === 'PUBLISHED' && (f.own || edit(f.branchId))).sort((a, b) => (a.funeralDate ?? '9').localeCompare(b.funeralDate ?? '9'));
     const upcoming = printable.filter((f) => f.stage !== 'past');
+    // Past funerals keep their programme and keepsakes: newest first, even after the memorial goes private.
+    const past = d.funerals
+      .filter((f) => (f.status === 'PUBLISHED' || f.status === 'ARCHIVED') && f.slug && f.stage === 'past' && (f.own || edit(f.branchId)))
+      .sort((a, b) => (b.funeralDate ?? '').localeCompare(a.funeralDate ?? ''));
     const drafts = d.funerals.filter((f) => f.status === 'DRAFT' && (f.own || edit(f.branchId)));
     return (
       <>
@@ -969,6 +974,25 @@ export function Studio(d: StudioData) {
             ))}
           </div>
         </section>
+        {past.length > 0 && (
+          <section className="st-sec">
+            <header className="st-sec-head">
+              <h2>Past funerals</h2>
+              <span className="st-sub">Their programmes and keepsakes stay here, for families who ask for another copy.</span>
+            </header>
+            <div className="past-ks-grid">
+              {past.map((f) => (
+                <PastKeepsake
+                  key={f.id}
+                  caseId={f.id}
+                  name={f.name}
+                  when={f.funeralDate ? fmt(f.funeralDate, { day: 'numeric', month: 'long', year: 'numeric' }) : 'Date not set'}
+                  privateNow={f.status === 'ARCHIVED'}
+                />
+              ))}
+            </div>
+          </section>
+        )}
         {drafts.length > 0 && (
           <section className="st-sec">
             <header className="st-sec-head">

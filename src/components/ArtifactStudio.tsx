@@ -93,11 +93,14 @@ export function ArtifactStudio({
   slug,
   caseId,
   brand,
+  privateNow = false,
 }: {
   draft: Draft;
   slug: string;
   caseId: string;
   brand?: { name: string; logoUrl: string; colour: string } | null;
+  /** The memorial's public year is over (or it was taken down): keepsakes still work, its link no longer opens for guests. */
+  privateNow?: boolean;
 }) {
   const toast = useToast();
   const prepared = useRef<Promise<A.PrintBrand | null> | null>(null);
@@ -133,6 +136,14 @@ export function ArtifactStudio({
           ← Back to memorial
         </Link>
       </div>
+      {privateNow && (
+        <div className="note" role="status" style={{ marginBottom: 18 }}>
+          <span>
+            <strong>This memorial is private now.</strong> The programme, keepsake book and cards are still yours to download and print. Its link and QR code no
+            longer open for guests, so share the files themselves.
+          </span>
+        </div>
+      )}
       <div className="artifact-grid">
         {ITEMS.map((item) => (
           <article className="artifact" key={item.key}>

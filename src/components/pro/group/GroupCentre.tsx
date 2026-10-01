@@ -3,6 +3,7 @@ import { ActionForm } from '@/components/admin/ActionForm';
 import { AdminAction } from '@/components/admin/AdminAction';
 import { RoleCard } from '@/components/admin/CommandPanels';
 import { Brand } from '@/components/Brand';
+import { NotificationBell } from '@/components/NotificationBell';
 import { Banner, Widget } from '@/components/pro/studio/Studio';
 import * as I from '@/components/pro/studio/icons';
 import { BLUEPRINTS, CONTRACT_STATUS, SLA_TIERS, SUPPORT_LEVELS, resolveBrand, type Module } from '@/lib/enterprise';
@@ -140,6 +141,9 @@ export function GroupCentre({
           <div className="st-top-title">
             <span className="st-eyebrow">{a.name}</span>
             <h1>{title}</h1>
+          </div>
+          <div className="st-top-actions">
+            <NotificationBell tone="studio" />
           </div>
         </header>
         <div className="st-body">

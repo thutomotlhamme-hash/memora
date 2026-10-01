@@ -6,6 +6,7 @@ import { resolveBrand, type BrandPart } from '../enterprise';
 import { archiveDate, periodOf } from '../plans';
 import { loadCaseById } from './cases';
 import { refreshPublicPages } from './public-cache';
+import { notify, notifyAllowance } from './notify';
 
 // Memorials that belong to a funeral home (memora_cases.org_id). Their staff act
 // on them through their roles, not through owning them, so these helpers run
@@ -70,6 +71,7 @@ export async function publishCase(admin: SupabaseClient, id: string, actorId: st
   if (error || !updated) return { ok: false, error: 'Could not publish the memorial.', status: 500 };
   refreshPublicPages();
   await recordUsage(admin, id, actorId, now);
+  await notifyPublished(admin, id, actorId, `${draft.person.preferredName || draft.person.firstName} ${draft.person.lastName}`.trim());
   await admin.from('memora_activity_log').insert({ case_id: id, actor_user_id: actorId, action: 'CASE_PUBLISHED', metadata: { slug, archive_at: archiveAt, ...metadata } });
   return {
     ok: true,
@@ -88,4 +90,25 @@ export async function recordUsage(admin: SupabaseClient, caseId: string, actorId
   await admin
     .from('memora_org_usage')
     .upsert({ case_id: caseId, org_id: c.org_id, branch_id: c.branch_id ?? null, period: periodOf(at), published_at: at.toISOString(), published_by: actorId }, { onConflict: 'case_id', ignoreDuplicates: true });
+}
+
+/** The family hears their memorial is live (when the home published it); owners hear as the allowance runs out. */
+async function notifyPublished(admin: SupabaseClient, caseId: string, actorId: string, name: string): Promise<void> {
+  const { data: c } = await admin.from('memora_cases').select('owner_id,org_id,memora_orgs(name)').eq('id', caseId).maybeSingle();
+  if (!c?.org_id) return;
+  const home = (Array.isArray(c.memora_orgs) ? c.memora_orgs[0] : c.memora_orgs) as { name?: string } | null;
+  await notify(
+    admin,
+    [c.owner_id as string],
+    {
+      kind: 'published',
+      tone: 'good',
+      title: `${name || 'The'} memorial is live`,
+      body: `${home?.name ?? 'Your funeral home'} published it. Share the link and QR code with family and friends; you can still edit it.`,
+      href: `/memorials/${caseId}`,
+      key: `published:${caseId}`,
+    },
+    actorId,
+  );
+  await notifyAllowance(admin, c.org_id as string, actorId);
 }

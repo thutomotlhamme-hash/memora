@@ -7,6 +7,7 @@ import { PRO_PLANS, isProPlan, type ProPlan } from '../plans';
 import { can, canAccount, canIn, type Principal } from '../rbac';
 import { linkSecret, signGiftToken, verifyGiftToken } from './links';
 import { createOrg, log, type ProInput, type ProResult } from './pro';
+import { accountAudience, homeAudience, notify, platformAudience } from './notify';
 
 // Two kinds of link, both signed (token = <inviteId>.<hmac>) so nothing secret is stored:
 //   org:    Memora sends a funeral home a link; whoever opens it sets the home up
@@ -201,6 +202,12 @@ export async function acceptInvite(
     await admin
       .from('memora_activity_log')
       .insert({ actor_user_id: user.id, action: 'ADMIN_MEMBER_JOINED', metadata: { group: invite.groupName, who: accountLabel(user.email) }, account_id: inv.account_id });
+    await notify(
+      admin,
+      await accountAudience(admin, inv.account_id, 'group.people'),
+      { kind: 'member_joined', tone: 'good', title: `${accountLabel(user.email)} joined ${invite.groupName}`, body: `They accepted their invite to ${invite.accountName}.`, href: `/pro/group?account=${inv.account_id}&tab=people`, key: `joined:${inv.group_id}:${user.id}` },
+      user.id,
+    );
     return { ok: true, redirect: `/pro/group?account=${inv.account_id}&welcome=1` };
   }
 
@@ -214,6 +221,20 @@ export async function acceptInvite(
     }
     await admin.from('memora_invites').update({ case_id: created.id }).eq('id', invite.id);
     await admin.from('memora_activity_log').insert({ case_id: created.id, actor_user_id: user.id, action: 'CASE_CREATED_FROM_FAMILY_LINK', metadata: { org: invite.orgId, for: invite.label } });
+    if (invite.orgId)
+      await notify(
+        admin,
+        await homeAudience(admin, invite.orgId, invite.branchId, 'org.memorials.edit'),
+        {
+          kind: 'family_started',
+          tone: 'action',
+          title: `${invite.label || 'A family'} started their memorial`,
+          body: 'They used the link you sent and are adding the story and programme. Check in, then publish when it’s ready.',
+          href: `/memorials/${created.id}`,
+          key: `family_started:${created.id}`,
+        },
+        user.id,
+      );
     return { ok: true, redirect: `/memorials/${created.id}` };
   }
 
@@ -247,5 +268,11 @@ export async function acceptInvite(
     .insert({ actor_user_id: user.id, action: 'ADMIN_PRO_TERMS_ACCEPTED', metadata: { home: name, terms: text(details.termsVersion, 20) || 'unknown' }, org_id: made.id });
   const { data: owners } = await admin.from('memora_groups').select('id').eq('org_id', made.id).eq('name', 'Owners').maybeSingle();
   if (owners) await admin.from('memora_group_members').insert({ group_id: owners.id, user_id: user.id, added_by: user.id });
+  await notify(
+    admin,
+    await platformAudience(admin, 'orgs.manage'),
+    { kind: 'home_joined', tone: 'action', title: `${name} set itself up on Memora Pro`, body: 'It’s in trial. Check its details, then make it active when billing should start.', href: `/admin?tab=homes#${made.id}`, key: `home_joined:${made.id}` },
+    user.id,
+  );
   return { ok: true, redirect: `/pro/dashboard?home=${made.id}&welcome=1` };
 }

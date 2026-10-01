@@ -111,6 +111,7 @@ function HomePublish({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [ask, setAsk] = useState(false);
+  const [told, setTold] = useState(false);
   const digits = home.phone.replace(/\D/g, '').replace(/^0(\d{9})$/, '27$1');
 
   if (!home.canPublish) {
@@ -122,8 +123,26 @@ function HomePublish({
             <strong>Everything they need is filled in.</strong> Let {home.name} know it’s ready. They’ll check it and publish it, and you can keep editing until then.
           </span>
         </div>
+        <div className="row" style={{ marginTop: 20 }}>
+          <button
+            className={`btn ${digits.length >= 11 ? '' : 'accent'} lg`}
+            type="button"
+            disabled={busy || told}
+            onClick={async () => {
+              setBusy(true);
+              await flush();
+              const res = await fetch(`/api/memorials/${owner.caseId}/ready`, { method: 'POST' }).catch(() => null);
+              const body = res ? await res.json().catch(() => ({})) : {};
+              setBusy(false);
+              if (res?.ok) setTold(true);
+              toast(body?.message || body?.error || 'Something went wrong.', res?.ok ? 'info' : 'error');
+            }}
+          >
+            {told ? `${home.name} has been told` : busy ? 'Letting them know…' : `Let ${home.name} know it’s ready`}
+          </button>
+        </div>
         {digits.length >= 11 && (
-          <div className="row" style={{ marginTop: 20 }}>
+          <div className="row" style={{ marginTop: 12 }}>
             <a
               className="btn accent lg"
               href={`https://wa.me/${digits}?text=${encodeURIComponent(`Hi ${home.name}, the memorial is ready for you to check and publish: ${typeof window === 'undefined' ? '' : window.location.origin}/memorials/${owner.caseId}`)}`}

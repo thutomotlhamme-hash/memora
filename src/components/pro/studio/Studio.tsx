@@ -4,6 +4,7 @@ import { AdminAction } from '@/components/admin/AdminAction';
 import { RoleCard } from '@/components/admin/CommandPanels';
 import { Brand } from '@/components/Brand';
 import { InviteList } from '@/components/pro/InviteList';
+import { NotificationBell } from '@/components/NotificationBell';
 import { NewHomeMemorial, PublishForHome, RunSheetFor } from '@/components/pro/ProButtons';
 import { PRO_PLANS, formatMoney, proInvoice } from '@/lib/plans';
 import { ALL_ROLES, ROLES, can, canGrantRole, canIn, type Permission, type Principal, type Role } from '@/lib/rbac';
@@ -218,6 +219,7 @@ export function Studio(d: StudioData) {
               </details>
             )}
             {live && createIn.length > 0 && <NewHomeMemorial orgId={org.id} branches={createIn.map((b) => ({ id: b.id, name: b.name }))} />}
+            {!d.preview && <NotificationBell tone="studio" />}
           </div>
         </header>
 

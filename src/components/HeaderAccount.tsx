@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { NotificationBell } from './NotificationBell';
 import { useEffect, useSyncExternalStore } from 'react';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 
@@ -96,6 +97,7 @@ export function HeaderAccount({ hideCreate }: { hideCreate: boolean }) {
             Funeral home
           </Link>
         )}
+        <NotificationBell />
         <Link className="btn ghost" href="/account">
           Account
         </Link>

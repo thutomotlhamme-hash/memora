@@ -3,11 +3,12 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { accountLabel, loginAddress } from '../account-id';
 import { slugify } from '../memorial';
-import { PRO_PLANS, billableUsage, isProPlan, periodOf, proInvoice, vatRateNow, type ProPlan } from '../plans';
+import { PRO_PLANS, billableUsage, formatMoney, isProPlan, periodOf, proInvoice, vatRateNow, type ProPlan } from '../plans';
 import { ALL_ROLES, ROLES, can, canGrantRole, canIn, isRole, type Permission, type Principal, type Role } from '../rbac';
 import { createInvite, revokeInvite } from './invites';
 import { refreshPublicPages } from './public-cache';
 import { generateAccountInvoices } from './enterprise';
+import { homeAudience, notify, teamHref } from './notify';
 import { lockedParts, type BrandPart } from '../enterprise';
 
 type Row = Record<string, any>;
@@ -403,6 +404,15 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       if (status === 'disabled' && !text(input.reason)) return { ok: false, error: 'Give a reason (it’s kept in the log).', status: 400 };
       await admin.from('memora_orgs').update({ status, updated_at: now }).eq('id', input.id);
       await log(admin, actor.userId, status === 'disabled' ? 'ORG_DISABLED' : 'ORG_ENABLED', { org: input.id, status, reason: text(input.reason, 500) });
+      if (status !== 'trial')
+        await notify(
+          admin,
+          await homeAudience(admin, input.id, null, 'org.branches', { evenIfOff: true }),
+          status === 'active'
+            ? { kind: 'home_active', tone: 'good', title: 'Your Memora Pro is active', body: 'Billing starts this month, on your plan’s terms. Thank you for choosing Memora.', href: `/pro/dashboard?home=${input.id}&tab=billing`, key: `home_status:${input.id}:${now}` }
+            : { kind: 'home_off', tone: 'warn', title: 'Your Memora Pro has been switched off', body: 'Staff can’t make or publish memorials for now. Published memorials stay up for families. Contact Memora.', key: `home_status:${input.id}:${now}` },
+          actor.userId,
+        );
       return {
         ok: true,
         message: status === 'disabled' ? 'Disabled. Their staff lose access at once; published memorials stay up.' : status === 'active' ? 'Active. Billing applies from this month.' : 'Back in trial.',
@@ -521,7 +531,21 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
       if (!uuid(input.id)) return { ok: false, error: 'Invoice not found.', status: 404 };
       const status = input.status;
       if (status !== 'SENT' && status !== 'PAID' && status !== 'VOID' && status !== 'DRAFT') return { ok: false, error: 'Unknown status.', status: 400 };
-      const { data } = await admin.from('memora_org_invoices').update({ status, updated_at: now }).eq('id', input.id).select('org_id,onboarding_minor').maybeSingle();
+      const { data } = await admin.from('memora_org_invoices').update({ status, updated_at: now }).eq('id', input.id).select('org_id,onboarding_minor,period,amount_minor,vat_minor').maybeSingle();
+      if (status === 'SENT' && data)
+        await notify(
+          admin,
+          await homeAudience(admin, data.org_id, null, 'org.billing.view'),
+          {
+            kind: 'invoice',
+            tone: 'action',
+            title: `Your Memora invoice for ${data.period} is ready`,
+            body: `${formatMoney(data.amount_minor + data.vat_minor)}${data.vat_minor ? ' incl. VAT' : ''}. Please pay within 7 days.`,
+            href: `/pro/dashboard?home=${data.org_id}&tab=billing`,
+            key: `invoice:${input.id}`,
+          },
+          actor.userId,
+        );
       if (status === 'PAID' && data?.onboarding_minor) await admin.from('memora_orgs').update({ onboarding_paid: true }).eq('id', data.org_id);
       await log(admin, actor.userId, 'INVOICE_' + status, { invoice: input.id });
       return { ok: true, message: `Marked ${status.toLowerCase()}.` };
@@ -589,12 +613,31 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
         const { error } = await admin.from('memora_group_members').insert({ group_id: g.id, user_id: account.id, added_by: actor.userId });
         if (error) return { ok: false, error: error.code === '23505' ? 'Already in this group.' : 'Could not add them.', status: 409 };
         await log(admin, actor.userId, 'MEMBER_ADDED', { group: g.name, roles: current, who: accountLabel(account.email) }, null, scope);
+        await notify(
+          admin,
+          [account.id],
+          {
+            kind: 'role_added',
+            tone: 'good',
+            title: `You’ve been added to ${await teamName(admin, g)}`,
+            body: `As ${current.map((r) => ROLES[r].label).join(' and ')}: ${current.map((r) => ROLES[r].summary).join(' ')}`,
+            href: teamHref(g),
+            key: `added:${g.id}:${account.id}:${now}`,
+          },
+          actor.userId,
+        );
         return { ok: true, message: `Added ${accountLabel(account.email)} to ${g.name}.` };
       }
       if (!uuid(input.userId)) return { ok: false, error: 'Person not found.', status: 404 };
       if (input.userId === actor.userId && current.includes('platform_admin')) return { ok: false, error: 'You can’t remove yourself from the administrators.', status: 400 };
       await admin.from('memora_group_members').delete().eq('group_id', g.id).eq('user_id', input.userId);
       const { data: gone } = await admin.auth.admin.getUserById(input.userId);
+      await notify(
+        admin,
+        [input.userId],
+        { kind: 'role_removed', tone: 'info', title: `You’re no longer in ${await teamName(admin, g)}`, body: 'Its access has been taken away. Ask the person who manages your team if this is a mistake.', key: `removed:${g.id}:${input.userId}:${now}` },
+        actor.userId,
+      );
       await log(admin, actor.userId, 'MEMBER_REMOVED', { group: g.name, roles: current, who: gone?.user?.email ? accountLabel(gone.user.email) : input.userId }, null, scope);
       return { ok: true, message: 'Removed. Their access changes on their next page.' };
     }
@@ -670,3 +713,14 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
 }
 
 export { ALL_ROLES };
+
+/** "Soweto · Arrangers at Letsatsi Funeral Services": a team as people know it. */
+async function teamName(admin: SupabaseClient, g: Row): Promise<string> {
+  const [home, branch, account] = await Promise.all([
+    g.org_id ? admin.from('memora_orgs').select('name').eq('id', g.org_id).maybeSingle() : Promise.resolve({ data: null }),
+    g.branch_id ? admin.from('memora_branches').select('name').eq('id', g.branch_id).maybeSingle() : Promise.resolve({ data: null }),
+    g.account_id ? admin.from('memora_accounts').select('name').eq('id', g.account_id).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const where = account.data?.name ?? home.data?.name ?? 'Memora';
+  return `${branch.data?.name ? `${branch.data.name} · ` : ''}${g.name} at ${where}`;
+}

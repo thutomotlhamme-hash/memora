@@ -22,11 +22,12 @@ import {
   type RegionKind,
 } from '../enterprise';
 import { newId } from '../memorial';
-import { billableUsage, periodOf, periodRange, proInvoice, vatRateNow } from '../plans';
+import { billableUsage, formatMoney, periodOf, periodRange, proInvoice, vatRateNow } from '../plans';
 import { ROLES, canAccount, canGrantRole, isRole, regionScope, type Principal, type Role } from '../rbac';
 import { linkSecret, signGiftToken } from './links';
 import { BRANCH_GROUPS, OWNERS_GROUP, adjustmentsFor, createBranch, loadGroups, log, uniqueSlug, type Group, type ProInput, type ProResult } from './pro';
 import { refreshPublicPages } from './public-cache';
+import { accountAudience, notify, teamHref } from './notify';
 
 // The Enterprise layer on the server: accounts (a group's contract and
 // configuration), their structure, the provisioning wizard, group actions,
@@ -504,6 +505,22 @@ async function addOrInvite(admin: SupabaseClient, actorId: string, accountId: st
   const person = await findPerson(admin, who);
   if (person) {
     await admin.from('memora_group_members').insert({ group_id: groupId, user_id: person.id, added_by: actorId });
+    const { data: g } = await admin.from('memora_groups').select('name,roles,org_id,branch_id,account_id').eq('id', groupId).maybeSingle();
+    const { data: acc } = await admin.from('memora_accounts').select('name').eq('id', accountId).maybeSingle();
+    if (g)
+      await notify(
+        admin,
+        [person.id],
+        {
+          kind: 'role_added',
+          tone: 'good',
+          title: `You’ve been added to ${g.name} at ${acc?.name ?? 'your group'}`,
+          body: ((g.roles ?? []) as string[]).filter(isRole).map((r) => ROLES[r].summary).join(' '),
+          href: teamHref(g),
+          key: `added:${groupId}:${person.id}:${Date.now()}`,
+        },
+        actorId,
+      );
     return { added: accountLabel(person.email) };
   }
   if (!linkSecret()) return { bad: who };
@@ -804,6 +821,20 @@ export async function performEnterpriseAction(admin: SupabaseClient, actor: Prin
       if ((input.status === 'suspended' || input.status === 'closed') && text(input.reason).length < 3) return { ok: false, error: 'Give a reason (it’s kept in the audit log).', status: 400 };
       await admin.from('memora_accounts').update({ status: input.status, updated_at: now }).eq('id', a.id);
       await log(admin, actor.userId, 'ACCOUNT_STATUS', { group: a.name, before: { status: a.status }, after: { status: input.status }, reason: text(input.reason, 500) }, null, scope);
+      if (input.status !== a.status)
+        await notify(
+          admin,
+          await accountAudience(admin, a.id, 'group.view'),
+          {
+            kind: 'group_status',
+            tone: CONTRACT_STATUS[input.status].access ? 'info' : 'warn',
+            title: `${a.name} on Memora: ${CONTRACT_STATUS[input.status].label.toLowerCase()}`,
+            body: CONTRACT_STATUS[input.status].hint,
+            href: `/pro/group?account=${a.id}&tab=billing`,
+            key: `group_status:${a.id}:${now}`,
+          },
+          actor.userId,
+        );
       refreshPublicPages();
       return { ok: true, message: `${CONTRACT_STATUS[input.status].label}. ${CONTRACT_STATUS[input.status].hint}` };
     }
@@ -818,7 +849,21 @@ export async function performEnterpriseAction(admin: SupabaseClient, actor: Prin
       if (!is('orgs.billing') || !uuid(input.id)) return deny();
       const status = input.status;
       if (status !== 'SENT' && status !== 'PAID' && status !== 'VOID' && status !== 'DRAFT') return { ok: false, error: 'Unknown status.', status: 400 };
-      const { data } = await admin.from('memora_account_invoices').update({ status, updated_at: now }).eq('id', input.id).eq('account_id', a.id).select('onboarding_minor,period').maybeSingle();
+      const { data } = await admin.from('memora_account_invoices').update({ status, updated_at: now }).eq('id', input.id).eq('account_id', a.id).select('onboarding_minor,period,amount_minor,vat_minor').maybeSingle();
+      if (status === 'SENT' && data)
+        await notify(
+          admin,
+          await accountAudience(admin, a.id, 'group.billing'),
+          {
+            kind: 'invoice',
+            tone: 'action',
+            title: `${a.name}’s Memora invoice for ${data.period} is ready`,
+            body: `${formatMoney(data.amount_minor + data.vat_minor)}${data.vat_minor ? ' incl. VAT' : ''}, payable on your agreement’s terms.`,
+            href: `/pro/group?account=${a.id}&tab=billing`,
+            key: `invoice:${input.id}`,
+          },
+          actor.userId,
+        );
       if (status === 'PAID' && data?.onboarding_minor) await admin.from('memora_accounts').update({ onboarding_paid: true }).eq('id', a.id);
       await log(admin, actor.userId, `INVOICE_${status}`, { group: a.name, period: data?.period ?? '' }, null, scope);
       return { ok: true, message: `Marked ${status.toLowerCase()}.` };

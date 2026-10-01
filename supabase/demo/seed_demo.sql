@@ -370,6 +370,20 @@ begin
     (palesa, 'ADMIN_TEMPLATE_PUBLISHED', '{"demo":true,"template":"Zion Christian Church service","audience":"regions"}', acc, now() - interval '20 days'),
     (me, 'ADMIN_CONTRACT_CHANGED', '{"demo":true,"group":"Motheo Funeral Group","before":{"included":40,"branches":30},"after":{"included":50,"branches":40}}', acc, now() - interval '15 days'),
     (thandi, 'ADMIN_BRANCHES_DEACTIVATED', '{"demo":true,"branches":["Rustenburg"]}', acc, now() - interval '6 days');
+
+  -- A few notifications, as they would have arrived (the bell also works out today's situations itself).
+  delete from public.memora_notifications where key like 'demo:%';
+  insert into public.memora_notifications (user_id, kind, tone, title, body, href, key, created_at)
+  select u, k, t, ti, b, h, 'demo:' || ky, now() - make_interval(hours => hrs)
+  from (values
+    (thandi, 'family_started', 'action', 'Motsamai family started their memorial', 'They used the link you sent and are adding the story and programme. Check in, then publish when it’s ready.', '/memorials/' || c_draft, 'fs-thandi', 30),
+    (me, 'family_started', 'action', 'Motsamai family started their memorial', 'They used the link you sent and are adding the story and programme. Check in, then publish when it’s ready.', '/memorials/' || c_draft, 'fs-me', 30),
+    (thandi, 'unveiling_interest', 'action', 'The Seleke family is planning Ditiro’s unveiling', 'They asked about unveiling pages. A good moment to call them.', '/memorials/' || c_old, 'uv-thandi', 20),
+    (me, 'unveiling_interest', 'action', 'The Seleke family is planning Ditiro’s unveiling', 'They asked about unveiling pages. A good moment to call them.', '/memorials/' || c_old, 'uv-me', 20),
+    (karabo, 'invoice', 'action', 'Motheo Funeral Group’s Memora invoice is ready', 'Last month: R44,500, payable on your agreement’s terms.', '/pro/group?account=' || acc || '&tab=billing', 'inv-karabo', 200),
+    (lerato_d, 'role_added', 'good', 'You’ve been added to Regional managers · Gauteng at Motheo Funeral Group', 'Sees and runs the branches in their region: their funerals, their managers and arrangers, and their reports.', '/pro/group?account=' || acc, 'role-lerato', 900)
+  ) as v(u, k, t, ti, b, h, ky, hrs)
+  where u is not null;
 end $$;
 
 commit;

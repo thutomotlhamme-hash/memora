@@ -264,3 +264,15 @@ test.describe('The legal pages say what Memora does', () => {
     await expect(page.getByRole('link', { name: 'Memora Pro terms' })).toHaveAttribute('href', '/terms#pro');
   });
 });
+
+test.describe('Notifications', () => {
+  test('a stranger has no notifications and can’t mark any', async ({ request, baseURL }) => {
+    const res = await request.get('/api/notifications?sync=1');
+    expect(res.ok()).toBe(true);
+    expect(await res.json()).toEqual({ items: [], unread: 0 });
+    const mark = await request.post('/api/notifications', { data: { id: 'all' }, headers: { origin: baseURL! } });
+    expect([401, 403]).toContain(mark.status());
+    const ready = await request.post('/api/memorials/00000000-0000-0000-0000-000000000000/ready', { headers: { origin: baseURL! } });
+    expect([401, 403, 404, 503]).toContain(ready.status());
+  });
+});

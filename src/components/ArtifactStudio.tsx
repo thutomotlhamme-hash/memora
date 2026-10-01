@@ -1,22 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOrigin } from '@/lib/hooks';
 import * as A from '@/lib/artifacts';
-import { displayName, lifeDates, type Draft } from '@/lib/memorial';
-import { QrImage } from './Share';
+import { displayName, type Draft } from '@/lib/memorial';
+import type { ThumbKind } from '@/lib/artifacts';
+import { KeepsakeThumb } from './KeepsakeThumb';
 import { useToast } from './Toast';
 
 type Item = {
-  key: string;
+  key: ThumbKind;
   kind: string;
   title: string;
   body: string;
   action: string;
   run: (input: A.ArtifactInput) => Promise<void>;
   dark?: boolean;
-  preview: (name: string, dates: string, url: string) => React.ReactNode;
 };
 
 const ITEMS: Item[] = [
@@ -28,13 +28,6 @@ const ITEMS: Item[] = [
     action: 'Download PNG',
     run: A.announcementCard,
     dark: true,
-    preview: (n, d) => (
-      <div>
-        <div className="k">With deep sorrow</div>
-        <div className="n">{n}</div>
-        <div className="d">{d}</div>
-      </div>
-    ),
   },
   {
     key: 'social',
@@ -43,13 +36,6 @@ const ITEMS: Item[] = [
     body: 'Portrait, name and dates for WhatsApp Status, Instagram and family groups.',
     action: 'Download PNG',
     run: A.socialCard,
-    preview: (n, d) => (
-      <div>
-        <div className="k">In loving memory</div>
-        <div className="n">{n}</div>
-        <div className="d">{d}</div>
-      </div>
-    ),
   },
   {
     key: 'journey',
@@ -58,13 +44,6 @@ const ITEMS: Item[] = [
     body: 'Every stop in order with times, to share once the arrangements are final.',
     action: 'Download PNG',
     run: A.journeyCard,
-    preview: (n) => (
-      <div>
-        <div className="k">Funeral journey</div>
-        <div className="n">{n}</div>
-        <div className="d">Stops · times · directions link</div>
-      </div>
-    ),
   },
   {
     key: 'qr',
@@ -73,7 +52,6 @@ const ITEMS: Item[] = [
     body: 'A framed QR code for the entrance, the guest book table or the back of the programme.',
     action: 'Download PNG',
     run: A.qrCard,
-    preview: (_n, _d, url) => <QrImage url={url} label="Memorial QR" />,
   },
   {
     key: 'programme',
@@ -82,13 +60,6 @@ const ITEMS: Item[] = [
     body: 'A cover with their portrait, the order of service with start times, the journey and a closing page with a QR code. Ready to print.',
     action: 'Download PDF',
     run: A.programmePdf,
-    preview: (n) => (
-      <div>
-        <div className="k">Order of service</div>
-        <div className="n">{n}</div>
-        <div className="d">Programme · journey · family message</div>
-      </div>
-    ),
   },
   {
     key: 'booklet',
@@ -97,13 +68,6 @@ const ITEMS: Item[] = [
     body: 'The programme and their story as a folded A5 booklet. Print double-sided on A4, flip on the short edge, then fold in half.',
     action: 'Download PDF',
     run: A.programmeBooklet,
-    preview: (n) => (
-      <div>
-        <div className="k">A5 booklet</div>
-        <div className="n">{n}</div>
-        <div className="d">Cover · story · programme · journey</div>
-      </div>
-    ),
   },
   {
     key: 'keepsake-card',
@@ -112,13 +76,6 @@ const ITEMS: Item[] = [
     body: 'A small card with a line from their story, to print and hand to guests.',
     action: 'Download PNG',
     run: A.keepsakeCard,
-    preview: (n, d) => (
-      <div>
-        <div className="k">In loving memory</div>
-        <div className="n">{n}</div>
-        <div className="d">{d}</div>
-      </div>
-    ),
   },
   {
     key: 'keepsake',
@@ -128,13 +85,6 @@ const ITEMS: Item[] = [
     action: 'Download PDF',
     run: A.keepsakePdf,
     dark: true,
-    preview: (n) => (
-      <div>
-        <div className="k">Keepsake</div>
-        <div className="n">{n}</div>
-        <div className="d">Story · programme · journey</div>
-      </div>
-    ),
   },
 ];
 
@@ -155,7 +105,16 @@ export function ArtifactStudio({
   const [busy, setBusy] = useState('');
   const url = `${origin}/m/${slug}`;
   const name = displayName(draft.person);
-  const dates = lifeDates(draft.person);
+  // The home's brand, ready for print (and for the QR card's thumbnail).
+  const [printBrand, setPrintBrand] = useState<A.PrintBrand | null>(null);
+  useEffect(() => {
+    let live = true;
+    prepared.current ??= A.prepareBrand(brand);
+    void prepared.current.then((b) => live && setPrintBrand(b));
+    return () => {
+      live = false;
+    };
+  }, [brand]);
 
   return (
     <main className="container">
@@ -177,7 +136,9 @@ export function ArtifactStudio({
       <div className="artifact-grid">
         {ITEMS.map((item) => (
           <article className="artifact" key={item.key}>
-            <div className={`preview ${item.dark ? 'dark' : ''}`}>{origin && item.preview(name, dates, url)}</div>
+            <div className={`preview ${item.dark ? 'dark' : ''}`}>
+              {origin && <KeepsakeThumb kind={item.key} draft={draft} url={url} brand={printBrand} alt={`${item.title} for ${name}`} />}
+            </div>
             <div className="body">
               <span className="eyebrow plain">{item.kind}</span>
               <h2 className="h3">{item.title}</h2>

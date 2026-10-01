@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useOrigin } from '@/lib/hooks';
 import { CopyField, QrImage, ShareButtons } from '@/components/Share';
+import { KeepsakeThumb } from '@/components/KeepsakeThumb';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/Toast';
 import { displayName, fmtDate, slugify, type CaseMeta, type Draft, type Readiness } from '@/lib/memorial';
@@ -427,6 +428,20 @@ function Published({ draft, meta, caseId, nav }: { draft: Draft; meta: CaseMeta;
             </div>
           </div>
         </div>
+      )}
+      {origin && (
+        <Link className="ks-strip" href={`/memorials/${caseId}/artifacts`} aria-label="Cards, programme and keepsake">
+          <span className="ks-strip-head">
+            <span className="eyebrow plain">Ready to share and print</span>
+            <strong>Cards, programme & keepsake →</strong>
+          </span>
+          <span className="ks-strip-row">
+            <KeepsakeThumb kind="announcement" draft={draft} url={url} width={300} alt="Announcement card" />
+            <KeepsakeThumb kind="social" draft={draft} url={url} width={300} alt="Memorial card" />
+            <KeepsakeThumb kind="programme" draft={draft} url={url} width={300} alt="Printable programme" />
+            <KeepsakeThumb kind="keepsake-card" draft={draft} url={url} width={300} alt="Keepsake card" />
+          </span>
+        </Link>
       )}
       <RunSheetLink caseId={caseId} name={name} />
       <PanelFoot nav={nav} />

@@ -354,7 +354,7 @@ const shortDate = (date: string) => {
 // ---------------------------------------------------------------------------
 
 /** 1080×1080 square for WhatsApp Status, Instagram and family groups. */
-export async function socialCard({ draft, slug }: ArtifactInput) {
+export async function drawSocialCard({ draft }: Omit<ArtifactInput, 'slug'>): Promise<HTMLCanvasElement> {
   await ensureFonts();
   const W = 1080;
   const { c, ctx } = canvas(W, W);
@@ -380,11 +380,15 @@ export async function socialCard({ draft, slug }: ArtifactInput) {
   ctx.font = `italic 400 30px ${DISPLAY}`;
   wrap(ctx, keepsakeLine(draft), W / 2, 934, 760, 42, 2);
   brandMark(ctx, W / 2 - 14, 1010, 28, C.bloom);
-  await download(c, file(slug, 'social', 'png'));
+  return c;
+}
+
+export async function socialCard(input: ArtifactInput) {
+  await download(await drawSocialCard(input), file(input.slug, 'social', 'png'));
 }
 
 /** 1080×1350 portrait death notice for immediate sharing. */
-export async function announcementCard({ draft, url, slug }: ArtifactInput) {
+export async function drawAnnouncementCard({ draft, url }: Omit<ArtifactInput, 'slug'>): Promise<HTMLCanvasElement> {
   await ensureFonts();
   const W = 1080;
   const H = 1350;
@@ -449,11 +453,15 @@ export async function announcementCard({ draft, url, slug }: ArtifactInput) {
   ctx.fillStyle = C.onNight;
   ctx.font = `600 24px ${SANS}`;
   ctx.fillText(bare(url), W / 2, H - 44);
-  await download(c, file(slug, 'announcement', 'png'));
+  return c;
+}
+
+export async function announcementCard(input: ArtifactInput) {
+  await download(await drawAnnouncementCard(input), file(input.slug, 'announcement', 'png'));
 }
 
 /** 1080×1350 route card with times, stops and the memorial link. */
-export async function journeyCard({ draft, url, slug }: ArtifactInput) {
+export async function drawJourneyCard({ draft, url }: Omit<ArtifactInput, 'slug'>): Promise<HTMLCanvasElement> {
   await ensureFonts();
   const W = 1080;
   const H = 1350;
@@ -547,11 +555,15 @@ export async function journeyCard({ draft, url, slug }: ArtifactInput) {
   ctx.fillStyle = C.onNightMuted;
   ctx.font = `400 21px ${SANS}`;
   ctx.fillText(bare(url), 104, H - 72);
-  await download(c, file(slug, 'funeral-journey', 'png'));
+  return c;
+}
+
+export async function journeyCard(input: ArtifactInput) {
+  await download(await drawJourneyCard(input), file(input.slug, 'funeral-journey', 'png'));
 }
 
 /** 5 × 7 in keepsake card at 300 dpi (1500 × 2100), to print and hand to guests. */
-export async function keepsakeCard({ draft, slug }: ArtifactInput) {
+export async function drawKeepsakeCard({ draft }: Omit<ArtifactInput, 'slug'>): Promise<HTMLCanvasElement> {
   await ensureFonts();
   const W = 1500;
   const H = 2100;
@@ -588,7 +600,11 @@ export async function keepsakeCard({ draft, slug }: ArtifactInput) {
   ctx.font = `italic 400 46px ${DISPLAY}`;
   wrap(ctx, keepsakeLine(draft), W / 2, y, 1060, 66, 4);
   brandMark(ctx, W / 2 - 20, H - 190, 40, C.bloom);
-  await download(c, file(slug, 'keepsake-card', 'png'));
+  return c;
+}
+
+export async function keepsakeCard(input: ArtifactInput) {
+  await download(await drawKeepsakeCard(input), file(input.slug, 'keepsake-card', 'png'));
 }
 
 /** 4 × 5 in QR card at 300 dpi (1200 × 1500) for entrances, tables and programmes. */
@@ -1434,4 +1450,86 @@ export async function keepsakePdf({ draft, url, slug, brand }: ArtifactInput) {
   }
   await pdf.closing(draft, url);
   pdf.save(file(slug, 'keepsake', 'pdf'));
+}
+
+// ---------------------------------------------------------------------------
+// Thumbnails: the real output, small. PNG cards are drawn exactly as they
+// download; PDFs show their cover, drawn the same way as the PDF's first page.
+// ---------------------------------------------------------------------------
+
+/** An A4 cover as a canvas (210 × 297 at 4 px per mm), mirroring the PDF cover. */
+async function drawPdfCover(draft: Draft, title: string, subtitle: string): Promise<HTMLCanvasElement> {
+  await ensureFonts();
+  const k = 4;
+  const W = 210 * k;
+  const H = 297 * k;
+  const { c, ctx } = canvas(W, H);
+  ctx.fillStyle = C.paper;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = C.clay;
+  ctx.lineWidth = 0.35 * k;
+  ctx.strokeRect(12 * k, 12 * k, W - 24 * k, H - 24 * k);
+  ctx.strokeStyle = C.bloom;
+  ctx.lineWidth = 0.2 * k;
+  ctx.strokeRect(14.5 * k, 14.5 * k, W - 29 * k, H - 29 * k);
+  const img = await loadImage(draft.person.portraitUrl);
+  const pw = 72 * k;
+  const ph = 92 * k;
+  archPortrait(ctx, draft, img, (W - pw) / 2, 38 * k, pw, ph, { outline: C.bloom, gap: 2.2 * k, stroke: 0.35 * k, empty: C.mist, emptyInk: C.clay });
+  let y = (38 + 92 + 18) * k;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.clay;
+  ctx.font = `600 ${3 * k}px ${SANS}`;
+  spaced(ctx, 'IN LOVING MEMORY', W / 2, y, 0.4 * k);
+  y += 16 * k;
+  const name = displayName(draft.person);
+  fit(ctx, name, (s) => `400 ${s}px ${DISPLAY}`, 12.7 * k, W - 50 * k);
+  ctx.fillStyle = C.ink;
+  ctx.fillText(name, W / 2, y);
+  y += 8 * k;
+  ctx.fillStyle = C.dusk;
+  ctx.font = `400 ${3.9 * k}px ${SANS}`;
+  ctx.fillText(lifeDates(draft.person), W / 2, y);
+  y += 11 * k;
+  ornament(ctx, W / 2, y, 12 * k, C.bloom, C.candle, 0.9 * k);
+  y += 11 * k;
+  ctx.fillStyle = C.clay;
+  ctx.font = `italic 400 ${5.6 * k}px ${DISPLAY}`;
+  ctx.fillText(title, W / 2, y);
+  if (subtitle) {
+    y += 7 * k;
+    ctx.fillStyle = C.dusk;
+    ctx.font = `400 ${3.5 * k}px ${SANS}`;
+    wrap(ctx, subtitle, W / 2, y, W - 60 * k, 5 * k, 2);
+  }
+  ctx.fillStyle = C.ink;
+  ctx.font = `italic 400 ${4.4 * k}px ${DISPLAY}`;
+  wrap(ctx, `“${keepsakeLine(draft).replace(/[.]$/, '')}.”`, W / 2, H - 40 * k, W - 70 * k, 6.6 * k, 3);
+  return c;
+}
+
+export type ThumbKind = 'announcement' | 'social' | 'journey' | 'qr' | 'programme' | 'booklet' | 'keepsake-card' | 'keepsake';
+
+/** The keepsake, drawn and shrunk to `width` pixels wide, as a JPEG data URL for an <img>. */
+export async function thumbnail(kind: ThumbKind, input: Omit<ArtifactInput, 'slug'>, width = 520): Promise<string> {
+  const big =
+    kind === 'announcement'
+      ? await drawAnnouncementCard(input)
+      : kind === 'social'
+        ? await drawSocialCard(input)
+        : kind === 'journey'
+          ? await drawJourneyCard(input)
+          : kind === 'qr'
+            ? await drawQrCard(input)
+            : kind === 'keepsake-card'
+              ? await drawKeepsakeCard(input)
+              : await drawPdfCover(input.draft, kind === 'keepsake' ? 'A life remembered' : 'Order of service', serviceLine(input.draft));
+  const scale = Math.min(1, width / big.width);
+  const small = document.createElement('canvas');
+  small.width = Math.round(big.width * scale);
+  small.height = Math.round(big.height * scale);
+  const ctx = small.getContext('2d')!;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(big, 0, 0, small.width, small.height);
+  return small.toDataURL('image/jpeg', 0.86);
 }

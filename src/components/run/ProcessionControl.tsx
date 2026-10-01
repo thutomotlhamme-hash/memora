@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/Toast';
 import { fmtDate, localDateKey, stopLabel, type Stop } from '@/lib/memorial';
 import { ARRIVAL_RADIUS_M, SHARING_HOURS, distanceM, etaRange, formatDistance, formatEta, shouldSend, type ProcessionRecord } from '@/lib/procession';
@@ -23,6 +24,8 @@ function defaultDestination(journey: Stop[]): string {
 }
 
 /** What the run-sheet can ask of the procession: leave for a stop, or stop sharing on arrival. */
+const CONSENT_KEY = 'memora.procession.consent';
+
 export type ProcessionHandle = { startTo: (stopId: string) => void; endIfSharing: (message?: string) => void };
 
 export function ProcessionControl({
@@ -167,8 +170,21 @@ export function ProcessionControl({
     };
   }, [holdScreen]);
 
+  // The first time a phone shares, its holder agrees to what that means. After that it never interrupts the day.
+  const [ask, setAsk] = useState<string | null>(null);
+  const consented = () => {
+    try {
+      return localStorage.getItem(CONSENT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  };
   const start = async (to: string = toStop) => {
     if (!to) return setProblem('Choose where the procession is going.');
+    if (!consented()) return setAsk(to);
+    return begin(to);
+  };
+  const begin = async (to: string) => {
     if (!('geolocation' in navigator)) return setProblem('This phone’s browser can’t share location. Try Chrome or Safari.');
     setBusy(true);
     setProblem('');
@@ -310,6 +326,29 @@ export function ProcessionControl({
           <span>{problem}</span>
         </div>
       )}
+      <ConfirmSheet
+        open={ask !== null}
+        title="Share this phone’s location?"
+        points={[
+          'While sharing is on, anyone with the memorial link sees where the procession is on a map, with an estimate of when it arrives.',
+          'Only the latest position is kept, never a route or history. It is erased when you pause or end, on arrival, or after 6 hours.',
+          'Keep this page open with the screen on. If you are driving, ask a passenger to hold the phone.',
+        ]}
+        check="This is my phone (or I have its owner’s agreement), and I’m riding with the procession."
+        confirm="Start sharing"
+        busy={busy}
+        onCancel={() => setAsk(null)}
+        onConfirm={() => {
+          try {
+            localStorage.setItem(CONSENT_KEY, '1');
+          } catch {
+            /* storage blocked: we'll simply ask again next time */
+          }
+          const to = ask;
+          setAsk(null);
+          if (to) void begin(to);
+        }}
+      />
     </section>
   );
 }

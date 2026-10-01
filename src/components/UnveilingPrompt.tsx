@@ -36,6 +36,8 @@ export function UnveilingPrompt({ caseId, name, daysLeft, until, asked }: { case
             type="button"
             disabled={busy}
             onClick={async () => {
+              const today = new Date().toISOString().slice(0, 10);
+              if (date && date < today) return toast('That date has passed. Leave it empty if you’re not sure yet.', 'error');
               setBusy(true);
               const res = await fetch(`/api/memorials/${caseId}/unveiling`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plannedFor: date || undefined }) }).catch(() => null);
               const out = res ? await res.json().catch(() => ({})) : {};
@@ -46,6 +48,7 @@ export function UnveilingPrompt({ caseId, name, daysLeft, until, asked }: { case
           >
             {busy ? 'Saving…' : 'Tell me when it’s ready'}
           </button>
+          <span className="unveil-fine">No payment and no commitment. We’ll only use this to tell you about the unveiling.</span>
         </div>
       )}
     </article>

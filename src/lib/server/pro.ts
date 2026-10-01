@@ -3,7 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { accountLabel, loginAddress } from '../account-id';
 import { slugify } from '../memorial';
-import { PRO_PLANS, billableUsage, isProPlan, periodOf, proInvoice, type ProPlan } from '../plans';
+import { PRO_PLANS, billableUsage, isProPlan, periodOf, proInvoice, vatRateNow, type ProPlan } from '../plans';
 import { ALL_ROLES, ROLES, can, canGrantRole, canIn, isRole, type Permission, type Principal, type Role } from '../rbac';
 import { createInvite, revokeInvite } from './invites';
 import { refreshPublicPages } from './public-cache';
@@ -473,7 +473,7 @@ export async function performProAction(admin: SupabaseClient, actor: Principal, 
         if (r.status === 'trial' || locked.has(r.id)) continue;
         const o = toOrg(r);
         const count = usage.get(o.id) ?? 0;
-        const inv = proInvoice(o, count, !had.has(o.id), adjustments.get(o.id) ?? 0);
+        const inv = proInvoice(o, count, !had.has(o.id), adjustments.get(o.id) ?? 0, vatRateNow());
         await admin.from('memora_org_invoices').upsert(
           {
             org_id: o.id,

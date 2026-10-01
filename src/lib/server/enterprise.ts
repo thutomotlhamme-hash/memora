@@ -22,7 +22,7 @@ import {
   type RegionKind,
 } from '../enterprise';
 import { newId } from '../memorial';
-import { billableUsage, periodOf, periodRange, proInvoice } from '../plans';
+import { billableUsage, periodOf, periodRange, proInvoice, vatRateNow } from '../plans';
 import { ROLES, canAccount, canGrantRole, isRole, regionScope, type Principal, type Role } from '../rbac';
 import { linkSecret, signGiftToken } from './links';
 import { BRANCH_GROUPS, OWNERS_GROUP, adjustmentsFor, createBranch, loadGroups, log, uniqueSlug, type Group, type ProInput, type ProResult } from './pro';
@@ -451,7 +451,7 @@ export async function generateAccountInvoices(admin: SupabaseClient, period: str
   let made = 0;
   for (const a of billable) {
     if (locked.has(a.id)) continue;
-    const inv = proInvoice(a, used.get(a.id) ?? 0, !had.has(a.id), adjustments.get(a.id) ?? 0);
+    const inv = proInvoice(a, used.get(a.id) ?? 0, !had.has(a.id), adjustments.get(a.id) ?? 0, vatRateNow());
     await admin.from('memora_account_invoices').upsert(
       {
         account_id: a.id,

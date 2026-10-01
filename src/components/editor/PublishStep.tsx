@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useOrigin } from '@/lib/hooks';
 import { CopyField, QrImage, ShareButtons } from '@/components/Share';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/Toast';
 import { displayName, fmtDate, slugify, type CaseMeta, type Draft, type Readiness } from '@/lib/memorial';
 import { paymentsOn } from '@/lib/config';
@@ -109,6 +110,7 @@ function HomePublish({
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [ask, setAsk] = useState(false);
   const digits = home.phone.replace(/\D/g, '').replace(/^0(\d{9})$/, '27$1');
 
   if (!home.canPublish) {
@@ -162,10 +164,28 @@ function HomePublish({
         </div>
       )}
       <div className="row" style={{ marginTop: 24 }}>
-        <button className="btn accent lg" type="button" onClick={publish} disabled={busy}>
+        <button className="btn accent lg" type="button" onClick={() => setAsk(true)} disabled={busy}>
           {busy ? 'Publishing…' : `Publish for ${home.name}`}
         </button>
       </div>
+      <ConfirmSheet
+        open={ask}
+        title={`Publish for ${home.name}?`}
+        points={[
+          'The memorial goes live at its own link and QR code. Anyone with the link can open it for a year; search engines are asked not to list it.',
+          `It counts once towards ${home.name}’s Memora Pro plan this month: from the allowance, or at the plan’s price per extra funeral. Editing it later is free.`,
+          'Check names, dates, times and places with the family first. Guests rely on them on the day.',
+        ]}
+        check={`The family has approved what’s on this memorial, and I’m publishing it on behalf of ${home.name}.`}
+        confirm="Publish now"
+        tone="accent"
+        busy={busy}
+        onCancel={() => setAsk(false)}
+        onConfirm={() => {
+          setAsk(false);
+          void publish();
+        }}
+      />
       <PanelFoot nav={nav} />
     </div>
   );
@@ -190,6 +210,7 @@ function Checkout({
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState<'' | 'pay' | 'publish'>('');
+  const [ask, setAsk] = useState(false);
   const paymentParam = useSearchParams().get('payment');
   const returning = paymentParam === 'return';
   const [pollDone, setPollDone] = useState(false);
@@ -327,11 +348,29 @@ function Checkout({
 
       {canPublish && (
         <div className="row" style={{ marginTop: 24 }}>
-          <button className="btn accent lg" type="button" onClick={publish} disabled={Boolean(busy)}>
+          <button className="btn accent lg" type="button" onClick={() => setAsk(true)} disabled={Boolean(busy)}>
             {busy === 'publish' ? 'Publishing…' : 'Publish memorial'}
           </button>
         </div>
       )}
+      <ConfirmSheet
+        open={ask}
+        title="Publish the memorial?"
+        points={[
+          `It goes live at its own link and QR code. Anyone you share them with can open it for a full year from today, through the unveiling. Search engines are asked not to list it.`,
+          'You can keep editing afterwards: names, times, the programme. Guests see the changes straight away.',
+          'Guests rely on the times and places on the day, so check them once more.',
+        ]}
+        check="The photos and words are ours to share, and I have the family’s agreement to publish them."
+        confirm="Publish now"
+        tone="accent"
+        busy={busy === 'publish'}
+        onCancel={() => setAsk(false)}
+        onConfirm={() => {
+          setAsk(false);
+          void publish();
+        }}
+      />
       <PanelFoot nav={nav} />
     </div>
   );

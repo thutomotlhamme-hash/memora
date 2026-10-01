@@ -130,7 +130,8 @@ export default function ProPage() {
             })}
           </div>
           <p className="small muted" style={{ textAlign: 'center', marginTop: 22 }}>
-            A family buying a memorial themselves pays {formatMoney(PRODUCT.amountMinor)} once, for {PRODUCT.name}. Memora Pro is for funeral homes running funerals through Memora.
+            A family buying a memorial themselves pays {formatMoney(PRODUCT.amountMinor)} once, for {PRODUCT.name}. Memora Pro is for funeral homes running funerals through Memora.{' '}
+            <Link href="/terms#pro">Memora Pro terms</Link>
           </p>
         </section>
       </main>

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CopyField } from '@/components/Share';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/Toast';
 import { createMemorial } from '@/lib/memorials-client';
 
@@ -44,29 +45,41 @@ export function NewHomeMemorial({ orgId, branches }: { orgId: string; branches: 
 }
 
 /** Publishes a funeral home's finished memorial (its arrangers, managers and owners). */
-export function PublishForHome({ caseId }: { caseId: string }) {
+export function PublishForHome({ caseId, name }: { caseId: string; name?: string }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(false);
+  const publish = async () => {
+    setBusy(true);
+    const res = await fetch(`/api/memorials/${caseId}/publish`, { method: 'POST' }).catch(() => null);
+    const body = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    setAsk(false);
+    toast(res?.ok ? 'Published. The memorial is live.' : body?.error || 'Could not publish.', res?.ok ? 'info' : 'error');
+    if (res?.ok) router.refresh();
+  };
   return (
-    <button
-      className="btn sm accent"
-      type="button"
-      disabled={busy}
-      onClick={async () => {
-        if (!window.confirm('Publish this memorial? It goes live for guests and is billed to the funeral home.')) return;
-        setBusy(true);
-        const res = await fetch(`/api/memorials/${caseId}/publish`, {
-          method: 'POST',
-        }).catch(() => null);
-        const body = res ? await res.json().catch(() => ({})) : {};
-        setBusy(false);
-        toast(res?.ok ? 'Published. The memorial is live.' : body?.error || 'Could not publish.', res?.ok ? 'info' : 'error');
-        if (res?.ok) router.refresh();
-      }}
-    >
-      {busy ? 'Publishing…' : 'Publish'}
-    </button>
+    <>
+      <button className="btn sm accent" type="button" disabled={busy} onClick={() => setAsk(true)}>
+        {busy ? 'Publishing…' : 'Publish'}
+      </button>
+      <ConfirmSheet
+        open={ask}
+        title={name ? `Publish ${name}’s memorial?` : 'Publish this memorial?'}
+        points={[
+          'It goes live at its own link and QR code for a year. Search engines are asked not to list it.',
+          'It counts once towards your plan this month: from the allowance, or at your price per extra funeral. Editing it later is free.',
+          'Check names, dates, times and places with the family first. Guests rely on them on the day.',
+        ]}
+        check="The family has approved what’s on this memorial."
+        confirm="Publish now"
+        tone="accent"
+        busy={busy}
+        onCancel={() => setAsk(false)}
+        onConfirm={() => void publish()}
+      />
+    </>
   );
 }
 

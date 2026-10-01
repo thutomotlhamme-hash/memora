@@ -927,7 +927,7 @@ export function GroupCentre({
                   </span>
                   <b className="st-amount">
                     {R(i.amountMinor + i.vatMinor)}
-                    <small>incl. VAT</small>
+                    <small>{i.vatMinor ? 'incl. VAT' : 'no VAT charged'}</small>
                   </b>
                   <span className={`st-pill ${i.status === 'PAID' ? 'ok' : i.status === 'VOID' ? 'muted' : ''}`}>{i.status === 'DRAFT' ? 'Being prepared' : i.status.toLowerCase()}</span>
                   {canAccount(p, 'orgs.billing', null) && i.status !== 'PAID' && i.status !== 'VOID' && (

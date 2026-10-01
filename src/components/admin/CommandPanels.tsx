@@ -284,7 +284,7 @@ export async function BillingPanel({ admin }: { admin: SupabaseClient }) {
                     {i.overageMemorials ? ` + ${i.overageMemorials} × ${R(i.perMemorialMinor)}` : ''}
                     {i.onboardingMinor ? ` + ${R(i.onboardingMinor)} onboarding` : ''}
                     {i.adjustmentsMinor ? ` ${i.adjustmentsMinor < 0 ? '−' : '+'} ${R(Math.abs(i.adjustmentsMinor))} adjustment` : ''}
-                    {` · VAT ${R(i.vatMinor)} · ${R(i.amountMinor + i.vatMinor)} incl.`}
+                    {i.vatMinor ? ` · VAT ${R(i.vatMinor)} · ${R(i.amountMinor + i.vatMinor)} incl.` : ' · no VAT charged'}
                   </span>
                 </td>
                 <td>{i.status.toLowerCase()}</td>

@@ -220,6 +220,9 @@ export async function acceptInvite(
   // A funeral home setting itself up: its details, then this person as owner.
   const name = text(details.name) || invite.label;
   if (name.length < 2) return { ok: false, error: 'Enter your funeral home’s name.', status: 400 };
+  if (details.agreed !== true) return { ok: false, error: 'Please confirm you may sign up for the funeral home and agree to the Memora Pro terms.', status: 400 };
+  const email = text(details.contactEmail, 200);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'Check the office email address.', status: 400 };
   if (!(await claim({}))) return { ok: false, error: 'This link has just been used. Ask Memora for a new one.', status: 409 };
   const area = text(details.area, 200);
   const made = await createOrg(admin, user.id, {
@@ -238,6 +241,10 @@ export async function acceptInvite(
     return made;
   }
   await admin.from('memora_invites').update({ org_id: made.id }).eq('id', invite.id);
+  // Who agreed to the Pro terms, for which home, and which version.
+  await admin
+    .from('memora_activity_log')
+    .insert({ actor_user_id: user.id, action: 'ADMIN_PRO_TERMS_ACCEPTED', metadata: { home: name, terms: text(details.termsVersion, 20) || 'unknown' }, org_id: made.id });
   const { data: owners } = await admin.from('memora_groups').select('id').eq('org_id', made.id).eq('name', 'Owners').maybeSingle();
   if (owners) await admin.from('memora_group_members').insert({ group_id: owners.id, user_id: user.id, added_by: user.id });
   return { ok: true, redirect: `/pro/dashboard?home=${made.id}&welcome=1` };

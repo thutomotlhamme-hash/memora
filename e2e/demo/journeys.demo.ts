@@ -96,6 +96,11 @@ for (const family of FAMILIES) {
     await page.waitForURL(/\/memorials\/[0-9a-f-]{36}/, { timeout: 30_000 });
     const caseId = /\/memorials\/([0-9a-f-]{36})/.exec(page.url())![1];
     await page.getByRole('button', { name: 'Publish memorial' }).click();
+    // The confirmation: tick that the family agrees, then publish.
+    const sheet = page.getByRole('dialog', { name: 'Publish the memorial?' });
+    await expect(sheet.getByRole('button', { name: 'Publish now' })).toBeDisabled();
+    await sheet.getByRole('checkbox').check();
+    await sheet.getByRole('button', { name: 'Publish now' }).click();
     await expect(page.getByRole('heading', { name: 'The memorial is live.' })).toBeVisible({ timeout: 30_000 });
     const memorialPath = (await page.getByRole('link', { name: /Open memorial/ }).getAttribute('href'))!;
     record({ family: family.key, phone, caseId, memorial: new URL(memorialPath, page.url()).toString() });

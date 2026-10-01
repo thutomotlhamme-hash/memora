@@ -237,3 +237,30 @@ test.describe('The first year and the unveiling', () => {
     expect([401, 403, 404, 503]).toContain(res.status());
   });
 });
+
+test.describe('The legal pages say what Memora does', () => {
+  test('terms cover families, the funeral day, Memora Pro and Enterprise, with live prices', async ({ page }) => {
+    await page.goto('/terms');
+    for (const h of ['Memora Complete: a family memorial', 'Memorials made with a funeral home', 'On the funeral day', 'Memora Pro: for funeral homes', 'Memora Enterprise', 'Law and disputes']) {
+      await expect(page.getByRole('heading', { name: new RegExp(h.split(':')[0]) }).first()).toBeVisible();
+    }
+    const pro = page.locator('table.legal-table');
+    await expect(pro).toContainText('R1,490');
+    await expect(pro).toContainText('R6,500');
+    await expect(pro).toContainText('R14,500');
+    await expect(page.getByText(/A funeral counts once, in the month its memorial is first published/)).toBeVisible();
+  });
+
+  test('the privacy policy explains who is responsible, the audit log and location', async ({ page }) => {
+    await page.goto('/privacy');
+    await expect(page.getByRole('heading', { name: 'Who is responsible for your information' })).toBeVisible();
+    await expect(page.getByText(/that funeral home is the responsible party/)).toBeVisible();
+    await expect(page.getByText(/Activity records:/)).toBeVisible();
+    await expect(page.getByText(/keep only the latest position, never a history/)).toBeVisible();
+  });
+
+  test('the Pro page links to the Pro terms', async ({ page }) => {
+    await page.goto('/pro');
+    await expect(page.getByRole('link', { name: 'Memora Pro terms' })).toHaveAttribute('href', '/terms#pro');
+  });
+});

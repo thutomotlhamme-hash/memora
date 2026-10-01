@@ -827,7 +827,7 @@ export function Studio(d: StudioData) {
           </ol>
         </div>
         <div className="st-funeral-actions">
-          {f.status === 'DRAFT' && live && canIn(p, 'org.memorials.publish', org.id, f.branchId) && <PublishForHome caseId={f.id} />}
+          {f.status === 'DRAFT' && live && canIn(p, 'org.memorials.publish', org.id, f.branchId) && <PublishForHome caseId={f.id} name={f.name.split(' ')[0]} />}
           {f.status === 'PUBLISHED' && f.stage !== 'past' && live && canIn(p, 'org.runsheet', org.id, f.branchId) && <RunSheetFor caseId={f.id} />}
           {canEdit && (
             <Link className="btn sm" href={`/memorials/${f.id}`}>
@@ -1190,7 +1190,7 @@ export function Studio(d: StudioData) {
                 </span>
                 <b className="st-amount">
                   {formatMoney(i.amountMinor + i.vatMinor)}
-                  <small>incl. VAT</small>
+                  <small>{i.vatMinor ? 'incl. VAT' : 'no VAT charged'}</small>
                 </b>
                 <span className={`st-pill ${i.status === 'PAID' ? 'ok' : i.status === 'VOID' ? 'muted' : ''}`}>{i.status === 'DRAFT' ? 'Being prepared' : i.status.toLowerCase()}</span>
               </div>

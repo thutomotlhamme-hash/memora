@@ -121,3 +121,10 @@ test('the first year: public for 365 days, the unveiling window at the end', asy
   assert.equal(over.daysLeft, 0);
   assert.equal(over.elapsed, 1);
 });
+
+test('VAT is only charged when Memora is VAT-registered', () => {
+  const t = termsOf('pro');
+  assert.equal(proInvoice(t, 0, false, 0, 0).vat, 0);
+  assert.equal(proInvoice(t, 0, false, 0, 0).totalInclVat, 650000);
+  assert.equal(proInvoice(t, 0, false).vat, 97500, 'the default rate is 15%');
+});

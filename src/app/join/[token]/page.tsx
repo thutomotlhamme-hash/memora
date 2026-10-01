@@ -156,9 +156,28 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
                 Signed in as {accountLabel(user.email)}. <Link href={`/account?next=/join/${token}`}>Not you?</Link>
               </p>
               {joining ? (
-                <StartFamilyMemorial token={decodeURIComponent(token)} label={`Join ${invite.groupName}`} busyLabel="Joining…" />
+                <>
+                  <p className="tiny muted">
+                    By joining you agree to Memora’s <Link href="/terms">terms</Link> and <Link href="/privacy">privacy policy</Link>. What you do in the group is recorded in
+                    its audit log.
+                  </p>
+                  <StartFamilyMemorial token={decodeURIComponent(token)} label={`Join ${invite.groupName}`} busyLabel="Joining…" />
+                </>
               ) : family ? (
-                <StartFamilyMemorial token={decodeURIComponent(token)} />
+                <>
+                  <div className="join-terms">
+                    <strong>What {invite.orgName} can do</strong>
+                    <ul>
+                      <li>See and help with everything you add, publish the memorial when you’re both happy, and run the programme on the day.</li>
+                      <li>Their name and logo appear on the memorial and printed programme.</li>
+                      <li>You can keep editing after it’s published, and nothing is public until then.</li>
+                    </ul>
+                    <span className="tiny muted">
+                      By starting you agree to Memora’s <Link href="/terms">terms</Link> and <Link href="/privacy">privacy policy</Link>.
+                    </span>
+                  </div>
+                  <StartFamilyMemorial token={decodeURIComponent(token)} />
+                </>
               ) : (
                 <SetUpHome token={decodeURIComponent(token)} name={invite.label} phone={isPhoneLogin(user.email) ? accountLabel(user.email) : ''} />
               )}

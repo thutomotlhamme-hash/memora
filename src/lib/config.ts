@@ -34,3 +34,29 @@ export const contact = {
     return process.env.NEXT_PUBLIC_BUSINESS_NAME || 'Memora';
   },
 };
+
+/**
+ * The supplier details South African law asks an online shop to show (ECTA s43)
+ * and the Information Officer POPIA requires. Set them in Netlify; anything
+ * missing is listed under Command centre → Setup.
+ */
+export const legal = {
+  get name(): string {
+    return process.env.NEXT_PUBLIC_LEGAL_NAME || '';
+  },
+  get registration(): string {
+    return process.env.NEXT_PUBLIC_COMPANY_REG || '';
+  },
+  get vat(): string {
+    return process.env.NEXT_PUBLIC_VAT_NUMBER || '';
+  },
+  get address(): string {
+    return process.env.NEXT_PUBLIC_PHYSICAL_ADDRESS || '';
+  },
+  get informationOfficer(): string {
+    return process.env.NEXT_PUBLIC_INFORMATION_OFFICER || '';
+  },
+};
+
+/** The version of the terms people agree to (recorded with each agreement). Change it when the terms change. */
+export const TERMS_VERSION = '2026-10-01';

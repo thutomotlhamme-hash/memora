@@ -45,6 +45,11 @@ export type ProPlan = 'payg' | 'pro' | 'pro_plus' | 'enterprise';
 
 export const VAT_RATE = 0.15;
 
+/** VAT may only be charged once Memora is VAT-registered (a VAT number is set). */
+export function vatRateNow(): number {
+  return process.env.NEXT_PUBLIC_VAT_NUMBER ? VAT_RATE : 0;
+}
+
 export type PlanDef = {
   name: string;
   /** The line the admin selector and invoices use. */
@@ -167,14 +172,14 @@ export type InvoiceLines = {
  * memorials count; the allowance resets each month; onboarding is charged once.
  * Whole cents only, so it is the same every time it is worked out.
  */
-export function proInvoice(terms: BillingTerms, memorials: number, firstInvoice: boolean, adjustmentsMinor = 0): InvoiceLines {
+export function proInvoice(terms: BillingTerms, memorials: number, firstInvoice: boolean, adjustmentsMinor = 0, vatRate = VAT_RATE): InvoiceLines {
   const used = Math.max(0, Math.floor(memorials));
   const included = Math.max(0, Math.floor(terms.includedMemorials ?? 0));
   const overageMemorials = Math.max(0, used - included);
   const usage = overageMemorials * terms.perMemorialMinor;
   const onboarding = firstInvoice && !terms.onboardingPaid ? terms.onboardingFeeMinor : 0;
   const subtotal = Math.max(0, terms.monthlyFeeMinor + usage + onboarding + adjustmentsMinor);
-  const vat = Math.round(subtotal * VAT_RATE);
+  const vat = Math.round(subtotal * vatRate);
   return {
     monthly: terms.monthlyFeeMinor,
     included,

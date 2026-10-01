@@ -1551,7 +1551,7 @@ body:has(.st) { background: var(--paper); }
 .st-menu > summary::-webkit-details-marker { display: none; }
 .st-menu > summary::after { content: ''; width: 7px; height: 7px; margin-top: -3px; border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted); transform: rotate(45deg); }
 .st-menu[open] > summary { box-shadow: 0 0 0 1.5px var(--home); }
-.st-menu-list { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; min-width: 230px; display: grid; gap: 2px; padding: 6px; border-radius: 16px; background: var(--card); box-shadow: 0 24px 60px -18px rgba(30, 26, 36, 0.3), 0 0 0 1px var(--line); animation: st-in 0.18s var(--ease-out) both; }
+.st-menu-list { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; min-width: 230px; max-width: calc(100vw - 32px); display: grid; gap: 2px; padding: 6px; border-radius: 16px; background: var(--card); box-shadow: 0 24px 60px -18px rgba(30, 26, 36, 0.3), 0 0 0 1px var(--line); animation: st-in 0.18s var(--ease-out) both; }
 .st-menu-list.right { left: auto; right: 0; }
 .st-menu-list.wide { min-width: 300px; padding: 12px; }
 .st-menu-list a { padding: 10px 12px; border-radius: 10px; color: var(--ink); text-decoration: none; font-size: 14.5px; }
@@ -1775,7 +1775,9 @@ body:has(.st) { background: var(--paper); }
   .st-nav { order: 3; flex-basis: 100%; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
   .st-nav a { flex: none; min-height: 38px; font-size: 14px; }
   .st-side-foot { display: none; }
-  .st-top { position: static; padding: 18px 16px 14px; align-items: flex-start; }
+  /* Keep header dropdowns above the animated body on phones. */
+  .st-side { z-index: 31; }
+  .st-top { position: relative; z-index: 30; padding: 18px 16px 14px; align-items: flex-start; }
   .st-body { padding: 20px 16px 96px; }
   .st-today, .st-split, .st-brand, .st-print-hero { grid-template-columns: minmax(0, 1fr); }
   .st-brand-preview { position: static; }
@@ -1791,6 +1793,11 @@ body:has(.st) { background: var(--paper); }
   .st-arch { width: 60px; height: 76px; font-size: 21px; }
   .st-top-actions { width: 100%; }
   .st-top-actions .new-home-memorial { flex: 1; }
+  /* Dropdowns span the action row so they never hang off either edge. */
+  .st-top-actions { position: relative; }
+  .st-top-actions .st-menu { position: static; }
+  .st-top-actions .st-menu-list, .st-top-actions .st-menu-list.right { left: 0; right: 0; min-width: 0; max-width: none; }
+  .st-homes .st-menu-list { left: auto; right: 0; }
   .st-setup header { flex-direction: column; align-items: stretch; }
   .st-pv-row { grid-template-columns: 1fr; }
 }

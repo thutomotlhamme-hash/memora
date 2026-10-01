@@ -5,6 +5,7 @@ import { RoleCard } from '@/components/admin/CommandPanels';
 import { Brand } from '@/components/Brand';
 import { InviteList } from '@/components/pro/InviteList';
 import { NotificationBell } from '@/components/NotificationBell';
+import { MenuGuard } from '@/components/pro/MenuGuard';
 import { NewHomeMemorial, PublishForHome, RunSheetFor } from '@/components/pro/ProButtons';
 import { PastKeepsake } from '@/components/pro/PastKeepsake';
 import { PRO_PLANS, formatMoney, proInvoice } from '@/lib/plans';
@@ -136,6 +137,7 @@ export function Studio(d: StudioData) {
 
   return (
     <div className="st" style={accent ? ({ ['--home' as string]: accent } as React.CSSProperties) : undefined}>
+      <MenuGuard />
       <aside className="st-side" aria-label="Funeral home">
         <div className="st-mark">
           <Brand />

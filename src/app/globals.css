@@ -1811,6 +1811,12 @@ body:has(.st) { background: var(--paper); }
   .st-top-actions .st-menu-list, .st-top-actions .st-menu-list.right { left: 0; right: 0; min-width: 0; max-width: none; }
   .st-homes .st-menu-list { left: auto; right: 0; }
   .st-setup header { flex-direction: column; align-items: stretch; }
+  /* In the stacked header the bar's 260px basis would become its height. */
+  .st-setup .st-progress { flex: none; width: 100%; }
+  /* New memorial gets its own full-width line; the bell stays on the first row. */
+  .st-top-actions .st-new, .st-top-actions > .btn.primary { order: 3; flex: 1 1 100%; }
+  .st-top-actions .st-new > summary { width: 100%; justify-content: center; }
+  .st-top-actions .bell { margin-left: auto; }
   .st-pv-row { grid-template-columns: 1fr; }
 }
 

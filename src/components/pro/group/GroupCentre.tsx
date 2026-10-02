@@ -4,6 +4,7 @@ import { AdminAction } from '@/components/admin/AdminAction';
 import { RoleCard } from '@/components/admin/CommandPanels';
 import { Brand } from '@/components/Brand';
 import { NotificationBell } from '@/components/NotificationBell';
+import { MenuGuard } from '@/components/pro/MenuGuard';
 import { Banner, Widget } from '@/components/pro/studio/Studio';
 import * as I from '@/components/pro/studio/icons';
 import { BLUEPRINTS, CONTRACT_STATUS, SLA_TIERS, SUPPORT_LEVELS, resolveBrand, type Module } from '@/lib/enterprise';
@@ -87,6 +88,7 @@ export function GroupCentre({
 
   return (
     <div className="st gc" style={accent ? ({ ['--home' as string]: accent } as React.CSSProperties) : undefined}>
+      <MenuGuard />
       <aside className="st-side" aria-label="Group">
         <div className="st-mark">
           <Brand />

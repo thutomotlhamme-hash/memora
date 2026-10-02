@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CopyField } from '@/components/Share';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { PhoneConfirmSheet } from '@/components/PhoneConfirm';
 import { useToast } from '@/components/Toast';
 import { createMemorial } from '@/lib/memorials-client';
 
@@ -50,12 +51,14 @@ export function PublishForHome({ caseId, name }: { caseId: string; name?: string
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState(false);
+  const [needPhone, setNeedPhone] = useState(false);
   const publish = async () => {
     setBusy(true);
     const res = await fetch(`/api/memorials/${caseId}/publish`, { method: 'POST' }).catch(() => null);
     const body = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
     setAsk(false);
+    if (body?.code === 'CONFIRM_PHONE') return setNeedPhone(true);
     toast(res?.ok ? 'Published. The memorial is live.' : body?.error || 'Could not publish.', res?.ok ? 'info' : 'error');
     if (res?.ok) router.refresh();
   };
@@ -78,6 +81,14 @@ export function PublishForHome({ caseId, name }: { caseId: string; name?: string
         busy={busy}
         onCancel={() => setAsk(false)}
         onConfirm={() => void publish()}
+      />
+      <PhoneConfirmSheet
+        open={needPhone}
+        onClose={() => setNeedPhone(false)}
+        onDone={() => {
+          setNeedPhone(false);
+          void publish();
+        }}
       />
     </>
   );

@@ -1,5 +1,6 @@
-// Cellphone accounts. Families sign up with their number and a password; no
-// SMS or email is ever sent. Supabase Auth stores the account under an internal
+// Cellphone accounts. Families sign up with their number and a password, with
+// nothing to wait for; the number is confirmed later with a one-time code
+// (lib/verify.ts) before anything is published. Supabase Auth stores the account under an internal
 // address derived from the number (27721234567@phone.memora.local), which no
 // one can receive mail at and which we never show to people.
 

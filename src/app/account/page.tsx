@@ -4,6 +4,8 @@ import { SignOutButton } from '@/components/SignOutButton';
 import { SiteHeader } from '@/components/SiteHeader';
 import { accountLabel, isPhoneLogin } from '@/lib/account-id';
 import { getSessionUser } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabase/admin';
+import { confirmState } from '@/lib/server/verify';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +14,7 @@ export const metadata = { title: 'Account' };
 export default async function AccountPage() {
   const user = await getSessionUser();
   if (!user) redirect('/account/login?next=/account');
+  const phone = await confirmState(getAdminSupabase(), user);
   return (
     <>
       <SiteHeader />
@@ -22,8 +25,22 @@ export default async function AccountPage() {
           <div className="card flat" style={{ padding: 0, border: 0, marginTop: 20 }}>
             <div className="kv">
               <span>{isPhoneLogin(user.email) ? 'Cellphone' : 'Email'}</span>
-              <strong>{accountLabel(user.email)}</strong>
+              <strong>
+                {accountLabel(user.email)}
+                {phone === 'confirmed' && <span className="pill phone-pill ok">Confirmed</span>}
+              </strong>
             </div>
+            {phone === 'needed' && (
+              <div className="kv">
+                <span>Confirmed</span>
+                <span>
+                  Not yet. You’ll need it before you publish.{' '}
+                  <Link className="text-link" href="/account/confirm?next=/account">
+                    Confirm my number
+                  </Link>
+                </span>
+              </div>
+            )}
             <div className="kv">
               <span>Logging in</span>
               <span>Use this {isPhoneLogin(user.email) ? 'number' : 'email'} and your password on any phone or computer.</span>

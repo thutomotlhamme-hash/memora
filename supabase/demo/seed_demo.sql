@@ -46,7 +46,8 @@ begin
     confirmation_token, recovery_token, email_change_token_new, email_change, is_anonymous)
   values ('00000000-0000-0000-0000-000000000000', v_id, 'authenticated', 'authenticated', v_email,
     extensions.crypt('__DEMO_PASSWORD__', extensions.gen_salt('bf')), now(),
-    '{"provider":"email","providers":["email"]}',
+    -- Demo numbers can't receive codes, so they start confirmed (see docs/PHONE_CODES.md).
+    jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email'), 'phone_confirmed_at', now(), 'phone_confirmed_how', 'staff'),
     jsonb_build_object('phone', '+' || p_digits, 'signup', 'phone', 'full_name', p_name, 'email_verified', true, 'demo', true),
     now() - interval '30 days', now(), '', '', '', '', false);
   insert into auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at, last_sign_in_at)

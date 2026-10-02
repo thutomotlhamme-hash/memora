@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   const us = legal.name || contact.businessName;
   const year = PRODUCT.publicDays === 365 ? 'one year' : `${PRODUCT.publicDays} days`;
   return (
-    <LegalPage eyebrow="Privacy" title="Privacy policy" updated="1 October 2026">
+    <LegalPage eyebrow="Privacy" title="Privacy policy" updated="2 October 2026">
       <p>
         {us} (“Memora”, “we”) helps families and funeral homes create funeral memorials and run the funeral day. We handle information about grieving
         families with care, and we process personal information in line with South Africa’s Protection of Personal Information Act, 2013 (POPIA).
@@ -29,7 +29,9 @@ export default function PrivacyPage() {
       <ul>
         <li>
           <strong>Your account:</strong> your name (optional), the cellphone number or email you log in with, and your password, stored only as a secure hash by our
-          sign-in provider. We never send codes or messages to your number.
+          sign-in provider. We message your number only when a one-time code is needed: to confirm the number is yours (before you publish a
+          memorial) or when you ask to reset your password. Codes go by WhatsApp, or by SMS if you choose. We never use your number for marketing, and we never phone
+          you to ask for a code. We record when your number was confirmed, and whether by a code or by our team after checking with you.
         </li>
         <li>
           <strong>Memorial content:</strong> the name, dates and portrait of the person who passed away, their life story, a family message, the funeral journey
@@ -100,6 +102,7 @@ export default function PrivacyPage() {
         <li>Supabase (database, file storage and sign-in), hosted in the European Union.</li>
         <li>Netlify (website hosting).</li>
         <li>Yoco (card payments).</li>
+        <li>Meta (WhatsApp) and BulkSMS: only your number and the one-time code, to deliver it. Neither gets your memorial or anything else.</li>
         <li>
           OpenStreetMap and komoot’s Photon service (map tiles and place suggestions, used when you search for a place or set a map pin; only what you type in the
           search box is sent).

@@ -12,7 +12,7 @@ const PLANS: ProPlan[] = ['payg', 'pro', 'pro_plus', 'enterprise'];
 export default function TermsPage() {
   const us = legal.name || contact.businessName;
   return (
-    <LegalPage eyebrow="Terms" title="Terms of use" updated="1 October 2026">
+    <LegalPage eyebrow="Terms" title="Terms of use" updated="2 October 2026">
       <p>
         These terms are an agreement between you and {us} (“Memora”, “we”). They apply when you create an account, make or publish a memorial, buy a gift, run a
         funeral day on Memora, or use Memora Pro as a funeral home. Please read them; the parts that limit our responsibility or set out what you must do are in
@@ -32,7 +32,7 @@ export default function TermsPage() {
 
       <h2>Your account</h2>
       <ul>
-        <li>You must be 18 or older. You log in with your cellphone number (or email) and a password; we never send codes to your phone.</li>
+        <li>You must be 18 or older. You log in with your cellphone number (or email) and a password. Before you publish a memorial we confirm the number is yours with a one-time code by WhatsApp or SMS, and you can reset a forgotten password the same way. Never share a code: Memora will never ask you for one.</li>
         <li>Keep your password to yourself. You are responsible for what happens under your account until you tell us it has been misused.</li>
         <li>We may suspend an account that is being misused, or that puts families, guests or the service at risk. We will tell you why unless the law or safety prevents it.</li>
       </ul>

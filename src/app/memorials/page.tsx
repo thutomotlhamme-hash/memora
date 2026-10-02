@@ -3,10 +3,12 @@ import { redirect } from 'next/navigation';
 import { GuestImport, NewMemorialButton } from '@/components/Dashboard';
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader';
 import { UnveilingPrompt } from '@/components/UnveilingPrompt';
+import { ConfirmNumberNudge } from '@/components/ConfirmNumberNudge';
 import { fmtDate } from '@/lib/memorial';
 import { publicYear } from '@/lib/plans';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { listOwnedCases } from '@/lib/server/cases';
+import { confirmState } from '@/lib/server/verify';
 import { getServerSupabase, getSessionUser } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +43,7 @@ export default async function MemorialsPage({ searchParams }: { searchParams: Pr
         )
     : { data: [] as { case_id: string }[] };
   const askedIds = new Set((asked ?? []).map((a) => a.case_id as string));
+  const phone = await confirmState(getAdminSupabase(), user);
 
   return (
     <>
@@ -57,6 +60,8 @@ export default async function MemorialsPage({ searchParams }: { searchParams: Pr
         </div>
 
         <GuestImport />
+
+        {phone === 'needed' && <ConfirmNumberNudge next="/memorials" />}
 
         {ending.map((c) => (
           <UnveilingPrompt key={c.id} caseId={c.id} name={c.name.split(' ')[0]} daysLeft={years.get(c.id)!.daysLeft} until={years.get(c.id)!.until} asked={askedIds.has(c.id)} />

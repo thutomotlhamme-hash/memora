@@ -11,6 +11,7 @@ import { loadAdminCases } from '@/lib/server/admin';
 import { loadInvites } from '@/lib/server/invites';
 import { loadBranches, loadGroups, loadInvoices, loadOrgs } from '@/lib/server/pro';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { confirmState } from '@/lib/server/verify';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Funeral home', robots: { index: false } };
@@ -186,6 +187,7 @@ export default async function ProDashboard({ searchParams }: { searchParams: Pro
       month={/^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? '') ? sp.month! : today.slice(0, 7)}
       today={today}
       welcome={Boolean(sp.welcome)}
+      confirmPhone={(await confirmState(admin, access.user)) === 'needed'}
     />
   );
 }

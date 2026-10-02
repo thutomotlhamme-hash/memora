@@ -45,6 +45,12 @@ export async function PeoplePanel({ admin, p, q, id }: { admin: SupabaseClient; 
                 {account.name || account.label}{' '}
                 {account.suspended && <span className="pill cc-status disabled">Suspended</span>}
                 {account.owner && <span className="pill">Owner (Netlify)</span>}
+                {account.whatsapp &&
+                  (account.phoneConfirmed ? (
+                    <span className="pill phone-pill ok">Number confirmed{account.phoneConfirmed.how === 'staff' ? ' by our team' : ''}</span>
+                  ) : (
+                    <span className="pill phone-pill">Number not confirmed</span>
+                  ))}
               </h2>
               <p className="small muted">
                 {account.name ? `${account.label} · ` : ''}joined {when(account.createdAt)} · last logged in {when(account.lastSignInAt)}
@@ -70,6 +76,20 @@ export async function PeoplePanel({ admin, p, q, id }: { admin: SupabaseClient; 
                     </li>
                   ))}
                 </ul>
+              )}
+              {account.whatsapp && !account.phoneConfirmed && !account.suspended && (
+                <div style={{ marginTop: 12 }}>
+                  <AdminAction
+                    action="account.confirmPhone"
+                    id={account.id}
+                    label="Mark number as confirmed"
+                    variant="ghost"
+                    prompt={{ field: 'reason', question: `How did you check ${account.label} is really theirs? (e.g. “WhatsApped them on it and they replied”; kept in the audit log)` }}
+                  />
+                  <p className="tiny muted" style={{ margin: '6px 0 0' }}>
+                    Only for someone a code can’t reach. Message them on that number first.
+                  </p>
+                </div>
               )}
               {account.resets.some((r) => r.state === 'open') && (
                 <AdminAction action="account.revokeResetLinks" id={account.id} label="Switch off their reset links" variant="ghost" confirm="Their open reset links stop working. Continue?" />

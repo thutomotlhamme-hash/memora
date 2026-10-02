@@ -2259,3 +2259,14 @@ body:has(.sl-map) .proc-card { display: none; }
 .past-ks-plain { display: grid; align-content: start; justify-items: center; gap: 6px; padding: 26px 10px 0; text-align: center; border: 1px solid var(--bloom, #c9b8e8); }
 .past-ks-plain small { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--clay); }
 .past-ks-plain b { font-family: var(--display); font-weight: 400; font-size: 17px; line-height: 1.15; }
+
+/* Confirming a cellphone number with a code */
+.phone-confirm { display: grid; gap: 12px; }
+.phone-code { display: grid; gap: 10px; }
+.code-input { font-size: 26px; letter-spacing: 0.32em; text-align: center; font-variant-numeric: tabular-nums; padding: 12px 14px; max-width: 260px; justify-self: start; width: 100%; }
+.text-link.tiny { font-size: inherit; cursor: pointer; }
+.text-link:disabled { opacity: 0.5; cursor: default; }
+.phone-pill { margin-left: 8px; font-size: 12px; vertical-align: middle; }
+.phone-pill.ok { background: var(--sage-soft); color: var(--ink); }
+.phone-nudge { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 20px; }
+.phone-nudge > span { flex: 1 1 260px; }

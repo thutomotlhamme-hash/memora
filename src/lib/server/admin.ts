@@ -16,6 +16,7 @@ import { ownerEmails } from './admin-auth';
 import { confirmGiftWithYoco, markGiftContacted } from './gifts';
 import { confirmOrderWithYoco, yocoSecret } from './yoco';
 import { refreshPublicPages } from './public-cache';
+import { markConfirmed } from './verify';
 
 type Row = Record<string, any>;
 
@@ -196,6 +197,7 @@ const ACTION_PERMISSION: Record<string, Permission> = {
   'account.resetPassword': 'accounts.help',
   'account.resetLink': 'accounts.help',
   'account.revokeResetLinks': 'accounts.help',
+  'account.confirmPhone': 'accounts.help',
   'account.suspend': 'accounts.suspend',
   'account.unsuspend': 'accounts.suspend',
   'team.add': 'access.manage',
@@ -336,6 +338,16 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
       await log(admin, actor.id, 'PASSWORD_RESET_LINKS_REVOKED', null, { account: input.id });
       return { ok: true, message: 'Their reset links no longer work.' };
     }
+    case 'account.confirmPhone': {
+      // For someone a code can't reach (no WhatsApp, SMS blocked): a person on the team vouches, with how they checked.
+      const g = await guardAccount(admin, principal, uuidOk(input.id) ? await accountById(admin, input.id) : null, 'reset');
+      if (!g.ok) return g;
+      if (!isPhoneLogin(g.account.email)) return { ok: false, error: 'This account logs in with an email, so there’s no number to confirm.', status: 400 };
+      if (!input.reason?.trim()) return { ok: false, error: 'Say how you checked it’s their number (it’s kept in the audit log).', status: 400 };
+      if (!(await markConfirmed(admin, g.account.id, 'staff', actor.id))) return { ok: false, error: 'Could not save that.', status: 500 };
+      await log(admin, actor.id, 'PHONE_CONFIRMED_BY_STAFF', null, { account: accountLabel(g.account.email), how: input.reason.trim().slice(0, 300) });
+      return { ok: true, message: `${accountLabel(g.account.email)} is marked as confirmed.` };
+    }
     case 'account.suspend':
     case 'account.unsuspend': {
       const suspend = input.action === 'account.suspend';
@@ -402,6 +414,8 @@ export function setupChecks(): { name: string; ok: boolean; needed: string; fix:
     { name: 'NEXT_PUBLIC_COMPANY_REG', ok: has('NEXT_PUBLIC_COMPANY_REG'), needed: 'Before taking payments: company registration number (ECTA s43)', fix: 'From your CIPC certificate, e.g. 2026/123456/07' },
     { name: 'NEXT_PUBLIC_PHYSICAL_ADDRESS', ok: has('NEXT_PUBLIC_PHYSICAL_ADDRESS'), needed: 'Before taking payments: an address where legal documents can be served (ECTA s43)', fix: 'Street address, suburb, city, postal code' },
     { name: 'NEXT_PUBLIC_INFORMATION_OFFICER', ok: has('NEXT_PUBLIC_INFORMATION_OFFICER'), needed: 'POPIA: the Information Officer people can contact (register them with the Information Regulator)', fix: 'Name and email, e.g. Thuto M · privacy@…' },
+    { name: 'WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID', ok: has('WHATSAPP_TOKEN') && has('WHATSAPP_PHONE_NUMBER_ID'), needed: 'Codes that confirm numbers and reset passwords, by WhatsApp (the cheapest way). Until a way to send codes is set, nobody is asked to confirm.', fix: 'Meta WhatsApp Cloud API: see docs/PHONE_CODES.md (and set WHATSAPP_CODE_TEMPLATE if your template isn’t called memora_code)' },
+    { name: 'BULKSMS_TOKEN_ID + BULKSMS_TOKEN_SECRET', ok: has('BULKSMS_TOKEN_ID') && has('BULKSMS_TOKEN_SECRET'), needed: 'Optional backup: codes by SMS for people without WhatsApp', fix: 'BulkSMS → Settings → API Tokens' },
     { name: 'NEXT_PUBLIC_VAT_NUMBER', ok: has('NEXT_PUBLIC_VAT_NUMBER'), needed: 'Optional until you are VAT-registered (required above R1 million turnover in 12 months); shown on invoices', fix: 'Your SARS VAT number' },
   ];
   if (process.env.NEXT_PUBLIC_MEMORA_PAYMENTS === 'on') {

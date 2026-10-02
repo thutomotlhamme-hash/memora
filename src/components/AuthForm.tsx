@@ -9,6 +9,8 @@ import { moveGuestDraftIntoAccount } from '@/lib/memorials-client';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 import { safeNext } from '@/lib/safe-next';
 import { QuickAccount } from './QuickAccount';
+import { ResetByCode } from './ResetByCode';
+import type { Channels } from '@/lib/verify';
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset';
 
@@ -24,9 +26,9 @@ const COPY: Record<Mode, { eyebrow: string; title: string; lede: string; cta: st
   reset: { eyebrow: 'Your password', title: 'Choose a new password.', lede: 'Use at least 8 characters, and don’t reuse a password from another site.', cta: 'Save new password' },
 };
 
-export function AuthForm({ mode }: { mode: Mode }) {
+export function AuthForm({ mode, codes }: { mode: Mode; codes?: Channels }) {
   if (mode === 'login' || mode === 'register') return <QuickAuth mode={mode} />;
-  return <PasswordForm mode={mode} />;
+  return <PasswordForm mode={mode} codes={codes} />;
 }
 
 /** Log in / create account: cellphone first, then straight back to what you were doing. */
@@ -70,7 +72,7 @@ function QuickAuth({ mode }: { mode: 'login' | 'register' }) {
   );
 }
 
-function PasswordForm({ mode }: { mode: 'forgot' | 'reset' }) {
+function PasswordForm({ mode, codes }: { mode: 'forgot' | 'reset'; codes?: Channels }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -86,7 +88,7 @@ function PasswordForm({ mode }: { mode: 'forgot' | 'reset' }) {
       const who = String(form.get('who') ?? '').trim();
       const login = loginAddress(who);
       if (!login) return setError('Enter the cellphone number or email you signed up with.');
-      // Nothing is ever sent to a phone: the team helps on WhatsApp instead.
+      // A code to the number when codes are on; otherwise a person helps on WhatsApp.
       if (login.kind === 'phone') return setPhoneHelp(who);
     }
     if (!supabase) return setError('Accounts are not configured on this Memora deployment yet.');
@@ -115,12 +117,14 @@ function PasswordForm({ mode }: { mode: 'forgot' | 'reset' }) {
   if (phoneHelp) {
     const text = `Hi Memora, I’ve forgotten my password. My account number is ${phoneHelp}.`;
     const wa = contact.whatsapp ? `https://wa.me/${contact.whatsapp.replace(/[^\d]/g, '')}?text=${encodeURIComponent(text)}` : '';
+    if (codes && (codes.whatsapp || codes.sms))
+      return <ResetByCode phone={phoneHelp} channels={codes} helpHref={wa || `/contact?topic=account&whatsapp=${encodeURIComponent(phoneHelp)}&message=${encodeURIComponent(text)}`} />;
     return (
       <div className="auth-card">
         <span className="eyebrow">Password help</span>
         <h1 className="h1">We’ll sort it out with you.</h1>
         <p className="muted" style={{ margin: 0 }}>
-          For your security we never send codes to phones. Message us and a person on our team will check it’s you (for example, by the name on your
+          Message us and a person on our team will check it’s you (for example, by the name on your
           memorial) and give you a temporary password.
         </p>
         <div className="row" style={{ marginTop: 24 }}>

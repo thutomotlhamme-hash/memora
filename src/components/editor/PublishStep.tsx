@@ -7,6 +7,7 @@ import { useOrigin } from '@/lib/hooks';
 import { CopyField, QrImage, ShareButtons } from '@/components/Share';
 import { KeepsakeThumb } from '@/components/KeepsakeThumb';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { PhoneConfirmSheet } from '@/components/PhoneConfirm';
 import { useToast } from '@/components/Toast';
 import { displayName, fmtDate, slugify, type CaseMeta, type Draft, type Readiness } from '@/lib/memorial';
 import { paymentsOn } from '@/lib/config';
@@ -113,6 +114,7 @@ function HomePublish({
   const [error, setError] = useState('');
   const [ask, setAsk] = useState(false);
   const [told, setTold] = useState(false);
+  const [needPhone, setNeedPhone] = useState(false);
   const digits = home.phone.replace(/\D/g, '').replace(/^0(\d{9})$/, '27$1');
 
   if (!home.canPublish) {
@@ -166,6 +168,11 @@ function HomePublish({
       await flush();
       const res = await fetch(`/api/memorials/${owner.caseId}/publish`, { method: 'POST' });
       const body = await res.json().catch(() => ({}));
+      if (body?.code === 'CONFIRM_PHONE') {
+        setNeedPhone(true);
+        setBusy(false);
+        return;
+      }
       if (!res.ok) throw new Error(body?.error || 'Could not publish.');
       setMeta({ ...body.meta, home: meta.home });
       toast('The memorial is live.');
@@ -206,6 +213,14 @@ function HomePublish({
           void publish();
         }}
       />
+      <PhoneConfirmSheet
+        open={needPhone}
+        onClose={() => setNeedPhone(false)}
+        onDone={() => {
+          setNeedPhone(false);
+          void publish();
+        }}
+      />
       <PanelFoot nav={nav} />
     </div>
   );
@@ -231,6 +246,7 @@ function Checkout({
   const toast = useToast();
   const [busy, setBusy] = useState<'' | 'pay' | 'publish'>('');
   const [ask, setAsk] = useState(false);
+  const [needPhone, setNeedPhone] = useState(false);
   const paymentParam = useSearchParams().get('payment');
   const returning = paymentParam === 'return';
   const [pollDone, setPollDone] = useState(false);
@@ -300,6 +316,11 @@ function Checkout({
       await flush();
       const res = await fetch(`/api/memorials/${owner.caseId}/publish`, { method: 'POST' });
       const body = await res.json().catch(() => ({}));
+      if (body?.code === 'CONFIRM_PHONE') {
+        setNeedPhone(true);
+        setBusy('');
+        return;
+      }
       if (!res.ok) throw new Error(body?.error || 'Could not publish.');
       setMeta(body.meta);
       toast('The memorial is live.');
@@ -388,6 +409,14 @@ function Checkout({
         onCancel={() => setAsk(false)}
         onConfirm={() => {
           setAsk(false);
+          void publish();
+        }}
+      />
+      <PhoneConfirmSheet
+        open={needPhone}
+        onClose={() => setNeedPhone(false)}
+        onDone={() => {
+          setNeedPhone(false);
           void publish();
         }}
       />

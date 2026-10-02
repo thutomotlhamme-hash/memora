@@ -9,6 +9,7 @@ import { isCasePaid, loadOwnedCase } from '@/lib/server/cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
 import { refreshPublicPages } from '@/lib/server/public-cache';
+import { needsConfirming } from '@/lib/server/verify';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +26,9 @@ export async function POST(request: Request, { params }: Ctx) {
 
   const admin = getAdminSupabase();
   if (!admin) return fail('Publishing is not configured on this deployment yet.', 503);
+
+  // A memorial goes out under someone's name: first they show the number is theirs.
+  if (await needsConfirming(admin, user.id)) return fail('Confirm your cellphone number first. It takes a minute: we send you a code.', 403, { code: 'CONFIRM_PHONE' });
 
   // A funeral home's memorial: that branch's arrangers and manager (or the home's
   // owners) publish it, and it is billed to the home, not the family.

@@ -26,6 +26,8 @@ export interface AccountView {
   lastSignInAt: string | null;
   suspended: boolean;
   owner: boolean;
+  /** When the number was shown to be theirs: by a code, or vouched for by Memora's team. */
+  phoneConfirmed: { at: string; how: 'code' | 'staff' } | null;
   memorials: { id: string; name: string; status: string; slug: string | null; home: string }[];
   access: { where: string; role: string }[];
   resets: { id: string; createdAt: string; state: 'open' | 'used' | 'expired' | 'revoked'; url: string }[];
@@ -64,6 +66,7 @@ export async function loadAccount(admin: SupabaseClient, id: string): Promise<Ac
     lastSignInAt: u.last_sign_in_at ?? null,
     suspended: banned,
     owner: ownerEmails().includes(u.email.toLowerCase()),
+    phoneConfirmed: typeof u.app_metadata?.phone_confirmed_at === 'string' ? { at: u.app_metadata.phone_confirmed_at, how: u.app_metadata.phone_confirmed_how === 'staff' ? 'staff' : 'code' } : null,
     memorials: ((cases ?? []) as Row[]).map((c) => {
       const p = one(c.memora_people) as Row | null;
       return {

@@ -278,3 +278,34 @@ test.describe('Notifications', () => {
     expect([401, 403, 404, 503]).toContain(ready.status());
   });
 });
+
+test.describe('Confirming numbers', () => {
+  test('codes need a signed-in person, and resets refuse cross-site requests', async ({ request }) => {
+    const status = await request.get('/api/account/verify');
+    expect([401, 503]).toContain(status.status());
+    const send = await request.post('/api/account/verify', { data: { action: 'send' }, headers: { origin: 'https://evil.example' } });
+    expect(send.status()).toBe(403);
+    const reset = await request.post('/api/account/reset-code', { data: { action: 'send', phone: '0721234567' }, headers: { origin: 'https://evil.example' } });
+    expect(reset.status()).toBe(403);
+  });
+
+  test('while codes are off, a reset by code says so and the forgot page offers a person', async ({ page, request, baseURL }) => {
+    const reset = await request.post('/api/account/reset-code', { data: { action: 'send', phone: '0721234567' }, headers: { origin: baseURL! } });
+    expect(reset.status()).toBe(503);
+    await page.goto('/account/forgot');
+    await page.getByLabel('Cellphone number or email').fill('072 123 4567');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'We’ll sort it out with you.' })).toBeVisible();
+  });
+
+  test('confirming your number needs you to log in first', async ({ page }) => {
+    await page.goto('/account/confirm?next=/memorials');
+    await expect(page).toHaveURL(/\/account\/login/);
+  });
+
+  test('the privacy policy says when we message a number', async ({ page }) => {
+    await page.goto('/privacy');
+    await expect(page.getByText(/We message your number only when a one-time code is needed/)).toBeVisible();
+    await expect(page.getByText(/Meta \(WhatsApp\) and BulkSMS/)).toBeVisible();
+  });
+});

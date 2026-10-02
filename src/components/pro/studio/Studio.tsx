@@ -72,6 +72,8 @@ export interface StudioData {
   month: string;
   today: string;
   welcome: boolean;
+  /** The signed-in person still needs to confirm their cellphone number (before publishing). */
+  confirmPhone?: boolean;
 }
 
 export type StudioTab = 'today' | 'funerals' | 'families' | 'print' | 'team' | 'branding' | 'billing' | 'roles';
@@ -297,6 +299,14 @@ export function Studio(d: StudioData) {
         {d.welcome && (
           <Banner tone="ok">
             <strong>Welcome to Memora Pro.</strong> {org.name} is ready. Four small steps below and your first family can have their memorial today.
+          </Banner>
+        )}
+        {d.confirmPhone && !d.visiting && !d.preview && (
+          <Banner tone="warn">
+            <strong>Confirm your cellphone number.</strong> Before you publish for {org.name}, we check the number is yours with a code by WhatsApp or SMS.{' '}
+            <a className="text-link" href="/account/confirm?next=/pro/dashboard">
+              Confirm now
+            </a>
           </Banner>
         )}
         {persona === 'owner' && !d.visiting && !d.preview && <Setup />}

@@ -50,7 +50,7 @@ export default function PrivacyPage() {
           funeral date and an optional message.
         </li>
         <li>
-          <strong>Payments:</strong> Yoco processes card payments. We never see or store card numbers; we keep the amount, date and a payment reference.
+          <strong>Payments:</strong> iKhokha (or Yoco) processes payments. We never see or store card numbers or bank details; we keep the amount, date and a payment reference.
         </li>
         <li>
           <strong>Procession location (funeral day only):</strong> if a coordinator chooses to share, their phone sends its location while the run-sheet is open. We
@@ -101,7 +101,7 @@ export default function PrivacyPage() {
       <ul>
         <li>Supabase (database, file storage and sign-in), hosted in the European Union.</li>
         <li>Netlify (website hosting).</li>
-        <li>Yoco (card payments).</li>
+        <li>iKhokha and Yoco (payments).</li>
         <li>Meta (WhatsApp) and BulkSMS: only your number and the one-time code, to deliver it. Neither gets your memorial or anything else.</li>
         <li>
           OpenStreetMap and komoot’s Photon service (map tiles and place suggestions, used when you search for a place or set a map pin; only what you type in the

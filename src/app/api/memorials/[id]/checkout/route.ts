@@ -6,7 +6,7 @@ import { isCasePaid, loadOwnedCase } from '@/lib/server/cases';
 import { caseOrg } from '@/lib/server/org-cases';
 import { requireOwner } from '@/lib/server/guard';
 import { fail, json } from '@/lib/server/http';
-import { createCheckout, yocoSecret } from '@/lib/server/yoco';
+import { checkoutProvider, openCheckout, providerLabel } from '@/lib/server/payments';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -49,31 +49,34 @@ export async function POST(request: Request, { params }: Ctx) {
     return json({ paid: true, simulated: true });
   }
 
-  if (!yocoSecret()) return fail('Checkout is not switched on yet. Please try again soon.', 503);
+  const provider = checkoutProvider();
+  if (!provider) return fail('Checkout is not switched on yet. Please try again soon.', 503);
 
   const { data: order, error } = await admin
     .from('memora_orders')
-    .insert({ case_id: id, created_by: user.id, amount_minor: amountMinor, currency, status: 'PENDING', provider: 'yoco' })
+    .insert({ case_id: id, created_by: user.id, amount_minor: amountMinor, currency, status: 'PENDING', provider })
     .select('id')
     .single();
   if (error || !order) return fail('Could not start the order.', 500);
 
   const back = `${siteUrl()}/memorials/${id}?step=publish&payment=`;
   try {
-    const checkout = await createCheckout({
+    const checkout = await openCheckout(provider, {
       amountMinor,
       currency,
+      reference: order.id,
+      kind: 'order',
+      description: `${PRODUCT.name}: a memorial for a year`,
       successUrl: `${back}return`,
       cancelUrl: `${back}cancelled`,
       failureUrl: `${back}failed`,
-      idempotencyKey: order.id,
       metadata: { orderId: order.id, caseId: id },
     });
     await admin.from('memora_orders').update({ provider_reference: checkout.id, updated_at: new Date().toISOString() }).eq('id', order.id);
-    return json({ url: checkout.redirectUrl });
+    return json({ url: checkout.url });
   } catch (err) {
-    console.error('Yoco checkout error', err);
+    console.error('Checkout error', provider, err);
     await admin.from('memora_orders').update({ status: 'FAILED', updated_at: new Date().toISOString() }).eq('id', order.id);
-    return fail('Could not open checkout with Yoco. Please try again.', 502);
+    return fail(`Could not open checkout with ${providerLabel(provider)}. Please try again.`, 502);
   }
 }

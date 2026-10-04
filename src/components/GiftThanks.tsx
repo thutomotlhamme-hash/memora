@@ -61,12 +61,12 @@ export function GiftThanks({ token }: { token: string }) {
       <div className="panel" aria-busy={state !== 'timeout'}>
         <span className="eyebrow">Confirming payment</span>
         <h1 className="h1" style={{ margin: '10px 0 12px' }}>
-          {state === 'timeout' ? 'Still waiting for Yoco.' : 'Just a moment…'}
+          {state === 'timeout' ? 'Still waiting for the payment to confirm.' : 'Just a moment…'}
         </h1>
         <p className="muted">
           {state === 'timeout'
             ? 'We haven’t had confirmation yet. If you were charged, refresh this page in a minute and the WhatsApp link will appear. Keep this page’s address.'
-            : 'We’re checking with Yoco. Please keep this page open.'}
+            : 'We’re checking your payment. Please keep this page open.'}
         </p>
       </div>
     );

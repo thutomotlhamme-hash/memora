@@ -140,7 +140,7 @@ export function GiftForm({ ready }: { ready: boolean }) {
           <strong className="plan-price" style={{ fontSize: 34 }}>
             {PRICE_LABEL}
           </strong>
-          <span className="small muted">Once-off. Secure card checkout by Yoco.</span>
+          <span className="small muted">Once-off. Secure checkout: card, Instant EFT and more.</span>
         </div>
         <button className="btn primary lg" type="submit" disabled={busy || !ready}>
           {busy ? 'Opening checkout…' : `Pay ${PRICE_LABEL} and send the gift`}

@@ -7,7 +7,7 @@ import { emptyDraft, readiness } from '../memorial';
 import { CURRENCY, PRODUCT } from '../plans';
 import { loadOwnedCase, saveOwnedDraft } from './cases';
 import { signGiftToken } from './links';
-import { createCheckout, fetchCheckout } from './yoco';
+import { checkoutProvider, confirmGift, openCheckout, providerOn, type Provider } from './payments';
 
 export type GiftRow = Record<string, any>;
 
@@ -16,14 +16,16 @@ export const buyerUrl = (giftId: string) => `${siteUrl()}/gift/thanks/${signGift
 
 const simulationAllowed = () => process.env.MEMORA_SIMULATE_PAYMENTS === 'true' && process.env.NODE_ENV !== 'production';
 
-/** Creates a pending gift and a Yoco checkout for it. Returns where to send the buyer. */
+/** Creates a pending gift and a card checkout for it. Returns where to send the buyer. */
 export async function startGiftCheckout(admin: SupabaseClient, gift: CleanGift, buyerUserId: string | null): Promise<string> {
+  const provider = simulationAllowed() ? 'simulated' : checkoutProvider();
+  if (!provider) throw new Error('No payment provider is set up.');
   const { data: row, error } = await admin
     .from('memora_gifts')
     .insert({
       amount_minor: PRODUCT.amountMinor,
       currency: CURRENCY,
-      provider: simulationAllowed() ? 'simulated' : 'yoco',
+      provider,
       buyer_name: gift.buyerName,
       buyer_email: gift.buyerEmail,
       buyer_user_id: buyerUserId,
@@ -39,55 +41,30 @@ export async function startGiftCheckout(admin: SupabaseClient, gift: CleanGift, 
     .single();
   if (error || !row) throw new Error('Could not save the gift.');
 
-  if (simulationAllowed()) {
+  if (provider === 'simulated') {
     await admin.from('memora_gifts').update({ status: 'PAID', paid_at: new Date().toISOString(), provider_reference: `sim-${row.id}` }).eq('id', row.id);
     return buyerUrl(row.id);
   }
 
   const thanks = buyerUrl(row.id);
   try {
-    const checkout = await createCheckout({
+    const checkout = await openCheckout(provider, {
       amountMinor: PRODUCT.amountMinor,
       currency: CURRENCY,
+      reference: row.id,
+      kind: 'gift',
+      description: `${PRODUCT.name}, a gift`,
       successUrl: thanks,
       cancelUrl: `${siteUrl()}/gift?payment=cancelled`,
       failureUrl: `${siteUrl()}/gift?payment=failed`,
-      idempotencyKey: `gift-${row.id}`,
       metadata: { giftId: row.id, kind: 'gift' },
     });
     await admin.from('memora_gifts').update({ provider_reference: checkout.id, updated_at: new Date().toISOString() }).eq('id', row.id);
-    return checkout.redirectUrl;
+    return checkout.url;
   } catch (err) {
     await admin.from('memora_gifts').update({ status: 'CANCELLED', updated_at: new Date().toISOString() }).eq('id', row.id);
     throw err;
   }
-}
-
-/**
- * Confirms a gift payment by fetching the checkout from Yoco (never trusting a
- * redirect or webhook body). Idempotent.
- */
-export async function confirmGiftWithYoco(admin: SupabaseClient, checkoutId: string): Promise<'confirmed' | 'already_paid' | 'pending' | 'mismatch' | 'no_gift'> {
-  const { data: gift } = await admin.from('memora_gifts').select('id,status,amount_minor,currency,provider_reference').eq('provider', 'yoco').eq('provider_reference', checkoutId).maybeSingle();
-  if (!gift) return 'no_gift';
-  if (gift.status === 'PAID' || gift.status === 'REDEEMED') return 'already_paid';
-  const checkout = await fetchCheckout(checkoutId);
-  if (String(checkout?.status).toLowerCase() !== 'completed') return 'pending';
-  const matches =
-    String(checkout.id) === gift.provider_reference &&
-    Number(checkout.amount) === Number(gift.amount_minor) &&
-    String(checkout.currency ?? '').toUpperCase() === String(gift.currency).toUpperCase() &&
-    (!checkout.metadata?.giftId || checkout.metadata.giftId === gift.id);
-  if (!matches) {
-    console.error('Yoco gift verification mismatch', { giftId: gift.id });
-    return 'mismatch';
-  }
-  await admin
-    .from('memora_gifts')
-    .update({ status: 'PAID', paid_at: new Date().toISOString(), provider_payment_id: String(checkout.paymentId || checkout.id), updated_at: new Date().toISOString() })
-    .eq('id', gift.id)
-    .eq('status', 'PENDING');
-  return 'confirmed';
 }
 
 export interface BuyerView {
@@ -103,15 +80,15 @@ export interface BuyerView {
   redeemLink: string | null;
 }
 
-/** What the buyer's thank-you page may see. Confirms with Yoco if still pending. */
+/** What the buyer's thank-you page may see. Confirms with the payment provider if still pending. */
 export async function buyerGiftView(admin: SupabaseClient, giftId: string): Promise<BuyerView | null> {
   let { data: g } = await admin.from('memora_gifts').select('*').eq('id', giftId).maybeSingle();
   if (!g) return null;
-  if (g.status === 'PENDING' && g.provider === 'yoco' && g.provider_reference) {
+  if (g.status === 'PENDING' && providerOn(g.provider) && g.provider_reference) {
     try {
-      await confirmGiftWithYoco(admin, g.provider_reference);
+      await confirmGift(admin, g.provider as Provider, g.provider_reference);
     } catch {
-      /* Yoco unreachable: the page polls again */
+      /* Provider unreachable: the page polls again */
     }
     ({ data: g } = await admin.from('memora_gifts').select('*').eq('id', giftId).maybeSingle());
     if (!g) return null;

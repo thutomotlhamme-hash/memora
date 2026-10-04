@@ -210,24 +210,24 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
           ))}
         </Section>
-        <Section title="Payments waiting for Yoco" hint="Checkout started over 15 minutes ago with no confirmation. Usually abandoned, but if the family says they paid, press Check." show={o.stuckOrders.length > 0}>
+        <Section title="Payments waiting for confirmation" hint="Checkout started over 15 minutes ago with no confirmation. Usually abandoned, but if the family says they paid, press Check." show={o.stuckOrders.length > 0}>
           {o.stuckOrders.map((p) => (
             <div className="kv" key={p.id}>
               <span>{when(p.createdAt)}</span>
               <span className="row">
                 <strong>{p.caseName}</strong> <span className="muted">{formatMoney(p.amountMinor)}</span>
-                <AdminAction action="order.recheck" id={p.id} label="Check with Yoco" />
+                <AdminAction action="order.recheck" id={p.id} label="Check payment" />
               </span>
             </div>
           ))}
         </Section>
-        <Section title="Gift payments waiting for Yoco" hint="If the buyer says they paid, press Check; it asks Yoco directly." show={o.stuckGifts.length > 0}>
+        <Section title="Gift payments waiting for confirmation" hint="If the buyer says they paid, press Check; it asks iKhokha (or Yoco) directly." show={o.stuckGifts.length > 0}>
           {o.stuckGifts.map((g) => (
             <div className="kv" key={g.id}>
               <span>{when(g.created_at)}</span>
               <span className="row">
                 <strong>{g.buyer_name}</strong> <span className="muted">for {g.recipient_name}</span>
-                <AdminAction action="gift.recheck" id={g.id} label="Check with Yoco" />
+                <AdminAction action="gift.recheck" id={g.id} label="Check payment" />
               </span>
             </div>
           ))}
@@ -309,7 +309,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 </td>
                 <td>
                   <div className="row" style={{ gap: 6 }}>
-                    {g.status === 'PENDING' && <AdminAction action="gift.recheck" id={g.id} label="Check with Yoco" />}
+                    {g.status === 'PENDING' && <AdminAction action="gift.recheck" id={g.id} label="Check payment" />}
                     {g.status !== 'PENDING' && !published && (
                       <a
                         className="btn sm primary"
@@ -345,7 +345,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                         label="Cancel & refund"
                         variant="danger"
                         prompt={{ field: 'reason', question: 'Why is this gift being cancelled? (kept in the log)' }}
-                        confirm="This stops the gift link from working. Refund the buyer in the Yoco portal. Continue?"
+                        confirm="This stops the gift link from working. Refund the buyer in the iKhokha (or Yoco) dashboard. Continue?"
                       />
                     )}
                   </div>
@@ -539,7 +539,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <td>{o.status.toLowerCase()}</td>
                 <td>
                   <div className="row" style={{ gap: 6 }}>
-                    {o.status === 'PENDING' && o.provider === 'yoco' && <AdminAction action="order.recheck" id={o.id} label="Check with Yoco" />}
+                    {o.status === 'PENDING' && (o.provider === 'ikhokha' || o.provider === 'yoco') && <AdminAction action="order.recheck" id={o.id} label="Check payment" />}
                     {o.status === 'PAID' && o.provider !== 'gift' && (
                       <AdminAction
                         action="order.refunded"
@@ -547,7 +547,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                         label="Mark refunded"
                         variant="ghost"
                         prompt={{ field: 'reason', question: 'Reason for the refund (kept in the log):' }}
-                        confirm="Only do this after refunding in the Yoco portal. Continue?"
+                        confirm="Only do this after refunding in the iKhokha (or Yoco) dashboard. Continue?"
                       />
                     )}
                   </div>

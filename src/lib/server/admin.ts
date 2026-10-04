@@ -13,8 +13,8 @@ import { ENTERPRISE_ACTIONS, performEnterpriseAction } from './enterprise';
 import { loadPrincipal } from './access';
 import { accountLabel, isPhoneLogin, loginAddress } from '../account-id';
 import { ownerEmails } from './admin-auth';
-import { confirmGiftWithYoco, markGiftContacted } from './gifts';
-import { confirmOrderWithYoco, yocoSecret } from './yoco';
+import { markGiftContacted } from './gifts';
+import { confirmGift, confirmOrder, providerLabel, providerOn, PROVIDERS, type Provider } from './payments';
 import { refreshPublicPages } from './public-cache';
 import { markConfirmed } from './verify';
 
@@ -131,14 +131,14 @@ export async function loadOverview(admin: SupabaseClient, now = new Date()): Pro
 
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const revenueMonthMinor =
-    orders.filter((o) => o.status === 'PAID' && o.provider === 'yoco' && o.createdAt >= monthStart).reduce((s, o) => s + o.amountMinor, 0) +
-    gifts.filter((g) => (g.status === 'PAID' || g.status === 'REDEEMED') && g.provider === 'yoco' && g.paid_at && g.paid_at >= monthStart).reduce((s, g) => s + g.amount_minor, 0);
+    orders.filter((o) => o.status === 'PAID' && PROVIDERS.includes(o.provider as Provider) && o.createdAt >= monthStart).reduce((s, o) => s + o.amountMinor, 0) +
+    gifts.filter((g) => (g.status === 'PAID' || g.status === 'REDEEMED') && PROVIDERS.includes(g.provider) && g.paid_at && g.paid_at >= monthStart).reduce((s, g) => s + g.amount_minor, 0);
 
   return {
     urgent,
     paidNotPublished: cases.filter((c) => c.paid && c.status === 'DRAFT'),
-    stuckOrders: orders.filter((o) => o.status === 'PENDING' && o.provider === 'yoco' && o.reference && minsAgo(o.createdAt) > 15 && minsAgo(o.createdAt) < 7 * 1440),
-    stuckGifts: gifts.filter((g) => g.status === 'PENDING' && g.provider === 'yoco' && g.provider_reference && minsAgo(g.created_at) > 15 && minsAgo(g.created_at) < 7 * 1440),
+    stuckOrders: orders.filter((o) => o.status === 'PENDING' && PROVIDERS.includes(o.provider as Provider) && o.reference && minsAgo(o.createdAt) > 15 && minsAgo(o.createdAt) < 7 * 1440),
+    stuckGifts: gifts.filter((g) => g.status === 'PENDING' && PROVIDERS.includes(g.provider) && g.provider_reference && minsAgo(g.created_at) > 15 && minsAgo(g.created_at) < 7 * 1440),
     giftsNotStarted: gifts.filter((g) => g.status === 'PAID' && g.paid_at && minsAgo(g.paid_at) > 24 * 60),
     stats: {
       published: cases.filter((c) => c.status === 'PUBLISHED').length,
@@ -220,19 +220,20 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
     }
     case 'gift.recheck': {
       if (!uuidOk(input.id)) return { ok: false, error: 'Gift not found.', status: 404 };
-      if (!yocoSecret()) return { ok: false, error: 'Yoco isn’t configured.', status: 503 };
-      const { data: g } = await admin.from('memora_gifts').select('status,provider_reference').eq('id', input.id).maybeSingle();
+      const { data: g } = await admin.from('memora_gifts').select('status,provider,provider_reference').eq('id', input.id).maybeSingle();
       if (!g?.provider_reference) return { ok: false, error: 'This gift never reached checkout.', status: 409 };
-      const result = await confirmGiftWithYoco(admin, g.provider_reference);
-      await log(admin, actor.id, 'GIFT_RECHECK', null, { gift_id: input.id, result });
-      return { ok: true, message: result === 'confirmed' || result === 'already_paid' ? 'Payment confirmed by Yoco.' : result === 'pending' ? 'Yoco says it hasn’t been paid.' : `Yoco check: ${result}.` };
+      const name = providerLabel(g.provider);
+      if (!providerOn(g.provider)) return { ok: false, error: `${name} isn’t configured.`, status: 503 };
+      const result = await confirmGift(admin, g.provider as Provider, g.provider_reference);
+      await log(admin, actor.id, 'GIFT_RECHECK', null, { gift_id: input.id, provider: g.provider, result });
+      return { ok: true, message: result === 'confirmed' || result === 'already_paid' ? `Payment confirmed by ${name}.` : result === 'pending' ? `${name} says it hasn’t been paid.` : `${name} check: ${result}.` };
     }
     case 'gift.cancel': {
       if (!uuidOk(input.id)) return { ok: false, error: 'Gift not found.', status: 404 };
       const { data } = await admin.from('memora_gifts').update({ status: 'CANCELLED', updated_at: now }).eq('id', input.id).in('status', ['PAID', 'PENDING']).select('id').maybeSingle();
       if (!data) return { ok: false, error: 'Only unused gifts can be cancelled.', status: 409 };
       await log(admin, actor.id, 'GIFT_CANCELLED', null, { gift_id: input.id, reason: input.reason ?? '' });
-      return { ok: true, message: 'Gift cancelled. Its link no longer works. Refund the buyer in the Yoco portal.' };
+      return { ok: true, message: 'Gift cancelled. Its link no longer works. Refund the buyer in the iKhokha or Yoco dashboard (whichever they paid with).' };
     }
     case 'gift.updateContact': {
       if (!uuidOk(input.id)) return { ok: false, error: 'Gift not found.', status: 404 };
@@ -249,12 +250,13 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
     // ---- Payments ----
     case 'order.recheck': {
       if (!uuidOk(input.id)) return { ok: false, error: 'Payment not found.', status: 404 };
-      if (!yocoSecret()) return { ok: false, error: 'Yoco isn’t configured.', status: 503 };
       const { data: o } = await admin.from('memora_orders').select('case_id,provider,provider_reference').eq('id', input.id).maybeSingle();
-      if (!o?.provider_reference || o.provider !== 'yoco') return { ok: false, error: 'This payment never reached Yoco checkout.', status: 409 };
-      const result = await confirmOrderWithYoco(admin, o.provider_reference);
-      await log(admin, actor.id, 'ORDER_RECHECK', o.case_id, { order_id: input.id, result });
-      return { ok: true, message: result === 'confirmed' || result === 'already_paid' ? 'Payment confirmed by Yoco. The family can publish now.' : result === 'pending' ? 'Yoco says it hasn’t been paid.' : `Yoco check: ${result}.` };
+      if (!o?.provider_reference || !PROVIDERS.includes(o.provider)) return { ok: false, error: 'This payment never reached checkout.', status: 409 };
+      const name = providerLabel(o.provider);
+      if (!providerOn(o.provider)) return { ok: false, error: `${name} isn’t configured.`, status: 503 };
+      const result = await confirmOrder(admin, o.provider as Provider, o.provider_reference);
+      await log(admin, actor.id, 'ORDER_RECHECK', o.case_id, { order_id: input.id, provider: o.provider, result });
+      return { ok: true, message: result === 'confirmed' || result === 'already_paid' ? `Payment confirmed by ${name}. The family can publish now.` : result === 'pending' ? `${name} says it hasn’t been paid.` : `${name} check: ${result}.` };
     }
     case 'order.refunded': {
       if (!uuidOk(input.id)) return { ok: false, error: 'Payment not found.', status: 404 };
@@ -262,7 +264,7 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
       if (!o) return { ok: false, error: 'Only paid orders can be marked refunded.', status: 409 };
       await admin.from('memora_payments').update({ status: 'REFUNDED' }).eq('order_id', input.id);
       await log(admin, actor.id, 'ORDER_REFUNDED', o.case_id, { order_id: input.id, reason: input.reason ?? '' });
-      return { ok: true, message: 'Marked as refunded. Make sure the money was returned in the Yoco portal.' };
+      return { ok: true, message: 'Marked as refunded. Make sure the money was returned in the iKhokha or Yoco dashboard.' };
     }
 
     // ---- Memorials ----
@@ -418,11 +420,11 @@ export function setupChecks(): { name: string; ok: boolean; needed: string; fix:
     { name: 'BULKSMS_TOKEN_ID + BULKSMS_TOKEN_SECRET', ok: has('BULKSMS_TOKEN_ID') && has('BULKSMS_TOKEN_SECRET'), needed: 'Optional backup: codes by SMS for people without WhatsApp', fix: 'BulkSMS → Settings → API Tokens' },
     { name: 'NEXT_PUBLIC_VAT_NUMBER', ok: has('NEXT_PUBLIC_VAT_NUMBER'), needed: 'Optional until you are VAT-registered (required above R1 million turnover in 12 months); shown on invoices', fix: 'Your SARS VAT number' },
   ];
+  const ik = has('IKHOKHA_APP_ID') && has('IKHOKHA_APP_SECRET');
+  checks.push({ name: 'IKHOKHA_APP_ID + IKHOKHA_APP_SECRET', ok: ik || has('YOCO_SECRET_KEY'), needed: 'Card payments with iKhokha (used instead of Yoco when set). Payments confirm themselves; no webhook to register. Nobody is charged until NEXT_PUBLIC_MEMORA_PAYMENTS is on.', fix: 'iKhokha dashboard → Integrations → iK Pay API: Application Key ID and Secret' });
   if (process.env.NEXT_PUBLIC_MEMORA_PAYMENTS === 'on') {
-    checks.push(
-      { name: 'YOCO_SECRET_KEY', ok: has('YOCO_SECRET_KEY'), needed: 'Taking payments', fix: 'Yoco → Settings → Payment Gateway' },
-      { name: 'YOCO_WEBHOOK_SECRET', ok: has('YOCO_WEBHOOK_SECRET'), needed: 'Confirming payments automatically', fix: 'Register the Yoco webhook' },
-    );
+    if (!ik && has('YOCO_SECRET_KEY'))
+      checks.push({ name: 'YOCO_WEBHOOK_SECRET', ok: has('YOCO_WEBHOOK_SECRET'), needed: 'Confirming Yoco payments automatically', fix: 'Register the Yoco webhook' });
   }
   return checks;
 }

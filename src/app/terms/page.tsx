@@ -88,7 +88,7 @@ export default function TermsPage() {
 
       <h2 id="payments">Payments and refunds</h2>
       <ul>
-        <li>Prices are in South African rand. Card payments are processed by Yoco; we never see your card number.</li>
+        <li>Prices are in South African rand. Payments are processed by iKhokha (or Yoco); we never see your card or bank details.</li>
         <li>
           If you have paid for a memorial but not yet published it, you can ask for a full refund within 7 days of paying. Publishing delivers the service, so
           we don’t refund a published memorial unless the law requires it.

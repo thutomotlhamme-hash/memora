@@ -309,3 +309,12 @@ test.describe('Confirming numbers', () => {
     await expect(page.getByText(/Meta \(WhatsApp\) and BulkSMS/)).toBeVisible();
   });
 });
+
+test.describe('iKhokha payments', () => {
+  test('a callback alone can never mark anything paid', async ({ request }) => {
+    const res = await request.post('/api/ikhokha/webhook', { data: { paylinkID: 'fake123', status: 'SUCCESS', externalTransactionID: 'x', responseCode: '00' } });
+    expect([400, 503]).toContain(res.status());
+    const bad = await request.post('/api/ikhokha/webhook', { data: { paylinkID: '../../etc' } });
+    expect([400, 503]).toContain(bad.status());
+  });
+});

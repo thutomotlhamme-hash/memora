@@ -256,7 +256,7 @@ function Checkout({
   const [error, setError] = useState('');
   const polled = useRef(false);
 
-  // Returning from Yoco: ask the server to check with Yoco directly.
+  // Returning from checkout: ask the server to check with the payment provider directly.
   useEffect(() => {
     if (!paymentsOn || polled.current || meta.paid || !returning) return;
     polled.current = true;
@@ -278,7 +278,7 @@ function Checkout({
       }
       if (attempts >= 12) {
         setPollDone(true);
-        setError('We haven’t received confirmation from Yoco yet. If you were charged, it will appear shortly. Refresh this page in a minute.');
+        setError('We haven’t received confirmation of your payment yet. If you were charged, it will appear shortly. Refresh this page in a minute.');
         return;
       }
       timer = setTimeout(poll, 3000);
@@ -346,11 +346,11 @@ function Checkout({
             <div className="price">{PRICE_LABEL}</div>
             <p>
               Includes the memorial page with Live Funeral Mode, the QR code, WhatsApp cards, the printable programme and the keepsake book. One
-              payment, no subscription. Secure card checkout by Yoco.
+              payment, no subscription. Secure checkout: card, Instant EFT and more.
             </p>
           </div>
           <button className="btn on-night primary lg" type="button" onClick={pay} disabled={Boolean(busy) || confirming || !owner.paymentsReady}>
-            {confirming ? 'Confirming payment…' : busy === 'pay' ? 'Opening checkout…' : `Pay ${PRICE_LABEL} with Yoco`}
+            {confirming ? 'Confirming payment…' : busy === 'pay' ? 'Opening checkout…' : `Pay ${PRICE_LABEL}`}
           </button>
         </div>
       ) : (
@@ -378,7 +378,7 @@ function Checkout({
       )}
       {confirming && (
         <div className="note" style={{ marginTop: 16 }} role="status">
-          <span>Checking with Yoco. This usually takes a few seconds, so please keep this page open.</span>
+          <span>Checking your payment. This usually takes a few seconds, so please keep this page open.</span>
         </div>
       )}
       {error && (

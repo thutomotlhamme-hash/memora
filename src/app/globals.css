@@ -2300,3 +2300,6 @@ body:has(.sl-map) .proc-card { display: none; }
 .test-pay { display: grid; gap: 14px; margin: 0 0 20px; }
 .test-pay-form { display: grid; gap: 6px; }
 .test-pay-r { align-self: center; font-weight: 500; }
+.give-gift { display: grid; gap: 12px; max-width: 720px; }
+.give-grid { display: grid; gap: 10px 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.give-gift .field { display: grid; gap: 4px; font-size: 14px; }

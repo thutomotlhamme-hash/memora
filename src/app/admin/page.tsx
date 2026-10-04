@@ -12,6 +12,7 @@ import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, setupChecks, t
 import { checkTestPayment, recentTestPayments } from '@/lib/server/test-payments';
 import { ikhokhaOn } from '@/lib/server/ikhokha';
 import { TestPaymentButton } from '@/components/admin/TestPayment';
+import { GiveGift } from '@/components/admin/GiveGift';
 import { getAdminAccess } from '@/lib/server/admin-auth';
 import { AccessPanel, AssignHome, AuditPanel, BillingPanel, HomesPanel } from '@/components/admin/CommandPanels';
 import { EnterprisePanel } from '@/components/admin/EnterprisePanel';
@@ -264,6 +265,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   async function renderGifts() {
     const view = await loadGiftBoard(admin);
     return (
+      <>
+      <div style={{ margin: '0 0 16px' }}>
+        <GiveGift />
+      </div>
       <div className="board-wrap">
         <table className="board">
           <thead>
@@ -309,7 +314,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 </td>
                 <td>
                   {g.buyer_name}
-                  <span className="sub">{g.buyer_email}</span>
+                  <span className="sub">{g.provider === 'complimentary' ? 'given by the team · free' : g.buyer_email}</span>
                 </td>
                 <td>
                   <div className="row" style={{ gap: 6 }}>
@@ -359,6 +364,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </tbody>
         </table>
       </div>
+      </>
     );
   }
 

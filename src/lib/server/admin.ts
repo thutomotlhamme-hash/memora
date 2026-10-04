@@ -6,6 +6,7 @@ import { daysUntil } from '../gift';
 import { localDateKey } from '../memorial';
 import { normaliseWhatsApp } from '../phone';
 import { PRODUCT } from '../plans';
+import { validateGift } from '../gift';
 import { can, type Permission, type Principal } from '../rbac';
 import { createResetLink, findAccountId, guardAccount, revokeResetLinks, setSuspended } from './accounts';
 import { isProAction, performProAction } from './pro';
@@ -13,7 +14,8 @@ import { ENTERPRISE_ACTIONS, performEnterpriseAction } from './enterprise';
 import { loadPrincipal } from './access';
 import { accountLabel, isPhoneLogin, loginAddress } from '../account-id';
 import { ownerEmails } from './admin-auth';
-import { markGiftContacted } from './gifts';
+import { giveGift, markGiftContacted } from './gifts';
+import { linkSecret } from './links';
 import { confirmGift, confirmOrder, providerLabel, providerOn, PROVIDERS, type Provider } from './payments';
 import { refreshPublicPages } from './public-cache';
 import { markConfirmed } from './verify';
@@ -190,6 +192,7 @@ const ACTION_PERMISSION: Record<string, Permission> = {
   'gift.contacted': 'gifts.manage',
   'gift.recheck': 'gifts.manage',
   'gift.cancel': 'gifts.manage',
+  'gift.give': 'gifts.manage',
   'gift.updateContact': 'gifts.manage',
   'order.recheck': 'orders.manage',
   'order.refunded': 'orders.manage',
@@ -236,6 +239,26 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
       if (!data) return { ok: false, error: 'Only unused gifts can be cancelled.', status: 409 };
       await log(admin, actor.id, 'GIFT_CANCELLED', null, { gift_id: input.id, reason: input.reason ?? '' });
       return { ok: true, message: 'Gift cancelled. Its link no longer works. Refund the buyer in the iKhokha or Yoco dashboard (whichever they paid with).' };
+    }
+    case 'gift.give': {
+      if (!linkSecret()) return { ok: false, error: 'Gift links need MEMORA_LINK_SECRET set in Netlify.', status: 503 };
+      const reason = String(input.reason ?? '').trim();
+      if (!reason) return { ok: false, error: 'Say why this memorial is a gift (it’s kept in the audit log).', status: 400 };
+      const date = String(input.funeralDate ?? '');
+      const checked = validateGift({
+        buyerName: String(input.from ?? '').trim() || 'The Memora team',
+        buyerEmail: actor.email,
+        recipientName: String(input.name ?? ''),
+        recipientWhatsapp: String(input.whatsapp ?? ''),
+        lovedOneName: String(input.lovedOne ?? ''),
+        message: String(input.message ?? ''),
+        funeralDate: date,
+        funeralDateUnsure: !date,
+      });
+      if (!checked.ok) return { ok: false, error: Object.values(checked.errors)[0] ?? 'Please check the details.', status: 400 };
+      const out = await giveGift(admin, actor, checked.gift);
+      await log(admin, actor.id, 'GIFT_GIVEN', null, { gift_id: out.id, to: checked.gift.recipientName, from: checked.gift.buyerName, reason: reason.slice(0, 300) });
+      return { ok: true, message: `Gift ready for ${checked.gift.recipientName}. Send them the link.`, data: { link: out.link, text: out.text, whatsapp: checked.gift.recipientWhatsapp } };
     }
     case 'gift.updateContact': {
       if (!uuidOk(input.id)) return { ok: false, error: 'Gift not found.', status: 404 };

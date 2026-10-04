@@ -228,3 +228,40 @@ export async function markGiftContacted(admin: SupabaseClient, giftId: string): 
 export function giftWhatsAppText(g: { recipient_name: string; buyer_name: string; loved_one_name?: string }, link: string): string {
   return `Hi ${g.recipient_name}, ${g.buyer_name} has arranged a Memora memorial${g.loved_one_name ? ` for ${g.loved_one_name}` : ''} for your family, and it's already paid for. You can create it here: ${link}\n\nIt stays private until you choose to publish it.`;
 }
+
+/**
+ * A memorial the Memora team gives (goodwill, hardship, a partner's family): the
+ * same private link as a bought gift, nothing to pay, and kept out of revenue
+ * (amount 0). Who gave it, and why, is in the audit log.
+ */
+export async function giveGift(admin: SupabaseClient, actor: { id: string; email: string }, gift: CleanGift): Promise<{ id: string; link: string; text: string }> {
+  const { data: row, error } = await admin
+    .from('memora_gifts')
+    .insert({
+      amount_minor: 0,
+      currency: CURRENCY,
+      provider: 'complimentary',
+      provider_reference: `team-${crypto.randomUUID()}`,
+      status: 'PAID',
+      paid_at: new Date().toISOString(),
+      buyer_name: gift.buyerName,
+      buyer_email: gift.buyerEmail,
+      buyer_user_id: actor.id,
+      recipient_name: gift.recipientName,
+      recipient_email: gift.recipientEmail,
+      recipient_whatsapp: gift.recipientWhatsapp,
+      loved_one_name: gift.lovedOneName,
+      message: gift.message,
+      funeral_date_estimate: gift.funeralDate,
+      funeral_date_unsure: gift.funeralDateUnsure,
+    })
+    .select('id')
+    .single();
+  if (error || !row) throw new Error('Could not save the gift.');
+  const link = redeemUrl(row.id);
+  const text = giftWhatsAppText({ recipient_name: gift.recipientName, buyer_name: gift.buyerName, loved_one_name: gift.lovedOneName }, link).replace(
+    "it's already paid for",
+    "it's on us: there's nothing to pay",
+  );
+  return { id: row.id, link, text };
+}

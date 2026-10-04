@@ -17,6 +17,7 @@ import { markGiftContacted } from './gifts';
 import { confirmGift, confirmOrder, providerLabel, providerOn, PROVIDERS, type Provider } from './payments';
 import { refreshPublicPages } from './public-cache';
 import { markConfirmed } from './verify';
+import { startTestPayment } from './test-payments';
 
 type Row = Record<string, any>;
 
@@ -198,6 +199,7 @@ const ACTION_PERMISSION: Record<string, Permission> = {
   'account.resetLink': 'accounts.help',
   'account.revokeResetLinks': 'accounts.help',
   'account.confirmPhone': 'accounts.help',
+  'payments.test': 'orders.manage',
   'account.suspend': 'accounts.suspend',
   'account.unsuspend': 'accounts.suspend',
   'team.add': 'access.manage',
@@ -257,6 +259,11 @@ export async function performAdminAction(admin: SupabaseClient, actor: { id: str
       const result = await confirmOrder(admin, o.provider as Provider, o.provider_reference);
       await log(admin, actor.id, 'ORDER_RECHECK', o.case_id, { order_id: input.id, provider: o.provider, result });
       return { ok: true, message: result === 'confirmed' || result === 'already_paid' ? `Payment confirmed by ${name}. The family can publish now.` : result === 'pending' ? `${name} says it hasn’t been paid.` : `${name} check: ${result}.` };
+    }
+    case 'payments.test': {
+      const rand = Number(String(input.amount ?? '').replace(',', '.'));
+      const out = await startTestPayment(admin, actor.id, Math.round(rand * 100));
+      return out.ok ? { ok: true, message: 'Opening iKhokha…', data: { url: out.url } } : out;
     }
     case 'order.refunded': {
       if (!uuidOk(input.id)) return { ok: false, error: 'Payment not found.', status: 404 };

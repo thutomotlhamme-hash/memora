@@ -2,6 +2,7 @@ import { getAdminSupabase } from '@/lib/supabase/admin';
 import { json } from '@/lib/server/http';
 import { ikhokhaOn } from '@/lib/server/ikhokha';
 import { confirmGift, confirmOrder } from '@/lib/server/payments';
+import { noteTestCallback } from '@/lib/server/test-payments';
 
 /**
  * iKhokha's callback after a payment attempt: { paylinkID, status, externalTransactionID, responseCode }.
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
     // A paylink pays either for a memorial (an order) or for a gift.
     let result: string = await confirmOrder(admin, 'ikhokha', paylinkId, { source: 'ikhokha-callback', callback: body });
     if (result === 'no_order') result = await confirmGift(admin, 'ikhokha', paylinkId);
+    // The team's own test payment (command centre → Payments): just noted.
+    if (result === 'no_gift' && (await noteTestCallback(admin, paylinkId, body))) result = 'test';
     if (result === 'mismatch') return json({ error: 'Verification mismatch' }, 409);
     // A failed or abandoned attempt: acknowledge it; nothing to do.
     return json({ received: true, result });

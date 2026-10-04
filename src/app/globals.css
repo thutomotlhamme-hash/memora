@@ -2295,3 +2295,8 @@ body:has(.sl-map) .proc-card { display: none; }
 .phone-pill.ok { background: var(--sage-soft); color: var(--ink); }
 .phone-nudge { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 20px; }
 .phone-nudge > span { flex: 1 1 260px; }
+
+/* Command centre: test a payment */
+.test-pay { display: grid; gap: 14px; margin: 0 0 20px; }
+.test-pay-form { display: grid; gap: 6px; }
+.test-pay-r { align-self: center; font-weight: 500; }

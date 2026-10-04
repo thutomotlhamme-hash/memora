@@ -9,6 +9,9 @@ import { fmtDate } from '@/lib/memorial';
 import { formatWhatsApp } from '@/lib/phone';
 import { PRO_PLANS, formatMoney } from '@/lib/plans';
 import { loadAdminCases, loadAdminOrders, loadOverview, loadTeam, setupChecks, teamInviteText, teamJoinText } from '@/lib/server/admin';
+import { checkTestPayment, recentTestPayments } from '@/lib/server/test-payments';
+import { ikhokhaOn } from '@/lib/server/ikhokha';
+import { TestPaymentButton } from '@/components/admin/TestPayment';
 import { getAdminAccess } from '@/lib/server/admin-auth';
 import { AccessPanel, AssignHome, AuditPanel, BillingPanel, HomesPanel } from '@/components/admin/CommandPanels';
 import { EnterprisePanel } from '@/components/admin/EnterprisePanel';
@@ -40,7 +43,7 @@ const wa = (digits: string, text: string) => `https://wa.me/${digits}?text=${enc
 const when = (iso: string | null | undefined) => (iso ? fmtDate(String(iso).slice(0, 10)) : '—');
 const inDays = (d: number | null) => (d == null ? '' : d < 0 ? 'passed' : d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`);
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; status?: string; q?: string; id?: string; bp?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; status?: string; q?: string; id?: string; bp?: string; testpay?: string; result?: string }> }) {
   const access = await getAdminAccess();
 
   // ---- Unhappy paths: every visitor gets a clear, safe answer. ----
@@ -83,6 +86,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const tabs = TABS.filter(([, , perm]) => can(p, perm));
   const requested = (await searchParams).tab;
   const tab: Tab = (tabs.find(([t]) => t === requested)?.[0] ?? 'overview') as Tab;
+  const ikhokhaReady = ikhokhaOn();
   const roleNames = [...p.roles].filter((r) => ROLES[r].scope === 'platform').map((r) => ROLES[r].label);
 
   return (
@@ -507,8 +511,53 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   }
 
   async function renderPayments() {
-    const orders = await loadAdminOrders(admin);
+    const sp = await searchParams;
+    const [orders, tests, back] = await Promise.all([loadAdminOrders(admin), recentTestPayments(admin), sp.testpay ? checkTestPayment(admin, sp.testpay) : Promise.resolve(null)]);
+    const rand = (minor: number | null) => (minor == null ? '?' : `R${(minor / 100).toFixed(2)}`);
     return (
+      <>
+      <section className="card test-pay">
+        <div>
+          <h2 className="h3">Test a payment</h2>
+          <p className="small muted" style={{ margin: '4px 0 0' }}>
+            Pay a few rand to Memora with your own card through iKhokha, to see the whole flow work: the payment page, the money, iKhokha telling Memora, and Memora
+            checking with iKhokha. It doesn’t touch any memorial, and works even while payments are off for families. Refund it in the iKhokha dashboard afterwards.
+          </p>
+        </div>
+        {back && (
+          <div className={`note ${back.checked?.paid ? 'ok' : 'warn'}`} role="status">
+            <span>
+              {back.checked?.paid ? (
+                <>
+                  <strong>It works.</strong> iKhokha confirms {rand(back.checked.amountMinor)} was paid
+                  {back.checked.amountMinor === back.amountMinor ? ', the exact amount' : ` (expected ${rand(back.amountMinor)})`}.{' '}
+                  {back.callbackAt ? 'Its callback reached Memora too.' : 'Its callback hasn’t arrived yet; refresh in a minute.'}
+                </>
+              ) : sp.result === 'cancelled' ? (
+                <>
+                  <strong>Cancelled.</strong> Nothing was paid. iKhokha says: {back.checked?.status}.
+                </>
+              ) : (
+                <>
+                  <strong>Not paid (yet).</strong> iKhokha says: {back.checked?.status}. If you did pay, refresh in a minute.
+                </>
+              )}
+            </span>
+          </div>
+        )}
+        <TestPaymentButton ready={ikhokhaReady} />
+        {!ikhokhaReady && <p className="small muted">Add IKHOKHA_APP_ID and IKHOKHA_APP_SECRET in Netlify and redeploy to use this.</p>}
+        {tests.length > 0 && (
+          <ul className="plain-list small">
+            {tests.map((t) => (
+              <li key={t.reference}>
+                {when(t.startedAt)} · {rand(t.amountMinor)} · {t.callbackAt ? 'callback received' : 'no callback yet'} ·{' '}
+                <Link href={`/admin?tab=payments&testpay=${t.reference}`}>Check with iKhokha</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <div className="board-wrap">
         <table className="board">
           <thead>
@@ -557,6 +606,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </tbody>
         </table>
       </div>
+      </>
     );
   }
 

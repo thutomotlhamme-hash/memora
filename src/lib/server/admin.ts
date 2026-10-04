@@ -441,7 +441,7 @@ export function setupChecks(): { name: string; ok: boolean; needed: string; fix:
     { name: 'SUPABASE_SECRET_KEY', ok: has('SUPABASE_SECRET_KEY') || has('SUPABASE_SERVICE_ROLE_KEY'), needed: 'Accounts, publishing, admin, the run-sheet', fix: 'Supabase → Project Settings → API Keys → secret key' },
     { name: 'MEMORA_LINK_SECRET', ok: has('MEMORA_LINK_SECRET'), needed: 'Run-sheet links, procession sharing, gift links', fix: 'Any long random string' },
     { name: 'NEXT_PUBLIC_SITE_URL', ok: has('NEXT_PUBLIC_SITE_URL'), needed: 'Correct links in WhatsApp messages and QR codes', fix: 'https://memora-memorials.netlify.app' },
-    { name: 'NEXT_PUBLIC_CONTACT_WHATSAPP', ok: has('NEXT_PUBLIC_CONTACT_WHATSAPP'), needed: 'Optional: “WhatsApp us” for password help (otherwise the contact form)', fix: 'Memora’s WhatsApp number, e.g. 27721234567' },
+    { name: 'NEXT_PUBLIC_CONTACT_WHATSAPP', ok: true, needed: 'Optional: overrides the “WhatsApp us” number (defaults to 062 568 3235)', fix: 'Memora’s WhatsApp number, e.g. 27721234567' },
     { name: 'NEXT_PUBLIC_LEGAL_NAME', ok: has('NEXT_PUBLIC_LEGAL_NAME'), needed: 'Before taking payments: the registered business name on the terms and invoices (ECTA s43)', fix: 'e.g. Memora Memorials (Pty) Ltd' },
     { name: 'NEXT_PUBLIC_COMPANY_REG', ok: has('NEXT_PUBLIC_COMPANY_REG'), needed: 'Before taking payments: company registration number (ECTA s43)', fix: 'From your CIPC certificate, e.g. 2026/123456/07' },
     { name: 'NEXT_PUBLIC_PHYSICAL_ADDRESS', ok: has('NEXT_PUBLIC_PHYSICAL_ADDRESS'), needed: 'Before taking payments: an address where legal documents can be served (ECTA s43)', fix: 'Street address, suburb, city, postal code' },

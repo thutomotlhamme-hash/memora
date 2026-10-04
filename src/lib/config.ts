@@ -28,7 +28,7 @@ export const contact = {
     return process.env.NEXT_PUBLIC_CONTACT_EMAIL || '';
   },
   get whatsapp(): string {
-    return process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || '';
+    return process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || '27625683235';
   },
   get businessName(): string {
     return process.env.NEXT_PUBLIC_BUSINESS_NAME || 'Memora';
